@@ -33,7 +33,6 @@ function normalizeName(s: string) {
 }
 
 export async function fetchRecitations(language: string = 'en'): Promise<QuranFoundationRecitation[]> {
-  // API commonly exposes this under /resources/recitations
   const url = `${API_BASE}/resources/recitations?language=${encodeURIComponent(language)}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error('فشل في جلب قائمة القراء');
@@ -68,7 +67,6 @@ export async function fetchChapterRecitationAudio(
   chapterNumber: number,
   segments: boolean = true
 ): Promise<QuranFoundationChapterAudio> {
-  // API commonly exposes this under /chapter_recitations/:id/:chapter_number
   const url = `${API_BASE}/chapter_recitations/${recitationId}/${chapterNumber}?segments=${segments ? 'true' : 'false'}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error('فشل في جلب ملف الصوت وتوقيتاته');
@@ -79,4 +77,28 @@ export async function fetchChapterRecitationAudio(
     audio_url: audioFile.audio_url,
     timestamps: audioFile.timestamps,
   };
+}
+
+// Direct fetch using known recitation ID (more reliable)
+export async function fetchChapterRecitationAudioById(
+  recitationId: number,
+  chapterNumber: number,
+  segments: boolean = true
+): Promise<QuranFoundationChapterAudio> {
+  const url = `${API_BASE}/chapter_recitations/${recitationId}/${chapterNumber}?segments=${segments ? 'true' : 'false'}`;
+  
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('فشل في جلب ملف الصوت');
+    const json = await res.json();
+    const audioFile = json.audio_file ?? json;
+
+    return {
+      audio_url: audioFile.audio_url,
+      timestamps: audioFile.timestamps,
+    };
+  } catch (error) {
+    console.error('Error fetching recitation:', error);
+    throw error;
+  }
 }

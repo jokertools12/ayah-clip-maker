@@ -1,6 +1,14 @@
 import { useRef, useEffect, forwardRef, useImperativeHandle, useCallback, useState } from 'react';
 import { BackgroundItem } from '@/data/backgrounds';
 
+// Font family mapping for canvas
+const FONT_MAP: Record<string, string> = {
+  '"Noto Naskh Arabic", serif': 'Noto Naskh Arabic',
+  '"Amiri", serif': 'Amiri',
+  '"Cairo", sans-serif': 'Cairo',
+  '"Scheherazade New", serif': 'Scheherazade New',
+};
+
 interface VideoPreviewProps {
   background: BackgroundItem | null;
   surahName: string;
@@ -38,7 +46,7 @@ const DEFAULT_DISPLAY_SETTINGS = {
   showReciterName: true,
   showAyahText: true,
   showAyahNumber: true,
-  highlightStyle: 'solid' as const,
+  highlightStyle: 'glow' as const, // Default to golden glow
 };
 
 export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
@@ -56,10 +64,9 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
 }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
-  const [videoReady, setVideoReady] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
 
   // Get dimensions based on aspect ratio
   const getDimensions = () => {
@@ -71,39 +78,28 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
 
   const dimensions = getDimensions();
 
+  // Get the actual font name for canvas
+  const getCanvasFontFamily = useCallback((fontFamily: string): string => {
+    return FONT_MAP[fontFamily] || 'Noto Naskh Arabic';
+  }, []);
+
   // Load background image
   useEffect(() => {
-    if (background?.type === 'image') {
+    if (background) {
+      setImageLoaded(false);
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.src = background.url;
       img.onload = () => {
         imageRef.current = img;
+        setImageLoaded(true);
+      };
+      img.onerror = () => {
+        console.error('Failed to load background image:', background.url);
+        imageRef.current = null;
+        setImageLoaded(false);
       };
     }
-  }, [background]);
-
-  // Handle video ready state
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video || background?.type !== 'video') return;
-
-    const handleCanPlay = () => setVideoReady(true);
-    const handleError = () => {
-      console.error('Video load error, falling back to image');
-      setVideoReady(false);
-    };
-
-    video.addEventListener('canplay', handleCanPlay);
-    video.addEventListener('error', handleError);
-
-    // Force load
-    video.load();
-
-    return () => {
-      video.removeEventListener('canplay', handleCanPlay);
-      video.removeEventListener('error', handleError);
-    };
   }, [background]);
 
   const getTokenHsl = useCallback((token: string, fallback: string) => {
@@ -150,7 +146,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     ctx.lineWidth = 1;
     ctx.stroke();
     
-    // Draw number with Noto Naskh Arabic for consistency
+    // Draw number
     ctx.font = `bold ${size * 1.1}px "Noto Naskh Arabic", "Amiri", serif`;
     ctx.fillStyle = '#D4AF37';
     ctx.textAlign = 'center';
@@ -175,16 +171,12 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Draw background
-    if (background?.type === 'video' && videoRef.current && videoReady && videoRef.current.readyState >= 2) {
-      // Draw video frame
-      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-    } else if (background?.type === 'image' && imageRef.current) {
-      // Ken Burns effect - subtle scale and position animation
+    // Draw background with Ken Burns effect
+    if (imageRef.current && imageLoaded) {
       const time = Date.now() / 1000;
-      const scale = 1 + Math.sin(time * 0.1) * 0.05;
-      const offsetX = Math.sin(time * 0.05) * 20;
-      const offsetY = Math.cos(time * 0.05) * 20;
+      const scale = 1.1 + Math.sin(time * 0.08) * 0.08;
+      const offsetX = Math.sin(time * 0.04) * 30;
+      const offsetY = Math.cos(time * 0.04) * 30;
       
       ctx.save();
       ctx.translate(canvas.width / 2, canvas.height / 2);
@@ -220,6 +212,9 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     ctx.fillStyle = bottomGradient;
     ctx.fillRect(0, canvas.height * 0.75, canvas.width, canvas.height * 0.25);
 
+    // Get the font family for canvas
+    const fontName = getCanvasFontFamily(textSettings.fontFamily);
+
     // Text settings
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -245,8 +240,8 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       ctx.lineWidth = 2;
       ctx.stroke();
 
-      // Surah name with Noto Naskh Arabic
-      ctx.font = `bold ${textSettings.fontSize * 2.2}px "Noto Naskh Arabic", "Amiri", serif`;
+      // Surah name with selected font
+      ctx.font = `bold ${textSettings.fontSize * 2.2}px "${fontName}", "Noto Naskh Arabic", serif`;
       ctx.fillStyle = textSettings.textColor;
       ctx.fillText(surahName, canvas.width / 2, badgeY);
     }
@@ -254,7 +249,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     // Draw reciter name (if enabled)
     if (displaySettings.showReciterName) {
       const reciterY = displaySettings.showSurahName ? canvas.height * 0.19 : canvas.height * 0.12;
-      ctx.font = `${textSettings.fontSize * 1.1}px "Noto Naskh Arabic", "Amiri", serif`;
+      ctx.font = `${textSettings.fontSize * 1.1}px "${fontName}", "Noto Naskh Arabic", serif`;
       ctx.fillStyle = textSettings.textColor;
       ctx.globalAlpha = 0.75;
       ctx.fillText(`بصوت ${reciterName}`, canvas.width / 2, reciterY);
@@ -289,8 +284,8 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       const maxWidth = canvas.width * 0.88;
       const lineHeight = textSettings.fontSize * 3.2;
       
-      // Use Noto Naskh Arabic for consistent rendering
-      ctx.font = `${textSettings.fontSize * 2}px "Noto Naskh Arabic", "Amiri", serif`;
+      // Use selected font family
+      ctx.font = `${textSettings.fontSize * 2}px "${fontName}", "Noto Naskh Arabic", serif`;
       ctx.fillStyle = textSettings.textColor;
       
       // Word wrap
@@ -410,7 +405,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         drawAyahBadge(ctx, canvas.width / 2, badgeY, currentAyah.numberInSurah, 36);
       }
     }
-  }, [background, videoReady, surahName, reciterName, currentAyah, currentAyahWords, highlightedWordIndex, textSettings, displaySettings, dimensions, getTokenHsl, drawAyahBadge]);
+  }, [background, imageLoaded, surahName, reciterName, currentAyah, currentAyahWords, highlightedWordIndex, textSettings, displaySettings, dimensions, getTokenHsl, drawAyahBadge, getCanvasFontFamily]);
 
   // Animation loop for canvas
   useEffect(() => {
@@ -427,17 +422,6 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       }
     };
   }, [drawFrame]);
-
-  // Control video playback
-  useEffect(() => {
-    if (videoRef.current && background?.type === 'video') {
-      if (isPlaying) {
-        videoRef.current.play().catch(console.error);
-      } else {
-        videoRef.current.pause();
-      }
-    }
-  }, [isPlaying, background]);
 
   // Notify when canvas is ready
   useEffect(() => {
@@ -461,20 +445,6 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       ref={containerRef}
       className={`${containerClass} w-full mx-auto relative rounded-2xl overflow-hidden shadow-2xl bg-black`}
     >
-      {/* Hidden video element for background */}
-      {background?.type === 'video' && (
-        <video
-          ref={videoRef}
-          src={background.url}
-          className="hidden"
-          loop
-          muted
-          playsInline
-          crossOrigin="anonymous"
-          preload="auto"
-        />
-      )}
-
       {/* Main Canvas - This is what gets recorded */}
       <canvas
         ref={canvasRef}
