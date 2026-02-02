@@ -20,13 +20,14 @@ export function useVideoRecorder() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const animationFrameRef = useRef<number | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
   const startRecording = useCallback(async (
-    previewContainer: HTMLElement,
+    canvas: HTMLCanvasElement,
     audioElement: HTMLAudioElement,
     duration: number = 30
   ): Promise<Blob | null> => {
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
       try {
         setState({
           isRecording: true,
@@ -37,43 +38,35 @@ export function useVideoRecorder() {
         });
         chunksRef.current = [];
 
-        // Get container dimensions
-        const rect = previewContainer.getBoundingClientRect();
-        const width = Math.floor(rect.width) * 2;
-        const height = Math.floor(rect.height) * 2;
-
-        // Create offscreen canvas
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d', { alpha: false });
-        
-        if (!ctx) {
-          throw new Error('Could not create canvas context');
-        }
-
-        // Get canvas stream
+        // Get canvas stream at 30fps
         const canvasStream = canvas.captureStream(30);
 
         // Create audio stream from audio element
-        let audioStream: MediaStream | null = null;
+        let combinedStream: MediaStream;
         try {
+          // Close previous context if exists
+          if (audioContextRef.current) {
+            await audioContextRef.current.close();
+          }
+          
           const audioCtx = new AudioContext();
+          audioContextRef.current = audioCtx;
+          
           const source = audioCtx.createMediaElementSource(audioElement);
           const destination = audioCtx.createMediaStreamDestination();
           source.connect(destination);
           source.connect(audioCtx.destination); // Also play through speakers
-          audioStream = destination.stream;
+          
+          // Combine video and audio tracks
+          const tracks = [
+            ...canvasStream.getVideoTracks(),
+            ...destination.stream.getAudioTracks()
+          ];
+          combinedStream = new MediaStream(tracks);
         } catch (audioError) {
-          console.warn('Could not capture audio:', audioError);
+          console.warn('Could not capture audio, recording video only:', audioError);
+          combinedStream = canvasStream;
         }
-
-        // Combine streams
-        const tracks = [...canvasStream.getVideoTracks()];
-        if (audioStream) {
-          tracks.push(...audioStream.getAudioTracks());
-        }
-        const combinedStream = new MediaStream(tracks);
 
         // Setup MediaRecorder with best available codec
         const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
@@ -120,131 +113,13 @@ export function useVideoRecorder() {
           reject(new Error('Recording failed'));
         };
 
-        // Drawing function
-        const drawFrame = () => {
-          if (!ctx) return;
-
-          // Fill with black background
-          ctx.fillStyle = '#000000';
-          ctx.fillRect(0, 0, width, height);
-
-          // Draw video element if exists
-          const video = previewContainer.querySelector('video') as HTMLVideoElement;
-          if (video && video.readyState >= 2) {
-            ctx.drawImage(video, 0, 0, width, height);
-          } else {
-            // Draw background image if exists
-            const bgDiv = previewContainer.querySelector('[style*="background-image"]') as HTMLElement;
-            if (bgDiv) {
-              const bgStyle = window.getComputedStyle(bgDiv);
-              const bgImage = bgStyle.backgroundImage;
-              const match = bgImage.match(/url\(["']?(.+?)["']?\)/);
-              if (match) {
-                const img = new Image();
-                img.crossOrigin = 'anonymous';
-                img.src = match[1];
-                if (img.complete) {
-                  // Apply Ken Burns effect
-                  const transform = bgStyle.transform;
-                  ctx.save();
-                  if (transform && transform !== 'none') {
-                    // Simple scale approximation
-                    const scaleMatch = transform.match(/matrix\(([^,]+)/);
-                    if (scaleMatch) {
-                      const scale = parseFloat(scaleMatch[1]) || 1;
-                      ctx.translate(width / 2, height / 2);
-                      ctx.scale(scale, scale);
-                      ctx.translate(-width / 2, -height / 2);
-                    }
-                  }
-                  ctx.drawImage(img, 0, 0, width, height);
-                  ctx.restore();
-                }
-              }
-            }
-          }
-
-          // Draw overlay
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-          ctx.fillRect(0, 0, width, height);
-
-          // Draw text elements
-          const textElements = previewContainer.querySelectorAll('h2, p:not(.text-xs)');
-          textElements.forEach((el) => {
-            const htmlEl = el as HTMLElement;
-            const elRect = htmlEl.getBoundingClientRect();
-            const containerRect = previewContainer.getBoundingClientRect();
-            
-            const relX = (elRect.left - containerRect.left) / containerRect.width;
-            const relY = (elRect.top - containerRect.top) / containerRect.height;
-            
-            const x = relX * width + (elRect.width / containerRect.width * width) / 2;
-            const y = relY * height + (elRect.height / containerRect.height * height);
-            
-            const computedStyle = window.getComputedStyle(htmlEl);
-            const fontSize = parseFloat(computedStyle.fontSize) * 2;
-            
-            ctx.save();
-            ctx.font = `${fontSize}px "Amiri", "Cairo", serif`;
-            ctx.fillStyle = computedStyle.color || '#ffffff';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            
-            // Add text shadow
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-            ctx.shadowBlur = 10;
-            ctx.shadowOffsetX = 2;
-            ctx.shadowOffsetY = 2;
-            
-            // Handle RTL text
-            ctx.direction = 'rtl';
-            
-            const text = htmlEl.textContent || '';
-            ctx.fillText(text, x, y - fontSize / 2);
-            ctx.restore();
-          });
-
-          // Draw ayah number badge
-          const badge = previewContainer.querySelector('.rounded-full span');
-          if (badge) {
-            const badgeEl = badge as HTMLElement;
-            const badgeRect = badgeEl.getBoundingClientRect();
-            const containerRect = previewContainer.getBoundingClientRect();
-            
-            const x = ((badgeRect.left - containerRect.left) / containerRect.width) * width + 
-                      ((badgeRect.width / containerRect.width) * width) / 2;
-            const y = ((badgeRect.top - containerRect.top) / containerRect.height) * height +
-                      ((badgeRect.height / containerRect.height) * height) / 2;
-            
-            ctx.save();
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-            ctx.beginPath();
-            ctx.arc(x, y, 30, 0, Math.PI * 2);
-            ctx.fill();
-            
-            ctx.font = 'bold 24px Arial';
-            ctx.fillStyle = '#ffffff';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(badgeEl.textContent || '', x, y);
-            ctx.restore();
-          }
-
-          if (state.isRecording) {
-            animationFrameRef.current = requestAnimationFrame(drawFrame);
-          }
-        };
-
         // Start recording
         setState((prev) => ({ ...prev, stage: 'جاري بدء التسجيل...' }));
         mediaRecorder.start(100);
 
         // Reset and play audio
         audioElement.currentTime = 0;
-        audioElement.play().catch(console.error);
-
-        // Start drawing
-        drawFrame();
+        await audioElement.play();
 
         // Progress tracking
         const startTime = Date.now();
@@ -279,18 +154,20 @@ export function useVideoRecorder() {
         reject(error);
       }
     });
-  }, [state.isRecording]);
+  }, []);
 
-  const downloadVideo = useCallback((filename: string = 'quran-reel.webm') => {
+  const downloadVideo = useCallback((filename: string = 'quran-reel.mp4') => {
     if (!state.videoBlob) {
       console.error('No video to download');
       return;
     }
 
+    // Note: Browser records as WebM but we name it .mp4 for compatibility
+    // Most modern players can handle WebM with .mp4 extension
     const url = URL.createObjectURL(state.videoBlob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = filename;
+    a.download = filename.replace('.webm', '.mp4');
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
