@@ -7,6 +7,8 @@ interface VideoPreviewProps {
   surahName: string;
   reciterName: string;
   currentAyah: { numberInSurah: number; text: string } | null;
+  currentAyahWords?: string[];
+  highlightedWordIndex?: number | null;
   aspectRatio: '9:16' | '16:9';
   textSettings: {
     fontSize: number;
@@ -30,6 +32,8 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   surahName,
   reciterName,
   currentAyah,
+  currentAyahWords,
+  highlightedWordIndex,
   aspectRatio,
   textSettings,
   isPlaying,
@@ -62,6 +66,15 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       };
     }
   }, [background]);
+
+  const getTokenHsl = useCallback((token: string, fallback: string) => {
+    try {
+      const v = getComputedStyle(document.documentElement).getPropertyValue(token).trim();
+      return v ? `hsl(${v})` : fallback;
+    } catch {
+      return fallback;
+    }
+  }, []);
 
   // Draw frame on canvas
   const drawFrame = useCallback(() => {
@@ -167,29 +180,80 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       ctx.font = `${textSettings.fontSize * 2}px ${textSettings.fontFamily}`;
       ctx.fillStyle = textSettings.textColor;
       
-      // Word wrap for Arabic text
-      const words = currentAyah.text.split(' ');
-      const lines: string[] = [];
-      let currentLine = '';
-      
+      // Word wrap (keep words array so we can highlight a single word)
+      const words = (currentAyahWords?.length ? currentAyahWords : currentAyah.text.split(' ')).filter(Boolean);
+
+      const spaceWidth = ctx.measureText(' ').width;
+      const lines: string[][] = [];
+      let line: string[] = [];
+      let lineWidth = 0;
+
       for (const word of words) {
-        const testLine = currentLine ? `${currentLine} ${word}` : word;
-        const metrics = ctx.measureText(testLine);
-        if (metrics.width > maxWidth && currentLine) {
-          lines.push(currentLine);
-          currentLine = word;
+        const w = ctx.measureText(word).width;
+        const add = line.length ? spaceWidth + w : w;
+        if (lineWidth + add > maxWidth && line.length) {
+          lines.push(line);
+          line = [word];
+          lineWidth = w;
         } else {
-          currentLine = testLine;
+          line.push(word);
+          lineWidth += add;
         }
       }
-      if (currentLine) lines.push(currentLine);
+      if (line.length) lines.push(line);
 
-      // Draw ayah text lines
       const totalHeight = lines.length * lineHeight;
       const startY = ayahY - totalHeight / 2;
-      
-      lines.forEach((line, i) => {
-        ctx.fillText(line, canvas.width / 2, startY + i * lineHeight + lineHeight / 2);
+
+      // Use RTL metrics for better Arabic placement
+      ctx.direction = 'rtl';
+      ctx.textAlign = 'right';
+
+      const primaryRaw = (() => {
+        try {
+          return getComputedStyle(document.documentElement).getPropertyValue('--primary').trim();
+        } catch {
+          return '';
+        }
+      })();
+      const highlightBg = primaryRaw ? `hsl(${primaryRaw} / 0.22)` : 'rgba(255,255,255,0.22)';
+      const highlightText = getTokenHsl('--primary-foreground', textSettings.textColor);
+
+      let globalIndex = 0;
+      lines.forEach((wordsInLine, i) => {
+        // Measure full line width to center it
+        const lineTotal = wordsInLine.reduce((sum, w) => sum + ctx.measureText(w).width, 0) +
+          Math.max(wordsInLine.length - 1, 0) * spaceWidth;
+
+        let cursorX = canvas.width / 2 + lineTotal / 2;
+        const y = startY + i * lineHeight + lineHeight / 2;
+
+        wordsInLine.forEach((w) => {
+          const wWidth = ctx.measureText(w).width;
+          const isWordHighlighted = highlightedWordIndex != null && globalIndex === highlightedWordIndex;
+
+          if (isWordHighlighted) {
+            const padX = 18;
+            const padY = 10;
+            ctx.save();
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = highlightBg;
+            const left = cursorX - wWidth - padX;
+            const top = y - (textSettings.fontSize * 1.2) - padY;
+            const width = wWidth + padX * 2;
+            const height = textSettings.fontSize * 2.2 + padY * 2;
+            ctx.beginPath();
+            ctx.roundRect(left, top, width, height, 22);
+            ctx.fill();
+            ctx.restore();
+          }
+
+          ctx.fillStyle = isWordHighlighted ? highlightText : textSettings.textColor;
+          ctx.fillText(w, cursorX, y);
+
+          cursorX -= wWidth + spaceWidth;
+          globalIndex += 1;
+        });
       });
 
       // Draw ayah number badge
@@ -206,7 +270,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       ctx.fillStyle = textSettings.textColor;
       ctx.fillText(String(currentAyah.numberInSurah), canvas.width / 2, badgeBottom);
     }
-  }, [background, surahName, reciterName, currentAyah, textSettings, dimensions]);
+  }, [background, surahName, reciterName, currentAyah, currentAyahWords, highlightedWordIndex, textSettings, dimensions, getTokenHsl]);
 
   // Animation loop for canvas
   useEffect(() => {

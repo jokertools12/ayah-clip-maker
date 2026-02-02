@@ -1,9 +1,13 @@
 import { useRef, useState, useCallback } from 'react';
+import { convertWebmToMp4 } from '@/lib/ffmpeg';
 
 export interface VideoRecorderState {
   isRecording: boolean;
   progress: number;
   videoBlob: Blob | null;
+  mp4Blob: Blob | null;
+  isConverting: boolean;
+  convertProgress: number;
   error: string | null;
   stage: string;
 }
@@ -13,6 +17,9 @@ export function useVideoRecorder() {
     isRecording: false,
     progress: 0,
     videoBlob: null,
+    mp4Blob: null,
+    isConverting: false,
+    convertProgress: 0,
     error: null,
     stage: '',
   });
@@ -20,12 +27,12 @@ export function useVideoRecorder() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const animationFrameRef = useRef<number | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
 
   const startRecording = useCallback(async (
     canvas: HTMLCanvasElement,
     audioElement: HTMLAudioElement,
-    duration: number = 30
+    duration: number = 30,
+    audioStream?: MediaStream | null
   ): Promise<Blob | null> => {
     return new Promise(async (resolve, reject) => {
       try {
@@ -33,6 +40,9 @@ export function useVideoRecorder() {
           isRecording: true,
           progress: 0,
           videoBlob: null,
+          mp4Blob: null,
+          isConverting: false,
+          convertProgress: 0,
           error: null,
           stage: 'جاري تجهيز التسجيل...',
         });
@@ -41,32 +51,21 @@ export function useVideoRecorder() {
         // Get canvas stream at 30fps
         const canvasStream = canvas.captureStream(30);
 
-        // Create audio stream from audio element
-        let combinedStream: MediaStream;
-        try {
-          // Close previous context if exists
-          if (audioContextRef.current) {
-            await audioContextRef.current.close();
+        // Combine video + audio tracks.
+        // IMPORTANT: We should not call createMediaElementSource here because the audio element
+        // is already connected to a WebAudio graph for effects (calling it twice throws).
+        const tracks = [...canvasStream.getVideoTracks()];
+        if (audioStream && audioStream.getAudioTracks().length) {
+          tracks.push(...audioStream.getAudioTracks());
+        } else {
+          // Fallback: try capturing audio directly from the <audio> element if supported.
+          const anyAudio = audioElement as unknown as { captureStream?: () => MediaStream; mozCaptureStream?: () => MediaStream };
+          const elStream = anyAudio.captureStream?.() ?? anyAudio.mozCaptureStream?.();
+          if (elStream?.getAudioTracks().length) {
+            tracks.push(...elStream.getAudioTracks());
           }
-          
-          const audioCtx = new AudioContext();
-          audioContextRef.current = audioCtx;
-          
-          const source = audioCtx.createMediaElementSource(audioElement);
-          const destination = audioCtx.createMediaStreamDestination();
-          source.connect(destination);
-          source.connect(audioCtx.destination); // Also play through speakers
-          
-          // Combine video and audio tracks
-          const tracks = [
-            ...canvasStream.getVideoTracks(),
-            ...destination.stream.getAudioTracks()
-          ];
-          combinedStream = new MediaStream(tracks);
-        } catch (audioError) {
-          console.warn('Could not capture audio, recording video only:', audioError);
-          combinedStream = canvasStream;
         }
+        const combinedStream = new MediaStream(tracks);
 
         // Setup MediaRecorder with best available codec
         const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
@@ -98,6 +97,7 @@ export function useVideoRecorder() {
             isRecording: false,
             progress: 100,
             videoBlob: blob,
+            mp4Blob: null,
             stage: 'اكتمل التسجيل!',
           }));
           resolve(blob);
@@ -118,7 +118,7 @@ export function useVideoRecorder() {
         mediaRecorder.start(100);
 
         // Reset and play audio
-        audioElement.currentTime = 0;
+        // Caller should set audioElement.currentTime to the desired start.
         await audioElement.play();
 
         // Progress tracking
@@ -148,6 +148,9 @@ export function useVideoRecorder() {
           isRecording: false,
           progress: 0,
           videoBlob: null,
+          mp4Blob: null,
+          isConverting: false,
+          convertProgress: 0,
           error: error instanceof Error ? error.message : 'حدث خطأ في التسجيل',
           stage: '',
         });
@@ -156,23 +159,80 @@ export function useVideoRecorder() {
     });
   }, []);
 
-  const downloadVideo = useCallback((filename: string = 'quran-reel.mp4') => {
-    if (!state.videoBlob) {
-      console.error('No video to download');
-      return;
-    }
-
-    // Note: Browser records as WebM but we name it .mp4 for compatibility
-    // Most modern players can handle WebM with .mp4 extension
+  const downloadWebm = useCallback((filename: string = 'quran-reel.webm') => {
+    if (!state.videoBlob) return;
     const url = URL.createObjectURL(state.videoBlob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = filename.replace('.webm', '.mp4');
+    a.download = filename.endsWith('.webm') ? filename : `${filename}.webm`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }, [state.videoBlob]);
+
+  const convertToMp4 = useCallback(async (): Promise<Blob | null> => {
+    if (!state.videoBlob) return null;
+
+    try {
+      setState((prev) => ({
+        ...prev,
+        isConverting: true,
+        convertProgress: 0,
+        stage: 'جاري تحويل الفيديو إلى MP4...',
+        error: null,
+      }));
+
+      const mp4 = await convertWebmToMp4(state.videoBlob, {
+        onProgress: (ratio) => {
+          setState((prev) => ({
+            ...prev,
+            convertProgress: Math.round(Math.min(Math.max(ratio, 0), 1) * 100),
+          }));
+        },
+      });
+
+      setState((prev) => ({
+        ...prev,
+        isConverting: false,
+        mp4Blob: mp4,
+        stage: 'جاهز للتحميل بصيغة MP4',
+      }));
+
+      return mp4;
+    } catch (e) {
+      console.error('MP4 conversion failed:', e);
+      setState((prev) => ({
+        ...prev,
+        isConverting: false,
+        error: 'تعذر تحويل الفيديو إلى MP4 على هذا الجهاز/المتصفح',
+        stage: 'يمكنك تنزيل WebM كبديل',
+      }));
+      return null;
+    }
+  }, [state.videoBlob]);
+
+  const downloadMp4 = useCallback(async (filename: string = 'quran-reel.mp4') => {
+    let blob = state.mp4Blob;
+    if (!blob) {
+      blob = await convertToMp4();
+    }
+
+    if (!blob) {
+      // fallback
+      downloadWebm(filename.replace(/\.mp4$/i, '.webm'));
+      return;
+    }
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename.endsWith('.mp4') ? filename : `${filename}.mp4`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [state.mp4Blob, convertToMp4, downloadWebm]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
@@ -189,6 +249,9 @@ export function useVideoRecorder() {
       isRecording: false,
       progress: 0,
       videoBlob: null,
+      mp4Blob: null,
+      isConverting: false,
+      convertProgress: 0,
       error: null,
       stage: '',
     });
@@ -199,7 +262,9 @@ export function useVideoRecorder() {
     ...state,
     startRecording,
     stopRecording,
-    downloadVideo,
+    downloadMp4,
+    downloadWebm,
+    convertToMp4,
     reset,
   };
 }
