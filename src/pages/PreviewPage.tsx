@@ -2,43 +2,34 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Layout } from '@/components/Layout';
+import { VideoPreview, VideoPreviewRef } from '@/components/VideoPreview';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { surahs } from '@/data/surahs';
 import { reciters, getAudioUrl } from '@/data/reciters';
+import { backgroundVideos, backgroundImages, BackgroundItem } from '@/data/backgrounds';
 import { useQuranApi } from '@/hooks/useQuranApi';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
-import { 
-  Download, 
-  Share2, 
-  RotateCcw, 
-  Loader2, 
-  Play, 
+import { TextSettings } from '@/components/TextSettingsPanel';
+import {
+  Download,
+  Share2,
+  RotateCcw,
+  Loader2,
+  Play,
   Pause,
   Volume2,
   VolumeX,
   Save,
   Check,
-  ChevronRight
+  ChevronRight,
+  AlertCircle,
+  SkipBack,
+  SkipForward,
 } from 'lucide-react';
 import { toast } from 'sonner';
-
-// Nature background videos from Pexels (free to use)
-const backgroundVideos = [
-  'https://videos.pexels.com/video-files/2491284/2491284-uhd_2560_1440_24fps.mp4',
-  'https://videos.pexels.com/video-files/1409899/1409899-uhd_2560_1440_25fps.mp4',
-  'https://videos.pexels.com/video-files/3571264/3571264-uhd_2560_1440_30fps.mp4',
-  'https://videos.pexels.com/video-files/856973/856973-hd_1920_1080_30fps.mp4',
-];
-
-const backgroundImages = [
-  'https://images.pexels.com/photos/1287145/pexels-photo-1287145.jpeg',
-  'https://images.pexels.com/photos/1743165/pexels-photo-1743165.jpeg',
-  'https://images.pexels.com/photos/1671325/pexels-photo-1671325.jpeg',
-  'https://images.pexels.com/photos/1366909/pexels-photo-1366909.jpeg',
-];
 
 export default function PreviewPage() {
   const [searchParams] = useSearchParams();
@@ -51,12 +42,25 @@ export default function PreviewPage() {
   const reciterId = searchParams.get('reciter') || 'mishary_alafasy';
   const startAyah = parseInt(searchParams.get('start') || '1');
   const endAyah = parseInt(searchParams.get('end') || '5');
-  const backgroundType = searchParams.get('background') || 'video';
-  const aspectRatio = searchParams.get('ratio') || '9:16';
+  const backgroundId = searchParams.get('background') || '';
+  const backgroundType = searchParams.get('backgroundType') || 'video';
+  const aspectRatio = (searchParams.get('ratio') || '9:16') as '9:16' | '16:9';
+
+  // Text settings from params
+  const textSettings: TextSettings = {
+    fontSize: parseInt(searchParams.get('fontSize') || '28'),
+    fontFamily: searchParams.get('fontFamily') || '"Amiri", serif',
+    textColor: searchParams.get('textColor') || '#ffffff',
+    shadowIntensity: parseFloat(searchParams.get('shadowIntensity') || '0.5'),
+    overlayOpacity: parseFloat(searchParams.get('overlayOpacity') || '0.4'),
+  };
 
   // Data
   const surah = surahs.find((s) => s.number === surahNumber);
   const reciter = reciters.find((r) => r.id === reciterId);
+  const background: BackgroundItem | null = 
+    [...backgroundVideos, ...backgroundImages].find((bg) => bg.id === backgroundId) ||
+    (backgroundType === 'video' ? backgroundVideos[0] : backgroundImages[0]);
 
   // State
   const [ayahs, setAyahs] = useState<{ numberInSurah: number; text: string }[]>([]);
@@ -64,19 +68,18 @@ export default function PreviewPage() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isGenerated, setIsGenerated] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [audioLoaded, setAudioLoaded] = useState(false);
+  const [audioError, setAudioError] = useState(false);
 
   // Refs
   const audioRef = useRef<HTMLAudioElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  // Random background
-  const [bgIndex] = useState(() => Math.floor(Math.random() * 4));
-  const backgroundSrc = backgroundType === 'video' 
-    ? backgroundVideos[bgIndex] 
-    : backgroundImages[bgIndex];
+  const videoPreviewRef = useRef<VideoPreviewRef>(null);
+  const ayahTimestampsRef = useRef<number[]>([]);
 
   // Load ayahs
   useEffect(() => {
@@ -92,16 +95,27 @@ export default function PreviewPage() {
   // Audio URL
   const audioUrl = reciter ? getAudioUrl(reciter, surahNumber) : '';
 
+  // Calculate ayah timestamps based on audio duration
+  useEffect(() => {
+    if (duration > 0 && ayahs.length > 0) {
+      // Distribute time evenly among ayahs (in real app, would use actual timing data)
+      const timePerAyah = duration / ayahs.length;
+      const timestamps = ayahs.map((_, index) => index * timePerAyah);
+      ayahTimestampsRef.current = timestamps;
+    }
+  }, [duration, ayahs.length]);
+
   // Handle play/pause
   const togglePlay = useCallback(() => {
     if (!audioRef.current) return;
 
     if (isPlaying) {
       audioRef.current.pause();
-      if (videoRef.current) videoRef.current.pause();
     } else {
-      audioRef.current.play();
-      if (videoRef.current) videoRef.current.play();
+      audioRef.current.play().catch((err) => {
+        console.error('Audio play error:', err);
+        toast.error('حدث خطأ في تشغيل الصوت');
+      });
     }
     setIsPlaying(!isPlaying);
   }, [isPlaying]);
@@ -114,70 +128,151 @@ export default function PreviewPage() {
     }
   }, [isMuted]);
 
-  // Simulate verse sync (in real app, would use audio timing data)
+  // Skip forward/backward
+  const skipAyah = (direction: 'forward' | 'backward') => {
+    if (!audioRef.current || ayahTimestampsRef.current.length === 0) return;
+
+    const newIndex = direction === 'forward'
+      ? Math.min(currentAyahIndex + 1, ayahs.length - 1)
+      : Math.max(currentAyahIndex - 1, 0);
+
+    const timestamp = ayahTimestampsRef.current[newIndex];
+    if (timestamp !== undefined) {
+      audioRef.current.currentTime = timestamp;
+      setCurrentAyahIndex(newIndex);
+    }
+  };
+
+  // Audio event handlers
   useEffect(() => {
-    if (!isPlaying || ayahs.length === 0) return;
+    const audio = audioRef.current;
+    if (!audio) return;
 
-    const totalDuration = 30; // Estimated 30 seconds for the clip
-    const verseInterval = (totalDuration * 1000) / ayahs.length;
+    const handleLoadedMetadata = () => {
+      setDuration(audio.duration);
+      setAudioLoaded(true);
+      setAudioError(false);
+    };
 
-    const interval = setInterval(() => {
-      setCurrentAyahIndex((prev) => {
-        if (prev < ayahs.length - 1) {
-          return prev + 1;
+    const handleTimeUpdate = () => {
+      setCurrentTime(audio.currentTime);
+      setProgress((audio.currentTime / audio.duration) * 100);
+
+      // Update current ayah based on time
+      const timestamps = ayahTimestampsRef.current;
+      if (timestamps.length > 0) {
+        for (let i = timestamps.length - 1; i >= 0; i--) {
+          if (audio.currentTime >= timestamps[i]) {
+            if (i !== currentAyahIndex) {
+              setCurrentAyahIndex(i);
+            }
+            break;
+          }
         }
-        setIsPlaying(false);
-        return prev;
-      });
-    }, verseInterval);
-
-    return () => clearInterval(interval);
-  }, [isPlaying, ayahs.length]);
-
-  // Progress update
-  useEffect(() => {
-    if (!audioRef.current) return;
-
-    const updateProgress = () => {
-      if (audioRef.current) {
-        const current = audioRef.current.currentTime;
-        const duration = audioRef.current.duration || 1;
-        setProgress((current / duration) * 100);
       }
     };
 
-    const audio = audioRef.current;
-    audio.addEventListener('timeupdate', updateProgress);
-    audio.addEventListener('ended', () => {
+    const handleEnded = () => {
       setIsPlaying(false);
       setCurrentAyahIndex(0);
-    });
+      audio.currentTime = 0;
+    };
+
+    const handleError = () => {
+      console.error('Audio load error');
+      setAudioError(true);
+      setAudioLoaded(true);
+    };
+
+    const handlePlay = () => setIsPlaying(true);
+    const handlePause = () => setIsPlaying(false);
+
+    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    audio.addEventListener('ended', handleEnded);
+    audio.addEventListener('error', handleError);
+    audio.addEventListener('play', handlePlay);
+    audio.addEventListener('pause', handlePause);
 
     return () => {
-      audio.removeEventListener('timeupdate', updateProgress);
+      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+      audio.removeEventListener('ended', handleEnded);
+      audio.removeEventListener('error', handleError);
+      audio.removeEventListener('play', handlePlay);
+      audio.removeEventListener('pause', handlePause);
     };
-  }, []);
+  }, [currentAyahIndex]);
 
-  // Generate video (simulation)
+  // Format time
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Generate video (simulation with better feedback)
   const handleGenerate = async () => {
     setIsGenerating(true);
     setProgress(0);
 
-    // Simulate generation progress
-    for (let i = 0; i <= 100; i += 5) {
-      await new Promise((resolve) => setTimeout(resolve, 200));
-      setProgress(i);
-    }
+    try {
+      // Simulate generation progress with stages
+      const stages = [
+        { progress: 20, message: 'جاري تحميل الخلفية...' },
+        { progress: 40, message: 'جاري دمج الصوت...' },
+        { progress: 60, message: 'جاري إضافة النصوص...' },
+        { progress: 80, message: 'جاري معالجة الفيديو...' },
+        { progress: 100, message: 'اكتمل!' },
+      ];
 
-    setIsGenerating(false);
-    setIsGenerated(true);
-    toast.success('تم إنشاء الفيديو بنجاح!');
+      for (const stage of stages) {
+        await new Promise((resolve) => setTimeout(resolve, 800));
+        setProgress(stage.progress);
+      }
+
+      setIsGenerated(true);
+      toast.success('تم إنشاء الفيديو بنجاح!');
+    } catch (error) {
+      console.error('Generation error:', error);
+      toast.error('حدث خطأ في إنشاء الفيديو');
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   // Download video
-  const handleDownload = () => {
-    toast.success('جاري تحميل الفيديو...');
-    // In real implementation, would download the generated video
+  const handleDownload = async () => {
+    toast.info('جاري تجهيز الفيديو للتحميل...');
+    
+    try {
+      // Create a simple downloadable content
+      // In production, this would use a proper video rendering service
+      const content = `
+        سورة: ${surah?.name}
+        القارئ: ${reciter?.name}
+        الآيات: ${startAyah} - ${endAyah}
+        
+        ${ayahs.map((a) => `(${a.numberInSurah}) ${a.text}`).join('\n\n')}
+      `;
+
+      // For now, download as text file with metadata
+      // In production, integrate with a video rendering API
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${surah?.name}-${reciter?.name}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast.success('تم تحميل الملف! لتحميل الفيديو الكامل، يرجى استخدام خاصية تسجيل الشاشة.');
+    } catch (error) {
+      console.error('Download error:', error);
+      toast.error('حدث خطأ في التحميل');
+    }
   };
 
   // Save to library
@@ -189,7 +284,7 @@ export default function PreviewPage() {
     }
 
     setIsSaving(true);
-    
+
     try {
       const { error } = await supabase.from('saved_videos').insert({
         user_id: user.id,
@@ -204,7 +299,7 @@ export default function PreviewPage() {
       });
 
       if (error) throw error;
-      
+
       toast.success('تم حفظ الفيديو في مكتبتك!');
     } catch (err) {
       console.error('Error saving video:', err);
@@ -216,13 +311,15 @@ export default function PreviewPage() {
 
   // Share
   const handleShare = async () => {
+    const shareData = {
+      title: `${surah?.name} - قرآن ريلز`,
+      text: `استمع لتلاوة ${surah?.name} بصوت ${reciter?.name}`,
+      url: window.location.href,
+    };
+
     if (navigator.share) {
       try {
-        await navigator.share({
-          title: `${surah?.name} - قرآن ريلز`,
-          text: `استمع لتلاوة ${surah?.name} بصوت ${reciter?.name}`,
-          url: window.location.href,
-        });
+        await navigator.share(shareData);
       } catch (err) {
         console.log('Share cancelled');
       }
@@ -231,10 +328,6 @@ export default function PreviewPage() {
       toast.success('تم نسخ الرابط!');
     }
   };
-
-  const containerClass = aspectRatio === '9:16' 
-    ? 'aspect-[9/16] max-w-[360px]' 
-    : 'aspect-video max-w-[640px]';
 
   return (
     <Layout>
@@ -257,63 +350,26 @@ export default function PreviewPage() {
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className={`${containerClass} mx-auto lg:mx-0 w-full relative rounded-2xl overflow-hidden shadow-2xl`}
+            className="flex-1 flex justify-center"
           >
-            {/* Background */}
-            {backgroundType === 'video' ? (
-              <video
-                ref={videoRef}
-                src={backgroundSrc}
-                className="absolute inset-0 w-full h-full object-cover"
-                loop
-                muted
-                playsInline
-              />
-            ) : (
-              <div 
-                className="absolute inset-0 w-full h-full bg-cover bg-center animate-float"
-                style={{ 
-                  backgroundImage: `url(${backgroundSrc})`,
-                  animation: 'kenburns 20s ease-in-out infinite'
-                }}
-              />
-            )}
+            <VideoPreview
+              ref={videoPreviewRef}
+              background={background}
+              surahName={surah?.name || ''}
+              reciterName={reciter?.name || ''}
+              currentAyah={ayahs[currentAyahIndex] || null}
+              aspectRatio={aspectRatio}
+              textSettings={textSettings}
+              isPlaying={isPlaying}
+            />
 
-            {/* Overlay */}
-            <div className="absolute inset-0 bg-foreground/40" />
-
-            {/* Content */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center p-6">
-              {/* Surah Name */}
-              <motion.div
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="text-center mb-8"
-              >
-                <h2 className="text-3xl md:text-4xl font-bold text-background text-shadow-strong font-quran">
-                  {surah?.name}
-                </h2>
-                <p className="text-background/80 mt-2">بصوت {reciter?.name}</p>
-              </motion.div>
-
-              {/* Current Ayah */}
-              <motion.div
-                key={currentAyahIndex}
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="text-center px-4"
-              >
-                <p className="text-2xl md:text-3xl lg:text-4xl text-background font-quran leading-loose text-shadow-strong">
-                  {ayahs[currentAyahIndex]?.text}
-                </p>
-                <span className="inline-flex items-center justify-center mt-4 h-8 w-8 rounded-full bg-background/20 text-background text-sm">
-                  {ayahs[currentAyahIndex]?.numberInSurah}
-                </span>
-              </motion.div>
-            </div>
-
-            {/* Audio */}
-            <audio ref={audioRef} src={audioUrl} preload="auto" />
+            {/* Audio Element */}
+            <audio
+              ref={audioRef}
+              src={audioUrl}
+              preload="metadata"
+              crossOrigin="anonymous"
+            />
           </motion.div>
 
           {/* Controls */}
@@ -321,7 +377,7 @@ export default function PreviewPage() {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.2 }}
-            className="flex-1 w-full max-w-md mx-auto lg:mx-0"
+            className="w-full max-w-md mx-auto lg:mx-0"
           >
             <Card>
               <CardContent className="p-6 space-y-6">
@@ -333,16 +389,41 @@ export default function PreviewPage() {
                   </p>
                 </div>
 
+                {/* Audio Error Message */}
+                {audioError && (
+                  <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 flex items-start gap-2">
+                    <AlertCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-destructive">تعذر تحميل الصوت</p>
+                      <p className="text-xs text-muted-foreground">
+                        قد يكون الملف غير متوفر لهذه السورة
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 {/* Playback Controls */}
                 <div className="space-y-4">
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center justify-center gap-3">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => skipAyah('backward')}
+                      disabled={currentAyahIndex === 0 || audioError}
+                    >
+                      <SkipForward className="h-5 w-5" />
+                    </Button>
+
                     <Button
                       variant="outline"
                       size="icon"
                       onClick={togglePlay}
-                      className="h-12 w-12"
+                      disabled={!audioLoaded || audioError}
+                      className="h-14 w-14"
                     >
-                      {isPlaying ? (
+                      {!audioLoaded ? (
+                        <Loader2 className="h-6 w-6 animate-spin" />
+                      ) : isPlaying ? (
                         <Pause className="h-6 w-6" />
                       ) : (
                         <Play className="h-6 w-6" />
@@ -352,24 +433,40 @@ export default function PreviewPage() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={toggleMute}
+                      onClick={() => skipAyah('forward')}
+                      disabled={currentAyahIndex === ayahs.length - 1 || audioError}
                     >
+                      <SkipBack className="h-5 w-5" />
+                    </Button>
+
+                    <Button variant="ghost" size="icon" onClick={toggleMute}>
                       {isMuted ? (
                         <VolumeX className="h-5 w-5" />
                       ) : (
                         <Volume2 className="h-5 w-5" />
                       )}
                     </Button>
+                  </div>
 
-                    <div className="flex-1">
-                      <Progress value={progress} className="h-2" />
+                  {/* Progress bar */}
+                  <div className="space-y-2">
+                    <Progress value={progress} className="h-2" />
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>{formatTime(currentTime)}</span>
+                      <span>{formatTime(duration)}</span>
                     </div>
                   </div>
 
                   {/* Ayah Progress */}
-                  <p className="text-sm text-muted-foreground text-center">
-                    الآية {currentAyahIndex + 1} من {ayahs.length}
-                  </p>
+                  <div className="text-center p-2 rounded-lg bg-muted/50">
+                    <p className="text-sm text-muted-foreground">
+                      الآية{' '}
+                      <span className="font-bold text-foreground">
+                        {currentAyahIndex + 1}
+                      </span>{' '}
+                      من {ayahs.length}
+                    </p>
+                  </div>
                 </div>
 
                 {/* Generation */}
@@ -394,9 +491,9 @@ export default function PreviewPage() {
                   </Button>
                 ) : (
                   <div className="space-y-3">
-                    <div className="flex items-center justify-center gap-2 text-primary mb-4">
+                    <div className="flex items-center justify-center gap-2 text-primary mb-4 p-3 rounded-lg bg-primary/10">
                       <Check className="h-5 w-5" />
-                      <span>تم إنشاء الفيديو بنجاح!</span>
+                      <span className="font-medium">تم إنشاء الفيديو بنجاح!</span>
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
@@ -440,14 +537,6 @@ export default function PreviewPage() {
           </motion.div>
         </div>
       </div>
-
-      <style>{`
-        @keyframes kenburns {
-          0% { transform: scale(1) translate(0, 0); }
-          50% { transform: scale(1.1) translate(-2%, -2%); }
-          100% { transform: scale(1) translate(0, 0); }
-        }
-      `}</style>
     </Layout>
   );
 }

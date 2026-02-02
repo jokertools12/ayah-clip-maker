@@ -5,30 +5,42 @@ import { Layout } from '@/components/Layout';
 import { SurahCard } from '@/components/SurahCard';
 import { ReciterCard } from '@/components/ReciterCard';
 import { AyahDisplay } from '@/components/AyahDisplay';
+import { BackgroundSelector } from '@/components/BackgroundSelector';
+import { TextSettingsPanel, TextSettings } from '@/components/TextSettingsPanel';
+import { VideoPreview } from '@/components/VideoPreview';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { surahs } from '@/data/surahs';
 import { reciters } from '@/data/reciters';
+import { BackgroundItem, getRandomBackground } from '@/data/backgrounds';
 import { useQuranApi } from '@/hooks/useQuranApi';
-import { 
-  Video, 
-  Image, 
-  Monitor, 
-  Smartphone, 
-  Loader2, 
+import {
+  Monitor,
+  Smartphone,
+  Loader2,
   Play,
   ChevronRight,
   ChevronLeft,
-  BookOpen
+  BookOpen,
+  Search,
+  Settings,
+  Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-type BackgroundType = 'video' | 'image';
 type AspectRatio = '9:16' | '16:9';
+
+const defaultTextSettings: TextSettings = {
+  fontSize: 28,
+  fontFamily: '"Amiri", serif',
+  textColor: '#ffffff',
+  shadowIntensity: 0.5,
+  overlayOpacity: 0.4,
+};
 
 export default function CreatePage() {
   const [searchParams] = useSearchParams();
@@ -37,6 +49,7 @@ export default function CreatePage() {
 
   // Step state
   const [currentStep, setCurrentStep] = useState(1);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Selection state
   const [selectedSurah, setSelectedSurah] = useState<number | null>(
@@ -45,15 +58,27 @@ export default function CreatePage() {
   const [selectedReciter, setSelectedReciter] = useState<string | null>(null);
   const [startAyah, setStartAyah] = useState(1);
   const [endAyah, setEndAyah] = useState(5);
-  const [backgroundType, setBackgroundType] = useState<BackgroundType>('video');
+  const [selectedBackground, setSelectedBackground] = useState<BackgroundItem | null>(
+    () => getRandomBackground('video')
+  );
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('9:16');
+  const [textSettings, setTextSettings] = useState<TextSettings>(defaultTextSettings);
 
   // Preview state
   const [ayahs, setAyahs] = useState<{ number: number; numberInSurah: number; text: string }[]>([]);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewAyahIndex, setPreviewAyahIndex] = useState(0);
 
   const selectedSurahData = surahs.find((s) => s.number === selectedSurah);
   const selectedReciterData = reciters.find((r) => r.id === selectedReciter);
+
+  // Filter surahs
+  const filteredSurahs = surahs.filter(
+    (surah) =>
+      surah.name.includes(searchQuery) ||
+      surah.englishName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      surah.number.toString().includes(searchQuery)
+  );
 
   // Fetch ayahs when selection changes
   useEffect(() => {
@@ -61,6 +86,16 @@ export default function CreatePage() {
       loadAyahs();
     }
   }, [selectedSurah, startAyah, endAyah]);
+
+  // Preview animation
+  useEffect(() => {
+    if (currentStep === 5 && ayahs.length > 0) {
+      const interval = setInterval(() => {
+        setPreviewAyahIndex((prev) => (prev + 1) % ayahs.length);
+      }, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [currentStep, ayahs.length]);
 
   const loadAyahs = async () => {
     if (!selectedSurah) return;
@@ -81,7 +116,11 @@ export default function CreatePage() {
       toast.error('الرجاء اختيار قارئ');
       return;
     }
-    setCurrentStep((prev) => Math.min(prev + 1, 4));
+    if (currentStep === 4 && !selectedBackground) {
+      toast.error('الرجاء اختيار خلفية');
+      return;
+    }
+    setCurrentStep((prev) => Math.min(prev + 1, 5));
   };
 
   const handlePrevStep = () => {
@@ -89,7 +128,7 @@ export default function CreatePage() {
   };
 
   const handleCreateVideo = () => {
-    if (!selectedSurah || !selectedReciter) {
+    if (!selectedSurah || !selectedReciter || !selectedBackground) {
       toast.error('الرجاء إكمال جميع الخطوات');
       return;
     }
@@ -100,12 +139,20 @@ export default function CreatePage() {
       reciter: selectedReciter,
       start: startAyah.toString(),
       end: endAyah.toString(),
-      background: backgroundType,
+      background: selectedBackground.id,
+      backgroundType: selectedBackground.type,
       ratio: aspectRatio,
+      fontSize: textSettings.fontSize.toString(),
+      fontFamily: textSettings.fontFamily,
+      textColor: textSettings.textColor,
+      shadowIntensity: textSettings.shadowIntensity.toString(),
+      overlayOpacity: textSettings.overlayOpacity.toString(),
     });
 
     navigate(`/preview?${params.toString()}`);
   };
+
+  const stepLabels = ['اختر السورة', 'اختر القارئ', 'حدد الآيات', 'اختر الخلفية', 'المعاينة'];
 
   return (
     <Layout>
@@ -116,7 +163,10 @@ export default function CreatePage() {
           animate={{ opacity: 1, y: 0 }}
           className="mb-8"
         >
-          <h1 className="text-3xl md:text-4xl font-bold mb-2">إنشاء فيديو جديد</h1>
+          <h1 className="text-3xl md:text-4xl font-bold mb-2 flex items-center gap-3">
+            <Sparkles className="h-8 w-8 text-primary" />
+            إنشاء فيديو جديد
+          </h1>
           <p className="text-muted-foreground">
             اتبع الخطوات لإنشاء مقطع قرآني احترافي
           </p>
@@ -127,12 +177,12 @@ export default function CreatePage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="flex items-center justify-center gap-2 mb-8"
+          className="flex items-center justify-center gap-1 md:gap-2 mb-6 overflow-x-auto pb-2"
         >
-          {[1, 2, 3, 4].map((step) => (
+          {[1, 2, 3, 4, 5].map((step) => (
             <div key={step} className="flex items-center">
               <div
-                className={`flex h-10 w-10 items-center justify-center rounded-full font-bold transition-all ${
+                className={`flex h-9 w-9 md:h-10 md:w-10 items-center justify-center rounded-full font-bold transition-all text-sm ${
                   currentStep === step
                     ? 'gradient-primary text-primary-foreground'
                     : currentStep > step
@@ -142,9 +192,9 @@ export default function CreatePage() {
               >
                 {step}
               </div>
-              {step < 4 && (
+              {step < 5 && (
                 <div
-                  className={`w-8 md:w-16 h-1 rounded ${
+                  className={`w-6 md:w-12 h-1 rounded ${
                     currentStep > step ? 'bg-primary' : 'bg-muted'
                   }`}
                 />
@@ -154,17 +204,22 @@ export default function CreatePage() {
         </motion.div>
 
         {/* Step Labels */}
-        <div className="hidden md:flex justify-center gap-4 mb-8">
-          {['اختر السورة', 'اختر القارئ', 'حدد الآيات', 'الإعدادات'].map((label, index) => (
+        <div className="hidden md:flex justify-center gap-6 mb-8">
+          {stepLabels.map((label, index) => (
             <span
               key={index}
-              className={`text-sm ${
+              className={`text-sm transition-colors ${
                 currentStep === index + 1 ? 'text-primary font-medium' : 'text-muted-foreground'
               }`}
             >
               {label}
             </span>
           ))}
+        </div>
+
+        {/* Mobile Step Label */}
+        <div className="md:hidden text-center mb-6">
+          <span className="text-primary font-medium">{stepLabels[currentStep - 1]}</span>
         </div>
 
         {/* Step Content */}
@@ -183,18 +238,30 @@ export default function CreatePage() {
                   <BookOpen className="h-5 w-5" />
                   اختر السورة
                 </CardTitle>
+                {/* Search */}
+                <div className="relative mt-4">
+                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="ابحث عن سورة..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pr-10"
+                  />
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 max-h-[60vh] overflow-y-auto custom-scrollbar p-1">
-                  {surahs.map((surah) => (
-                    <SurahCard
-                      key={surah.number}
-                      {...surah}
-                      isSelected={selectedSurah === surah.number}
-                      onClick={() => setSelectedSurah(surah.number)}
-                    />
-                  ))}
-                </div>
+                <ScrollArea className="h-[55vh]">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 p-1">
+                    {filteredSurahs.map((surah) => (
+                      <SurahCard
+                        key={surah.number}
+                        {...surah}
+                        isSelected={selectedSurah === surah.number}
+                        onClick={() => setSelectedSurah(surah.number)}
+                      />
+                    ))}
+                  </div>
+                </ScrollArea>
               </CardContent>
             </Card>
           )}
@@ -206,16 +273,18 @@ export default function CreatePage() {
                 <CardTitle>اختر القارئ</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {reciters.map((reciter) => (
-                    <ReciterCard
-                      key={reciter.id}
-                      reciter={reciter}
-                      isSelected={selectedReciter === reciter.id}
-                      onClick={() => setSelectedReciter(reciter.id)}
-                    />
-                  ))}
-                </div>
+                <ScrollArea className="h-[55vh]">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-1">
+                    {reciters.map((reciter) => (
+                      <ReciterCard
+                        key={reciter.id}
+                        reciter={reciter}
+                        isSelected={selectedReciter === reciter.id}
+                        onClick={() => setSelectedReciter(reciter.id)}
+                      />
+                    ))}
+                  </div>
+                </ScrollArea>
               </CardContent>
             </Card>
           )}
@@ -261,9 +330,11 @@ export default function CreatePage() {
                     </div>
                   </div>
 
-                  <p className="text-sm text-muted-foreground">
-                    سيتم تضمين {endAyah - startAyah + 1} آية في الفيديو
-                  </p>
+                  <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
+                    <p className="text-sm text-primary font-medium">
+                      سيتم تضمين {endAyah - startAyah + 1} آية في الفيديو
+                    </p>
+                  </div>
                 </CardContent>
               </Card>
 
@@ -277,57 +348,48 @@ export default function CreatePage() {
                       <Loader2 className="h-8 w-8 animate-spin text-primary" />
                     </div>
                   ) : (
-                    <div className="space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar">
-                      {ayahs.map((ayah) => (
-                        <AyahDisplay
-                          key={ayah.number}
-                          number={ayah.numberInSurah}
-                          text={ayah.text}
-                        />
-                      ))}
-                    </div>
+                    <ScrollArea className="h-[350px]">
+                      <div className="space-y-2 pr-4">
+                        {ayahs.map((ayah) => (
+                          <AyahDisplay
+                            key={ayah.number}
+                            number={ayah.numberInSurah}
+                            text={ayah.text}
+                          />
+                        ))}
+                      </div>
+                    </ScrollArea>
                   )}
                 </CardContent>
               </Card>
             </div>
           )}
 
-          {/* Step 4: Settings */}
+          {/* Step 4: Select Background & Settings */}
           {currentStep === 4 && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>إعدادات الفيديو</CardTitle>
+                  <CardTitle>اختر الخلفية</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-6">
-                  {/* Background Type */}
-                  <div className="space-y-3">
-                    <Label>نوع الخلفية</Label>
-                    <Tabs
-                      value={backgroundType}
-                      onValueChange={(v) => setBackgroundType(v as BackgroundType)}
-                    >
-                      <TabsList className="w-full">
-                        <TabsTrigger value="video" className="flex-1 gap-2">
-                          <Video className="h-4 w-4" />
-                          فيديو متحرك
-                        </TabsTrigger>
-                        <TabsTrigger value="image" className="flex-1 gap-2">
-                          <Image className="h-4 w-4" />
-                          صورة مع حركة
-                        </TabsTrigger>
-                      </TabsList>
-                    </Tabs>
-                    <p className="text-xs text-muted-foreground">
-                      {backgroundType === 'video'
-                        ? 'فيديوهات طبيعية متحركة من مكتبة Pexels'
-                        : 'صور طبيعية مع تأثير Ken Burns للحركة البطيئة'}
-                    </p>
-                  </div>
+                <CardContent>
+                  <BackgroundSelector
+                    selectedBackground={selectedBackground}
+                    onSelect={setSelectedBackground}
+                  />
+                </CardContent>
+              </Card>
 
-                  {/* Aspect Ratio */}
-                  <div className="space-y-3">
-                    <Label>صيغة الفيديو</Label>
+              <div className="space-y-6">
+                {/* Aspect Ratio */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Settings className="h-5 w-5" />
+                      صيغة الفيديو
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
                     <RadioGroup
                       value={aspectRatio}
                       onValueChange={(v) => setAspectRatio(v as AspectRatio)}
@@ -356,9 +418,30 @@ export default function CreatePage() {
                         </Label>
                       </div>
                     </RadioGroup>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+
+                {/* Text Settings */}
+                <TextSettingsPanel settings={textSettings} onChange={setTextSettings} />
+              </div>
+            </div>
+          )}
+
+          {/* Step 5: Preview & Summary */}
+          {currentStep === 5 && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+              {/* Live Preview */}
+              <div className="flex justify-center">
+                <VideoPreview
+                  background={selectedBackground}
+                  surahName={selectedSurahData?.name || ''}
+                  reciterName={selectedReciterData?.name || ''}
+                  currentAyah={ayahs[previewAyahIndex] || null}
+                  aspectRatio={aspectRatio}
+                  textSettings={textSettings}
+                  isPlaying={true}
+                />
+              </div>
 
               {/* Summary */}
               <Card>
@@ -367,32 +450,41 @@ export default function CreatePage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-3">
-                    <div className="flex justify-between py-2 border-b border-border/50">
+                    <div className="flex justify-between py-3 border-b border-border/50">
                       <span className="text-muted-foreground">السورة</span>
                       <span className="font-medium">{selectedSurahData?.name}</span>
                     </div>
-                    <div className="flex justify-between py-2 border-b border-border/50">
+                    <div className="flex justify-between py-3 border-b border-border/50">
                       <span className="text-muted-foreground">القارئ</span>
                       <span className="font-medium">{selectedReciterData?.name}</span>
                     </div>
-                    <div className="flex justify-between py-2 border-b border-border/50">
+                    <div className="flex justify-between py-3 border-b border-border/50">
                       <span className="text-muted-foreground">الآيات</span>
                       <span className="font-medium">
                         من {startAyah} إلى {endAyah} ({endAyah - startAyah + 1} آية)
                       </span>
                     </div>
-                    <div className="flex justify-between py-2 border-b border-border/50">
+                    <div className="flex justify-between py-3 border-b border-border/50">
                       <span className="text-muted-foreground">الخلفية</span>
-                      <span className="font-medium">
-                        {backgroundType === 'video' ? 'فيديو متحرك' : 'صورة مع حركة'}
-                      </span>
+                      <span className="font-medium">{selectedBackground?.name}</span>
                     </div>
-                    <div className="flex justify-between py-2">
+                    <div className="flex justify-between py-3">
                       <span className="text-muted-foreground">الصيغة</span>
                       <span className="font-medium">
                         {aspectRatio === '9:16' ? 'عمودي (ريلز)' : 'أفقي (يوتيوب)'}
                       </span>
                     </div>
+                  </div>
+
+                  <div className="pt-4">
+                    <Button
+                      onClick={handleCreateVideo}
+                      size="lg"
+                      className="w-full gap-2 text-lg py-6"
+                    >
+                      <Play className="h-5 w-5" />
+                      إنشاء الفيديو
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -417,15 +509,10 @@ export default function CreatePage() {
             السابق
           </Button>
 
-          {currentStep < 4 ? (
+          {currentStep < 5 && (
             <Button onClick={handleNextStep} className="gap-2">
               التالي
               <ChevronLeft className="h-4 w-4" />
-            </Button>
-          ) : (
-            <Button onClick={handleCreateVideo} className="gap-2">
-              <Play className="h-4 w-4" />
-              إنشاء الفيديو
             </Button>
           )}
         </motion.div>
