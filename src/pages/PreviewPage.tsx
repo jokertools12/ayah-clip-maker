@@ -230,10 +230,10 @@ export default function PreviewPage() {
 
   // Start video recording
   const handleStartRecording = async () => {
-    const container = previewContainerRef.current;
+    const canvas = videoPreviewRef.current?.getCanvas();
     const audio = audioRef.current;
 
-    if (!container || !audio) {
+    if (!canvas || !audio) {
       toast.error('حدث خطأ في تجهيز التسجيل');
       return;
     }
@@ -241,12 +241,14 @@ export default function PreviewPage() {
     try {
       await audioEffects.resumeContext();
 
-      // Calculate recording duration based on ayahs
-      const recordingDuration = Math.min(duration || 30, 60); // Max 60 seconds
+      // Calculate recording duration based on selected ayahs
+      const ayahCount = endAyah - startAyah + 1;
+      const estimatedTimePerAyah = 8; // ~8 seconds per ayah
+      const recordingDuration = Math.min(ayahCount * estimatedTimePerAyah, duration || 60);
 
       toast.info('بدء التسجيل... لا تغلق هذه الصفحة');
 
-      const blob = await videoRecorder.startRecording(container, audio, recordingDuration);
+      const blob = await videoRecorder.startRecording(canvas, audio, recordingDuration);
 
       if (blob) {
         toast.success('تم إنشاء الفيديو بنجاح!');
@@ -257,12 +259,12 @@ export default function PreviewPage() {
     }
   };
 
-  // Download recorded video
+  // Download recorded video as MP4
   const handleDownload = () => {
     if (videoRecorder.videoBlob) {
-      const filename = `${surah?.name || 'quran'}-${reciter?.name || 'reciter'}.webm`;
+      const filename = `${surah?.name || 'quran'}-${reciter?.name || 'reciter'}.mp4`;
       videoRecorder.downloadVideo(filename);
-      toast.success('تم تحميل الفيديو!');
+      toast.success('تم تحميل الفيديو بصيغة MP4!');
     } else {
       toast.error('لا يوجد فيديو للتحميل، قم بإنشاء الفيديو أولاً');
     }
