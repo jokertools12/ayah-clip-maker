@@ -25,9 +25,11 @@ export function useAudioEffects() {
   const convolverRef = useRef<ConvolverNode | null>(null);
   const delayRef = useRef<DelayNode | null>(null);
   const feedbackRef = useRef<GainNode | null>(null);
-  const dryGainRef = useRef<GainNode | null>(null);
-  const wetGainRef = useRef<GainNode | null>(null);
   const reverbGainRef = useRef<GainNode | null>(null);
+  const dryGainRef = useRef<GainNode | null>(null);
+  const echoGainRef = useRef<GainNode | null>(null);
+  const masterGainRef = useRef<GainNode | null>(null);
+  const recordingDestRef = useRef<MediaStreamAudioDestinationNode | null>(null);
 
   // Create impulse response for reverb (simulates mosque acoustics)
   const createImpulseResponse = useCallback((duration: number, decay: number, reverse: boolean = false) => {
@@ -72,16 +74,20 @@ export function useAudioEffects() {
       const delay = ctx.createDelay(1.0);
       const feedback = ctx.createGain();
       const dryGain = ctx.createGain();
-      const wetGain = ctx.createGain();
       const reverbGain = ctx.createGain();
+      const echoGain = ctx.createGain();
+      const masterGain = ctx.createGain();
+      const recordingDest = ctx.createMediaStreamDestination();
 
       // Store refs
       convolverRef.current = convolver;
       delayRef.current = delay;
       feedbackRef.current = feedback;
       dryGainRef.current = dryGain;
-      wetGainRef.current = wetGain;
       reverbGainRef.current = reverbGain;
+      echoGainRef.current = echoGain;
+      masterGainRef.current = masterGain;
+      recordingDestRef.current = recordingDest;
 
       // Create mosque-like reverb impulse response
       const impulse = createImpulseResponse(3, 2);
@@ -91,26 +97,31 @@ export function useAudioEffects() {
 
       // Set initial values
       dryGain.gain.value = 1;
-      wetGain.gain.value = 0;
-      reverbGain.gain.value = 0;
+      reverbGain.gain.value = effects.reverbEnabled ? effects.reverbLevel : 0;
+      echoGain.gain.value = effects.echoEnabled ? 0.6 : 0;
+      masterGain.gain.value = 1;
       delay.delayTime.value = effects.echoDelay;
-      feedback.gain.value = effects.echoFeedback;
+      feedback.gain.value = effects.echoEnabled ? effects.echoFeedback : 0;
 
-      // Connect dry path
+      // Mixdown: all paths -> master -> speakers + recording
+      masterGain.connect(ctx.destination);
+      masterGain.connect(recordingDest);
+
+      // Dry path
       sourceNodeRef.current.connect(dryGain);
-      dryGain.connect(ctx.destination);
+      dryGain.connect(masterGain);
 
-      // Connect reverb path
+      // Reverb path
       sourceNodeRef.current.connect(convolver);
       convolver.connect(reverbGain);
-      reverbGain.connect(ctx.destination);
+      reverbGain.connect(masterGain);
 
-      // Connect echo/delay path
+      // Echo path
       sourceNodeRef.current.connect(delay);
       delay.connect(feedback);
       feedback.connect(delay);
-      delay.connect(wetGain);
-      wetGain.connect(ctx.destination);
+      delay.connect(echoGain);
+      echoGain.connect(masterGain);
 
       setIsInitialized(true);
     } catch (error) {
@@ -128,12 +139,16 @@ export function useAudioEffects() {
     }
 
     // Update echo
-    if (delayRef.current && feedbackRef.current && wetGainRef.current) {
+    if (delayRef.current && feedbackRef.current && echoGainRef.current) {
       delayRef.current.delayTime.value = effects.echoDelay;
       feedbackRef.current.gain.value = effects.echoEnabled ? effects.echoFeedback : 0;
-      wetGainRef.current.gain.value = effects.echoEnabled ? 0.5 : 0;
+      echoGainRef.current.gain.value = effects.echoEnabled ? 0.6 : 0;
     }
   }, [effects, isInitialized]);
+
+  const getRecordingStream = useCallback((): MediaStream | null => {
+    return recordingDestRef.current?.stream ?? null;
+  }, []);
 
   // Resume audio context (needed for browsers that suspend it)
   const resumeContext = useCallback(async () => {
@@ -152,8 +167,10 @@ export function useAudioEffects() {
         delayRef.current?.disconnect();
         feedbackRef.current?.disconnect();
         dryGainRef.current?.disconnect();
-        wetGainRef.current?.disconnect();
         reverbGainRef.current?.disconnect();
+        echoGainRef.current?.disconnect();
+        masterGainRef.current?.disconnect();
+        recordingDestRef.current?.disconnect();
       } catch (e) {
         // Ignore disconnect errors
       }
@@ -180,6 +197,7 @@ export function useAudioEffects() {
     initializeAudio,
     resumeContext,
     cleanup,
+    getRecordingStream,
     isInitialized,
   };
 }
