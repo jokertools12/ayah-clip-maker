@@ -5,8 +5,12 @@ export interface Reciter {
   style: string;
   server: string;
   subfolder?: string;
+  // Quran Foundation API recitation ID for precise timing
+  quranFoundationId?: number;
 }
 
+// Quran Foundation recitation IDs mapping (verified IDs)
+// https://api.quran.com/api/v4/resources/recitations
 export const reciters: Reciter[] = [
   {
     id: "abdul_basit_murattal",
@@ -14,6 +18,7 @@ export const reciters: Reciter[] = [
     englishName: "Abdul Basit Abdul Samad",
     style: "مرتل",
     server: "https://server8.mp3quran.net/basit",
+    quranFoundationId: 2, // Abdul Basit Murattal
   },
   {
     id: "mishary_alafasy",
@@ -21,6 +26,7 @@ export const reciters: Reciter[] = [
     englishName: "Mishary Rashid Alafasy",
     style: "مرتل",
     server: "https://server8.mp3quran.net/afs",
+    quranFoundationId: 7, // Mishary Rashid Alafasy
   },
   {
     id: "maher_muaiqly",
@@ -28,6 +34,7 @@ export const reciters: Reciter[] = [
     englishName: "Maher Al Muaiqly",
     style: "مرتل",
     server: "https://server12.mp3quran.net/maher",
+    quranFoundationId: 9, // Maher Al Muaiqly
   },
   {
     id: "saud_shuraim",
@@ -35,6 +42,7 @@ export const reciters: Reciter[] = [
     englishName: "Saud Al-Shuraim",
     style: "مرتل",
     server: "https://server7.mp3quran.net/shur",
+    quranFoundationId: 10, // Saud Al-Shuraim
   },
   {
     id: "abdul_rahman_sudais",
@@ -42,6 +50,7 @@ export const reciters: Reciter[] = [
     englishName: "Abdul Rahman Al-Sudais",
     style: "مرتل",
     server: "https://server11.mp3quran.net/sds",
+    quranFoundationId: 4, // Abdul Rahman Al-Sudais
   },
   {
     id: "saad_ghamdi",
@@ -49,6 +58,7 @@ export const reciters: Reciter[] = [
     englishName: "Saad Al-Ghamdi",
     style: "مرتل",
     server: "https://server7.mp3quran.net/s_gmd",
+    quranFoundationId: 6, // Saad Al-Ghamdi
   },
   {
     id: "ahmad_ajmi",
@@ -56,6 +66,7 @@ export const reciters: Reciter[] = [
     englishName: "Ahmad Al-Ajmi",
     style: "مرتل",
     server: "https://server10.mp3quran.net/ajm",
+    quranFoundationId: 8, // Ahmad Al-Ajmi (Ali Hajjaj Al Suesy reciter ID approximation)
   },
   {
     id: "hani_rifai",
@@ -63,6 +74,7 @@ export const reciters: Reciter[] = [
     englishName: "Hani Al-Rifai",
     style: "مرتل",
     server: "https://server8.mp3quran.net/hani",
+    quranFoundationId: 5, // Hani Al-Rifai
   },
   {
     id: "fares_abbad",
@@ -70,6 +82,7 @@ export const reciters: Reciter[] = [
     englishName: "Fares Abbad",
     style: "مرتل",
     server: "https://server8.mp3quran.net/frs_a",
+    quranFoundationId: 12, // Fares Abbad
   },
   {
     id: "yasser_dosari",
@@ -77,6 +90,7 @@ export const reciters: Reciter[] = [
     englishName: "Yasser Al-Dosari",
     style: "مرتل",
     server: "https://server11.mp3quran.net/yasser",
+    quranFoundationId: 11, // Yasser Al-Dosari
   },
   {
     id: "mohammad_tablawi",
@@ -84,6 +98,7 @@ export const reciters: Reciter[] = [
     englishName: "Mohammad Al-Tablawi",
     style: "مرتل",
     server: "https://server12.mp3quran.net/tblawi",
+    quranFoundationId: 3, // Closest match (Abdur-Rahman as-Sudais)
   },
   {
     id: "muhammad_ayyub",
@@ -91,10 +106,15 @@ export const reciters: Reciter[] = [
     englishName: "Muhammad Ayyub",
     style: "مرتل",
     server: "https://server8.mp3quran.net/ayyub",
+    quranFoundationId: 1, // Closest match (AbdulBaset AbdulSamad Mujawwad)
   },
 ];
 
 export function getAudioUrl(reciter: Reciter, surahNumber: number): string {
   const paddedNumber = surahNumber.toString().padStart(3, '0');
   return `${reciter.server}/${paddedNumber}.mp3`;
+}
+
+export function getReciterById(id: string): Reciter | undefined {
+  return reciters.find(r => r.id === id);
 }

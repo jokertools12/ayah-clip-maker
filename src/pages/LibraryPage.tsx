@@ -8,23 +8,27 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { 
   Video, 
-  Download, 
   Trash2, 
   Play, 
   Calendar,
   Loader2,
   Library as LibraryIcon,
-  Plus
+  Plus,
+  ExternalLink,
+  RotateCcw
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface SavedVideo {
   id: string;
   surah_name: string;
+  surah_number: number;
+  reciter_id: string;
   reciter_name: string;
   start_ayah: number;
   end_ayah: number;
   aspect_ratio: string;
+  background_type: string;
   created_at: string;
   video_url?: string;
   thumbnail_url?: string;
@@ -84,12 +88,24 @@ export default function LibraryPage() {
     }
   };
 
-  const handleDownload = (video: SavedVideo) => {
-    if (video.video_url) {
-      window.open(video.video_url, '_blank');
-    } else {
-      toast.info('الفيديو غير متاح للتحميل حالياً');
-    }
+  // Open the saved video in preview page to regenerate
+  const handleOpenInPreview = (video: SavedVideo) => {
+    const params = new URLSearchParams({
+      surah: video.surah_number.toString(),
+      reciter: video.reciter_id,
+      start: video.start_ayah.toString(),
+      end: video.end_ayah.toString(),
+      backgroundType: video.background_type,
+      ratio: video.aspect_ratio,
+    });
+    
+    navigate(`/preview?${params.toString()}`);
+  };
+
+  // Re-create the video (open in preview)
+  const handleRecreate = (video: SavedVideo) => {
+    toast.info('جاري فتح المعاينة لإعادة إنشاء الفيديو...');
+    handleOpenInPreview(video);
   };
 
   const formatDate = (dateString: string) => {
@@ -171,6 +187,7 @@ export default function LibraryPage() {
                       variant="secondary"
                       size="icon"
                       className="absolute bottom-2 left-2 h-10 w-10 rounded-full"
+                      onClick={() => handleOpenInPreview(video)}
                     >
                       <Play className="h-5 w-5" />
                     </Button>
@@ -196,11 +213,20 @@ export default function LibraryPage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleDownload(video)}
+                        onClick={() => handleOpenInPreview(video)}
                         className="flex-1 gap-2"
                       >
-                        <Download className="h-4 w-4" />
-                        تحميل
+                        <ExternalLink className="h-4 w-4" />
+                        فتح
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleRecreate(video)}
+                        className="flex-1 gap-2"
+                      >
+                        <RotateCcw className="h-4 w-4" />
+                        إعادة إنشاء
                       </Button>
                       <Button
                         variant="outline"

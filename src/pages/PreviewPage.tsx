@@ -17,10 +17,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useAudioEffects } from '@/hooks/useAudioEffects';
 import { useVideoRecorder } from '@/hooks/useVideoRecorder';
 import {
-  fetchChapterRecitationAudio,
-  fetchRecitations,
+  fetchChapterRecitationAudioById,
   QuranFoundationTimestamp,
-  resolveRecitationIdByName,
 } from '@/lib/quranFoundationApi';
 import { supabase } from '@/integrations/supabase/client';
 import { TextSettings } from '@/components/TextSettingsPanel';
@@ -51,7 +49,7 @@ const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
   showReciterName: true,
   showAyahText: true,
   showAyahNumber: true,
-  highlightStyle: 'solid',
+  highlightStyle: 'glow', // Default to golden glow
 };
 
 export default function PreviewPage() {
@@ -144,15 +142,16 @@ export default function PreviewPage() {
       setHighlightWordIndex(null);
 
       try {
-        // Try Quran Foundation API first for precise timing
-        const recitations = await fetchRecitations('en');
-        const recitationId = resolveRecitationIdByName(recitations, reciter.englishName);
+        // Use the reciter's known Quran Foundation ID if available
+        const recitationId = reciter.quranFoundationId;
         
         if (!recitationId) {
           throw new Error('Reciter not found in Quran Foundation');
         }
 
-        const audioFile = await fetchChapterRecitationAudio(recitationId, surahNumber, true);
+        console.log(`Loading audio for reciter: ${reciter.englishName}, recitationId: ${recitationId}`);
+        
+        const audioFile = await fetchChapterRecitationAudioById(recitationId, surahNumber, true);
         const all = audioFile.timestamps ?? [];
 
         // Build stable array by index so it matches [startAyah..endAyah]
@@ -179,6 +178,7 @@ export default function PreviewPage() {
           setRangeMs({ from, to });
           setDuration(Math.max((to - from) / 1000, 0));
           setUseQuranFoundation(true);
+          console.log(`Loaded audio: ${audioFile.audio_url}`);
         }
       } catch (e) {
         console.warn('Quran Foundation API failed, falling back to mp3quran:', e);
@@ -186,6 +186,7 @@ export default function PreviewPage() {
         // Fallback to mp3quran.net with the reciter's specific server
         if (!cancelled && reciter) {
           const fallbackUrl = getAudioUrl(reciter, surahNumber);
+          console.log(`Fallback audio URL: ${fallbackUrl}`);
           setAudioUrl(fallbackUrl);
           setAyahTimings([]);
           setRangeMs(null);
@@ -201,7 +202,7 @@ export default function PreviewPage() {
     return () => {
       cancelled = true;
     };
-  }, [reciter?.id, reciter?.englishName, surahNumber, startAyah, endAyah]);
+  }, [reciter?.id, reciter?.quranFoundationId, surahNumber, startAyah, endAyah]);
 
   // Initialize audio effects when audio is loaded
   useEffect(() => {

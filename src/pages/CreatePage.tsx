@@ -58,6 +58,8 @@ export default function CreatePage() {
   const [selectedReciter, setSelectedReciter] = useState<string | null>(null);
   const [startAyah, setStartAyah] = useState(1);
   const [endAyah, setEndAyah] = useState(5);
+  const [startAyahInput, setStartAyahInput] = useState('1');
+  const [endAyahInput, setEndAyahInput] = useState('5');
   const [selectedBackground, setSelectedBackground] = useState<BackgroundItem | null>(
     () => getRandomBackground('video')
   );
@@ -312,21 +314,24 @@ export default function CreatePage() {
                         id="startAyah"
                         type="text"
                         inputMode="numeric"
-                        pattern="[0-9]*"
-                        min={1}
-                        max={selectedSurahData?.numberOfAyahs || 1}
-                        value={startAyah}
+                        value={startAyahInput}
                         onChange={(e) => {
-                          const val = e.target.value.replace(/[^0-9]/g, '');
-                          const num = parseInt(val) || 1;
-                          const max = selectedSurahData?.numberOfAyahs || 1;
-                          setStartAyah(Math.min(Math.max(num, 1), max));
+                          // Allow any input while typing
+                          setStartAyahInput(e.target.value);
                         }}
-                        onBlur={(e) => {
-                          const val = parseInt(e.target.value) || 1;
+                        onBlur={() => {
                           const max = selectedSurahData?.numberOfAyahs || 1;
-                          setStartAyah(Math.min(Math.max(val, 1), max));
+                          const val = parseInt(startAyahInput) || 1;
+                          const clamped = Math.min(Math.max(val, 1), max);
+                          setStartAyah(clamped);
+                          setStartAyahInput(clamped.toString());
+                          // Also adjust end if needed
+                          if (endAyah < clamped) {
+                            setEndAyah(clamped);
+                            setEndAyahInput(clamped.toString());
+                          }
                         }}
+                        className="text-center"
                       />
                     </div>
                     <div className="space-y-2">
@@ -335,21 +340,19 @@ export default function CreatePage() {
                         id="endAyah"
                         type="text"
                         inputMode="numeric"
-                        pattern="[0-9]*"
-                        min={startAyah}
-                        max={selectedSurahData?.numberOfAyahs || 1}
-                        value={endAyah}
+                        value={endAyahInput}
                         onChange={(e) => {
-                          const val = e.target.value.replace(/[^0-9]/g, '');
-                          const num = parseInt(val) || startAyah;
-                          const max = selectedSurahData?.numberOfAyahs || 1;
-                          setEndAyah(Math.min(Math.max(num, startAyah), max));
+                          // Allow any input while typing
+                          setEndAyahInput(e.target.value);
                         }}
-                        onBlur={(e) => {
-                          const val = parseInt(e.target.value) || startAyah;
+                        onBlur={() => {
                           const max = selectedSurahData?.numberOfAyahs || 1;
-                          setEndAyah(Math.min(Math.max(val, startAyah), max));
+                          const val = parseInt(endAyahInput) || startAyah;
+                          const clamped = Math.min(Math.max(val, startAyah), max);
+                          setEndAyah(clamped);
+                          setEndAyahInput(clamped.toString());
                         }}
+                        className="text-center"
                       />
                     </div>
                   </div>
