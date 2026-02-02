@@ -310,22 +310,46 @@ export default function CreatePage() {
                       <Label htmlFor="startAyah">من الآية</Label>
                       <Input
                         id="startAyah"
-                        type="number"
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
                         min={1}
                         max={selectedSurahData?.numberOfAyahs || 1}
                         value={startAyah}
-                        onChange={(e) => setStartAyah(parseInt(e.target.value) || 1)}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/[^0-9]/g, '');
+                          const num = parseInt(val) || 1;
+                          const max = selectedSurahData?.numberOfAyahs || 1;
+                          setStartAyah(Math.min(Math.max(num, 1), max));
+                        }}
+                        onBlur={(e) => {
+                          const val = parseInt(e.target.value) || 1;
+                          const max = selectedSurahData?.numberOfAyahs || 1;
+                          setStartAyah(Math.min(Math.max(val, 1), max));
+                        }}
                       />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="endAyah">إلى الآية</Label>
                       <Input
                         id="endAyah"
-                        type="number"
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
                         min={startAyah}
                         max={selectedSurahData?.numberOfAyahs || 1}
                         value={endAyah}
-                        onChange={(e) => setEndAyah(parseInt(e.target.value) || 1)}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/[^0-9]/g, '');
+                          const num = parseInt(val) || startAyah;
+                          const max = selectedSurahData?.numberOfAyahs || 1;
+                          setEndAyah(Math.min(Math.max(num, startAyah), max));
+                        }}
+                        onBlur={(e) => {
+                          const val = parseInt(e.target.value) || startAyah;
+                          const max = selectedSurahData?.numberOfAyahs || 1;
+                          setEndAyah(Math.min(Math.max(val, startAyah), max));
+                        }}
                       />
                     </div>
                   </div>

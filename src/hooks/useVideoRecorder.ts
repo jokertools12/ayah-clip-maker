@@ -202,11 +202,11 @@ export function useVideoRecorder() {
       return mp4;
     } catch (e) {
       console.error('MP4 conversion failed:', e);
+      // Fallback silently to WebM without showing error
       setState((prev) => ({
         ...prev,
         isConverting: false,
-        error: 'تعذر تحويل الفيديو إلى MP4 على هذا الجهاز/المتصفح',
-        stage: 'يمكنك تنزيل WebM كبديل',
+        stage: '',
       }));
       return null;
     }

@@ -1,5 +1,4 @@
-import { useRef, useEffect, forwardRef, useImperativeHandle, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useRef, useEffect, forwardRef, useImperativeHandle, useCallback, useState } from 'react';
 import { BackgroundItem } from '@/data/backgrounds';
 
 interface VideoPreviewProps {
@@ -17,6 +16,13 @@ interface VideoPreviewProps {
     shadowIntensity: number;
     overlayOpacity: number;
   };
+  displaySettings?: {
+    showSurahName: boolean;
+    showReciterName: boolean;
+    showAyahText: boolean;
+    showAyahNumber: boolean;
+    highlightStyle: 'solid' | 'glow' | 'underline';
+  };
   isPlaying: boolean;
   onCanvasReady?: (canvas: HTMLCanvasElement) => void;
 }
@@ -27,6 +33,14 @@ export interface VideoPreviewRef {
   drawFrame: () => void;
 }
 
+const DEFAULT_DISPLAY_SETTINGS = {
+  showSurahName: true,
+  showReciterName: true,
+  showAyahText: true,
+  showAyahNumber: true,
+  highlightStyle: 'solid' as const,
+};
+
 export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   background,
   surahName,
@@ -36,6 +50,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   highlightedWordIndex,
   aspectRatio,
   textSettings,
+  displaySettings = DEFAULT_DISPLAY_SETTINGS,
   isPlaying,
   onCanvasReady,
 }, ref) => {
@@ -44,6 +59,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   const videoRef = useRef<HTMLVideoElement>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const [videoReady, setVideoReady] = useState(false);
 
   // Get dimensions based on aspect ratio
   const getDimensions = () => {
@@ -67,6 +83,29 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     }
   }, [background]);
 
+  // Handle video ready state
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || background?.type !== 'video') return;
+
+    const handleCanPlay = () => setVideoReady(true);
+    const handleError = () => {
+      console.error('Video load error, falling back to image');
+      setVideoReady(false);
+    };
+
+    video.addEventListener('canplay', handleCanPlay);
+    video.addEventListener('error', handleError);
+
+    // Force load
+    video.load();
+
+    return () => {
+      video.removeEventListener('canplay', handleCanPlay);
+      video.removeEventListener('error', handleError);
+    };
+  }, [background]);
+
   const getTokenHsl = useCallback((token: string, fallback: string) => {
     try {
       const v = getComputedStyle(document.documentElement).getPropertyValue(token).trim();
@@ -74,6 +113,52 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     } catch {
       return fallback;
     }
+  }, []);
+
+  // Convert Arabic number to Eastern Arabic numerals
+  const toArabicNumber = (num: number): string => {
+    const arabicNumerals = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+    return num.toString().split('').map(d => arabicNumerals[parseInt(d)] || d).join('');
+  };
+
+  // Draw decorative ayah number badge
+  const drawAyahBadge = useCallback((ctx: CanvasRenderingContext2D, x: number, y: number, num: number, size: number) => {
+    const arabicNum = toArabicNumber(num);
+    
+    // Outer decorative circle
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, y, size, 0, Math.PI * 2);
+    const gradient = ctx.createRadialGradient(x, y, 0, x, y, size);
+    gradient.addColorStop(0, 'rgba(212, 175, 55, 0.3)');
+    gradient.addColorStop(0.7, 'rgba(212, 175, 55, 0.15)');
+    gradient.addColorStop(1, 'rgba(212, 175, 55, 0.05)');
+    ctx.fillStyle = gradient;
+    ctx.fill();
+    
+    // Inner circle border
+    ctx.beginPath();
+    ctx.arc(x, y, size * 0.85, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(212, 175, 55, 0.6)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Inner decorative ring
+    ctx.beginPath();
+    ctx.arc(x, y, size * 0.7, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(212, 175, 55, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    
+    // Draw number with Noto Naskh Arabic for consistency
+    ctx.font = `bold ${size * 1.1}px "Noto Naskh Arabic", "Amiri", serif`;
+    ctx.fillStyle = '#D4AF37';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+    ctx.shadowBlur = 4;
+    ctx.fillText(arabicNum, x, y + 2);
+    ctx.restore();
   }, []);
 
   // Draw frame on canvas
@@ -91,7 +176,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Draw background
-    if (background?.type === 'video' && videoRef.current && videoRef.current.readyState >= 2) {
+    if (background?.type === 'video' && videoRef.current && videoReady && videoRef.current.readyState >= 2) {
       // Draw video frame
       ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
     } else if (background?.type === 'image' && imageRef.current) {
@@ -108,10 +193,11 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       ctx.drawImage(imageRef.current, 0, 0, canvas.width, canvas.height);
       ctx.restore();
     } else {
-      // Gradient fallback
+      // Gradient fallback with Islamic pattern hint
       const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
       gradient.addColorStop(0, '#1a1a2e');
-      gradient.addColorStop(1, '#16213e');
+      gradient.addColorStop(0.5, '#16213e');
+      gradient.addColorStop(1, '#0f3460');
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
@@ -121,18 +207,18 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Draw top gradient
-    const topGradient = ctx.createLinearGradient(0, 0, 0, canvas.height * 0.2);
-    topGradient.addColorStop(0, 'rgba(0, 0, 0, 0.4)');
+    const topGradient = ctx.createLinearGradient(0, 0, 0, canvas.height * 0.25);
+    topGradient.addColorStop(0, 'rgba(0, 0, 0, 0.5)');
     topGradient.addColorStop(1, 'transparent');
     ctx.fillStyle = topGradient;
-    ctx.fillRect(0, 0, canvas.width, canvas.height * 0.2);
+    ctx.fillRect(0, 0, canvas.width, canvas.height * 0.25);
 
     // Draw bottom gradient
-    const bottomGradient = ctx.createLinearGradient(0, canvas.height * 0.8, 0, canvas.height);
+    const bottomGradient = ctx.createLinearGradient(0, canvas.height * 0.75, 0, canvas.height);
     bottomGradient.addColorStop(0, 'transparent');
-    bottomGradient.addColorStop(1, 'rgba(0, 0, 0, 0.4)');
+    bottomGradient.addColorStop(1, 'rgba(0, 0, 0, 0.5)');
     ctx.fillStyle = bottomGradient;
-    ctx.fillRect(0, canvas.height * 0.8, canvas.width, canvas.height * 0.2);
+    ctx.fillRect(0, canvas.height * 0.75, canvas.width, canvas.height * 0.25);
 
     // Text settings
     ctx.textAlign = 'center';
@@ -142,45 +228,72 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     ctx.shadowOffsetX = 2;
     ctx.shadowOffsetY = 2;
 
-    // Draw surah name badge
-    const badgeY = canvas.height * 0.15;
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-    ctx.beginPath();
-    ctx.roundRect(canvas.width / 2 - 150, badgeY - 40, 300, 80, 40);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    ctx.font = `bold ${textSettings.fontSize * 2}px ${textSettings.fontFamily}`;
-    ctx.fillStyle = textSettings.textColor;
-    ctx.fillText(surahName, canvas.width / 2, badgeY);
-
-    // Draw reciter name
-    ctx.font = `${textSettings.fontSize * 1.2}px ${textSettings.fontFamily}`;
-    ctx.fillStyle = textSettings.textColor;
-    ctx.globalAlpha = 0.8;
-    ctx.fillText(`بصوت ${reciterName}`, canvas.width / 2, badgeY + 60);
-    ctx.globalAlpha = 1;
-
-    // Draw decorative line
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(canvas.width / 2 - 100, badgeY + 100);
-    ctx.lineTo(canvas.width / 2 + 100, badgeY + 100);
-    ctx.stroke();
-
-    // Draw current ayah
-    if (currentAyah) {
-      const ayahY = canvas.height / 2;
-      const maxWidth = canvas.width * 0.85;
-      const lineHeight = textSettings.fontSize * 3;
+    // Draw surah name badge (if enabled)
+    if (displaySettings.showSurahName) {
+      const badgeY = canvas.height * 0.12;
       
-      ctx.font = `${textSettings.fontSize * 2}px ${textSettings.fontFamily}`;
+      // Elegant badge background
+      const badgeWidth = 320;
+      const badgeHeight = 90;
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+      ctx.beginPath();
+      ctx.roundRect(canvas.width / 2 - badgeWidth / 2, badgeY - badgeHeight / 2, badgeWidth, badgeHeight, 45);
+      ctx.fill();
+      
+      // Golden border
+      ctx.strokeStyle = 'rgba(212, 175, 55, 0.4)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Surah name with Noto Naskh Arabic
+      ctx.font = `bold ${textSettings.fontSize * 2.2}px "Noto Naskh Arabic", "Amiri", serif`;
+      ctx.fillStyle = textSettings.textColor;
+      ctx.fillText(surahName, canvas.width / 2, badgeY);
+    }
+
+    // Draw reciter name (if enabled)
+    if (displaySettings.showReciterName) {
+      const reciterY = displaySettings.showSurahName ? canvas.height * 0.19 : canvas.height * 0.12;
+      ctx.font = `${textSettings.fontSize * 1.1}px "Noto Naskh Arabic", "Amiri", serif`;
+      ctx.fillStyle = textSettings.textColor;
+      ctx.globalAlpha = 0.75;
+      ctx.fillText(`بصوت ${reciterName}`, canvas.width / 2, reciterY);
+      ctx.globalAlpha = 1;
+    }
+
+    // Draw decorative separator line
+    if (displaySettings.showSurahName || displaySettings.showReciterName) {
+      const lineY = canvas.height * 0.24;
+      const lineWidth = 150;
+      
+      // Center ornament
+      ctx.fillStyle = 'rgba(212, 175, 55, 0.5)';
+      ctx.beginPath();
+      ctx.arc(canvas.width / 2, lineY, 4, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Lines on both sides
+      ctx.strokeStyle = 'rgba(212, 175, 55, 0.3)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(canvas.width / 2 - lineWidth, lineY);
+      ctx.lineTo(canvas.width / 2 - 15, lineY);
+      ctx.moveTo(canvas.width / 2 + 15, lineY);
+      ctx.lineTo(canvas.width / 2 + lineWidth, lineY);
+      ctx.stroke();
+    }
+
+    // Draw current ayah (if enabled)
+    if (currentAyah && displaySettings.showAyahText) {
+      const ayahY = canvas.height * 0.52;
+      const maxWidth = canvas.width * 0.88;
+      const lineHeight = textSettings.fontSize * 3.2;
+      
+      // Use Noto Naskh Arabic for consistent rendering
+      ctx.font = `${textSettings.fontSize * 2}px "Noto Naskh Arabic", "Amiri", serif`;
       ctx.fillStyle = textSettings.textColor;
       
-      // Word wrap (keep words array so we can highlight a single word)
+      // Word wrap
       const words = (currentAyahWords?.length ? currentAyahWords : currentAyah.text.split(' ')).filter(Boolean);
 
       const spaceWidth = ctx.measureText(' ').width;
@@ -205,7 +318,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       const totalHeight = lines.length * lineHeight;
       const startY = ayahY - totalHeight / 2;
 
-      // Use RTL metrics for better Arabic placement
+      // RTL text direction
       ctx.direction = 'rtl';
       ctx.textAlign = 'right';
 
@@ -216,12 +329,27 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
           return '';
         }
       })();
-      const highlightBg = primaryRaw ? `hsl(${primaryRaw} / 0.22)` : 'rgba(255,255,255,0.22)';
-      const highlightText = getTokenHsl('--primary-foreground', textSettings.textColor);
+      
+      // Different highlight styles
+      let highlightBg: string;
+      let highlightText: string;
+      
+      switch (displaySettings.highlightStyle) {
+        case 'glow':
+          highlightBg = 'transparent';
+          highlightText = '#FFD700';
+          break;
+        case 'underline':
+          highlightBg = 'transparent';
+          highlightText = textSettings.textColor;
+          break;
+        default: // solid
+          highlightBg = primaryRaw ? `hsl(${primaryRaw} / 0.28)` : 'rgba(212, 175, 55, 0.28)';
+          highlightText = getTokenHsl('--primary-foreground', '#FFD700');
+      }
 
       let globalIndex = 0;
       lines.forEach((wordsInLine, i) => {
-        // Measure full line width to center it
         const lineTotal = wordsInLine.reduce((sum, w) => sum + ctx.measureText(w).width, 0) +
           Math.max(wordsInLine.length - 1, 0) * spaceWidth;
 
@@ -233,44 +361,56 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
           const isWordHighlighted = highlightedWordIndex != null && globalIndex === highlightedWordIndex;
 
           if (isWordHighlighted) {
-            const padX = 18;
-            const padY = 10;
             ctx.save();
             ctx.shadowBlur = 0;
-            ctx.fillStyle = highlightBg;
-            const left = cursorX - wWidth - padX;
-            const top = y - (textSettings.fontSize * 1.2) - padY;
-            const width = wWidth + padX * 2;
-            const height = textSettings.fontSize * 2.2 + padY * 2;
-            ctx.beginPath();
-            ctx.roundRect(left, top, width, height, 22);
-            ctx.fill();
+            
+            if (displaySettings.highlightStyle === 'solid') {
+              const padX = 20;
+              const padY = 12;
+              ctx.fillStyle = highlightBg;
+              const left = cursorX - wWidth - padX;
+              const top = y - (textSettings.fontSize * 1.3) - padY;
+              const width = wWidth + padX * 2;
+              const height = textSettings.fontSize * 2.4 + padY * 2;
+              ctx.beginPath();
+              ctx.roundRect(left, top, width, height, 24);
+              ctx.fill();
+            } else if (displaySettings.highlightStyle === 'glow') {
+              ctx.shadowColor = '#FFD700';
+              ctx.shadowBlur = 20;
+            } else if (displaySettings.highlightStyle === 'underline') {
+              ctx.strokeStyle = '#FFD700';
+              ctx.lineWidth = 3;
+              ctx.beginPath();
+              ctx.moveTo(cursorX - wWidth, y + textSettings.fontSize * 0.8);
+              ctx.lineTo(cursorX, y + textSettings.fontSize * 0.8);
+              ctx.stroke();
+            }
+            
             ctx.restore();
           }
 
+          ctx.save();
+          if (isWordHighlighted && displaySettings.highlightStyle === 'glow') {
+            ctx.shadowColor = '#FFD700';
+            ctx.shadowBlur = 25;
+          }
           ctx.fillStyle = isWordHighlighted ? highlightText : textSettings.textColor;
           ctx.fillText(w, cursorX, y);
+          ctx.restore();
 
           cursorX -= wWidth + spaceWidth;
           globalIndex += 1;
         });
       });
 
-      // Draw ayah number badge
-      const badgeBottom = startY + totalHeight + 60;
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-      ctx.beginPath();
-      ctx.arc(canvas.width / 2, badgeBottom, 40, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-
-      ctx.font = `bold ${textSettings.fontSize * 1.5}px Arial`;
-      ctx.fillStyle = textSettings.textColor;
-      ctx.fillText(String(currentAyah.numberInSurah), canvas.width / 2, badgeBottom);
+      // Draw ayah number badge (if enabled)
+      if (displaySettings.showAyahNumber) {
+        const badgeY = startY + totalHeight + 70;
+        drawAyahBadge(ctx, canvas.width / 2, badgeY, currentAyah.numberInSurah, 36);
+      }
     }
-  }, [background, surahName, reciterName, currentAyah, currentAyahWords, highlightedWordIndex, textSettings, dimensions, getTokenHsl]);
+  }, [background, videoReady, surahName, reciterName, currentAyah, currentAyahWords, highlightedWordIndex, textSettings, displaySettings, dimensions, getTokenHsl, drawAyahBadge]);
 
   // Animation loop for canvas
   useEffect(() => {
@@ -331,6 +471,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
           muted
           playsInline
           crossOrigin="anonymous"
+          preload="auto"
         />
       )}
 

@@ -18,10 +18,10 @@ interface TextSettingsPanelProps {
 }
 
 const fontOptions = [
+  { value: '"Noto Naskh Arabic", serif', label: 'نسخ' },
   { value: '"Amiri", serif', label: 'أميري' },
   { value: '"Cairo", sans-serif', label: 'القاهرة' },
   { value: '"Scheherazade New", serif', label: 'شهرزاد' },
-  { value: '"Noto Naskh Arabic", serif', label: 'نسخ' },
 ];
 
 const colorOptions = [
