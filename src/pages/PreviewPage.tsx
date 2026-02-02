@@ -3,14 +3,18 @@ import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Layout } from '@/components/Layout';
 import { VideoPreview, VideoPreviewRef } from '@/components/VideoPreview';
+import { AudioEffectsPanel } from '@/components/AudioEffectsPanel';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { surahs } from '@/data/surahs';
 import { reciters, getAudioUrl } from '@/data/reciters';
 import { backgroundVideos, backgroundImages, BackgroundItem } from '@/data/backgrounds';
 import { useQuranApi } from '@/hooks/useQuranApi';
 import { useAuth } from '@/hooks/useAuth';
+import { useAudioEffects, AudioEffects } from '@/hooks/useAudioEffects';
+import { useVideoRecorder } from '@/hooks/useVideoRecorder';
 import { supabase } from '@/integrations/supabase/client';
 import { TextSettings } from '@/components/TextSettingsPanel';
 import {
@@ -28,6 +32,9 @@ import {
   AlertCircle,
   SkipBack,
   SkipForward,
+  Video,
+  Settings,
+  Music,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -36,6 +43,8 @@ export default function PreviewPage() {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
   const { fetchAyahs } = useQuranApi();
+  const audioEffects = useAudioEffects();
+  const videoRecorder = useVideoRecorder();
 
   // Get params
   const surahNumber = parseInt(searchParams.get('surah') || '1');
@@ -58,7 +67,7 @@ export default function PreviewPage() {
   // Data
   const surah = surahs.find((s) => s.number === surahNumber);
   const reciter = reciters.find((r) => r.id === reciterId);
-  const background: BackgroundItem | null = 
+  const background: BackgroundItem | null =
     [...backgroundVideos, ...backgroundImages].find((bg) => bg.id === backgroundId) ||
     (backgroundType === 'video' ? backgroundVideos[0] : backgroundImages[0]);
 
@@ -70,15 +79,15 @@ export default function PreviewPage() {
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [isGenerated, setIsGenerated] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [audioLoaded, setAudioLoaded] = useState(false);
   const [audioError, setAudioError] = useState(false);
+  const [activeTab, setActiveTab] = useState('controls');
 
   // Refs
   const audioRef = useRef<HTMLAudioElement>(null);
   const videoPreviewRef = useRef<VideoPreviewRef>(null);
+  const previewContainerRef = useRef<HTMLDivElement>(null);
   const ayahTimestampsRef = useRef<number[]>([]);
 
   // Load ayahs
@@ -95,10 +104,16 @@ export default function PreviewPage() {
   // Audio URL
   const audioUrl = reciter ? getAudioUrl(reciter, surahNumber) : '';
 
+  // Initialize audio effects when audio is loaded
+  useEffect(() => {
+    if (audioRef.current && audioLoaded && !audioError) {
+      audioEffects.initializeAudio(audioRef.current);
+    }
+  }, [audioLoaded, audioError]);
+
   // Calculate ayah timestamps based on audio duration
   useEffect(() => {
     if (duration > 0 && ayahs.length > 0) {
-      // Distribute time evenly among ayahs (in real app, would use actual timing data)
       const timePerAyah = duration / ayahs.length;
       const timestamps = ayahs.map((_, index) => index * timePerAyah);
       ayahTimestampsRef.current = timestamps;
@@ -106,8 +121,10 @@ export default function PreviewPage() {
   }, [duration, ayahs.length]);
 
   // Handle play/pause
-  const togglePlay = useCallback(() => {
+  const togglePlay = useCallback(async () => {
     if (!audioRef.current) return;
+
+    await audioEffects.resumeContext();
 
     if (isPlaying) {
       audioRef.current.pause();
@@ -118,7 +135,7 @@ export default function PreviewPage() {
       });
     }
     setIsPlaying(!isPlaying);
-  }, [isPlaying]);
+  }, [isPlaying, audioEffects]);
 
   // Handle mute
   const toggleMute = useCallback(() => {
@@ -132,9 +149,10 @@ export default function PreviewPage() {
   const skipAyah = (direction: 'forward' | 'backward') => {
     if (!audioRef.current || ayahTimestampsRef.current.length === 0) return;
 
-    const newIndex = direction === 'forward'
-      ? Math.min(currentAyahIndex + 1, ayahs.length - 1)
-      : Math.max(currentAyahIndex - 1, 0);
+    const newIndex =
+      direction === 'forward'
+        ? Math.min(currentAyahIndex + 1, ayahs.length - 1)
+        : Math.max(currentAyahIndex - 1, 0);
 
     const timestamp = ayahTimestampsRef.current[newIndex];
     if (timestamp !== undefined) {
@@ -158,7 +176,6 @@ export default function PreviewPage() {
       setCurrentTime(audio.currentTime);
       setProgress((audio.currentTime / audio.duration) * 100);
 
-      // Update current ayah based on time
       const timestamps = ayahTimestampsRef.current;
       if (timestamps.length > 0) {
         for (let i = timestamps.length - 1; i >= 0; i--) {
@@ -211,67 +228,43 @@ export default function PreviewPage() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Generate video (simulation with better feedback)
-  const handleGenerate = async () => {
-    setIsGenerating(true);
-    setProgress(0);
+  // Start video recording
+  const handleStartRecording = async () => {
+    const container = previewContainerRef.current;
+    const audio = audioRef.current;
+
+    if (!container || !audio) {
+      toast.error('حدث خطأ في تجهيز التسجيل');
+      return;
+    }
 
     try {
-      // Simulate generation progress with stages
-      const stages = [
-        { progress: 20, message: 'جاري تحميل الخلفية...' },
-        { progress: 40, message: 'جاري دمج الصوت...' },
-        { progress: 60, message: 'جاري إضافة النصوص...' },
-        { progress: 80, message: 'جاري معالجة الفيديو...' },
-        { progress: 100, message: 'اكتمل!' },
-      ];
+      await audioEffects.resumeContext();
 
-      for (const stage of stages) {
-        await new Promise((resolve) => setTimeout(resolve, 800));
-        setProgress(stage.progress);
+      // Calculate recording duration based on ayahs
+      const recordingDuration = Math.min(duration || 30, 60); // Max 60 seconds
+
+      toast.info('بدء التسجيل... لا تغلق هذه الصفحة');
+
+      const blob = await videoRecorder.startRecording(container, audio, recordingDuration);
+
+      if (blob) {
+        toast.success('تم إنشاء الفيديو بنجاح!');
       }
-
-      setIsGenerated(true);
-      toast.success('تم إنشاء الفيديو بنجاح!');
     } catch (error) {
-      console.error('Generation error:', error);
-      toast.error('حدث خطأ في إنشاء الفيديو');
-    } finally {
-      setIsGenerating(false);
+      console.error('Recording error:', error);
+      toast.error('حدث خطأ في التسجيل');
     }
   };
 
-  // Download video
-  const handleDownload = async () => {
-    toast.info('جاري تجهيز الفيديو للتحميل...');
-    
-    try {
-      // Create a simple downloadable content
-      // In production, this would use a proper video rendering service
-      const content = `
-        سورة: ${surah?.name}
-        القارئ: ${reciter?.name}
-        الآيات: ${startAyah} - ${endAyah}
-        
-        ${ayahs.map((a) => `(${a.numberInSurah}) ${a.text}`).join('\n\n')}
-      `;
-
-      // For now, download as text file with metadata
-      // In production, integrate with a video rendering API
-      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${surah?.name}-${reciter?.name}.txt`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
-      toast.success('تم تحميل الملف! لتحميل الفيديو الكامل، يرجى استخدام خاصية تسجيل الشاشة.');
-    } catch (error) {
-      console.error('Download error:', error);
-      toast.error('حدث خطأ في التحميل');
+  // Download recorded video
+  const handleDownload = () => {
+    if (videoRecorder.videoBlob) {
+      const filename = `${surah?.name || 'quran'}-${reciter?.name || 'reciter'}.webm`;
+      videoRecorder.downloadVideo(filename);
+      toast.success('تم تحميل الفيديو!');
+    } else {
+      toast.error('لا يوجد فيديو للتحميل، قم بإنشاء الفيديو أولاً');
     }
   };
 
@@ -351,6 +344,7 @@ export default function PreviewPage() {
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             className="flex-1 flex justify-center"
+            ref={previewContainerRef}
           >
             <VideoPreview
               ref={videoPreviewRef}
@@ -364,12 +358,7 @@ export default function PreviewPage() {
             />
 
             {/* Audio Element */}
-            <audio
-              ref={audioRef}
-              src={audioUrl}
-              preload="metadata"
-              crossOrigin="anonymous"
-            />
+            <audio ref={audioRef} src={audioUrl} preload="metadata" crossOrigin="anonymous" />
           </motion.div>
 
           {/* Controls */}
@@ -377,121 +366,136 @@ export default function PreviewPage() {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.2 }}
-            className="w-full max-w-md mx-auto lg:mx-0"
+            className="w-full max-w-md mx-auto lg:mx-0 space-y-4"
           >
+            {/* Info Card */}
             <Card>
-              <CardContent className="p-6 space-y-6">
-                {/* Info */}
-                <div className="space-y-2">
-                  <h3 className="text-xl font-bold">{surah?.name}</h3>
-                  <p className="text-muted-foreground">
-                    الآيات {startAyah} - {endAyah} | {reciter?.name}
-                  </p>
-                </div>
+              <CardContent className="p-4">
+                <h3 className="text-xl font-bold">{surah?.name}</h3>
+                <p className="text-muted-foreground text-sm">
+                  الآيات {startAyah} - {endAyah} | {reciter?.name}
+                </p>
+              </CardContent>
+            </Card>
 
-                {/* Audio Error Message */}
-                {audioError && (
-                  <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 flex items-start gap-2">
-                    <AlertCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-medium text-destructive">تعذر تحميل الصوت</p>
-                      <p className="text-xs text-muted-foreground">
-                        قد يكون الملف غير متوفر لهذه السورة
-                      </p>
+            {/* Tabs */}
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <TabsList className="w-full">
+                <TabsTrigger value="controls" className="flex-1 gap-2">
+                  <Settings className="h-4 w-4" />
+                  التحكم
+                </TabsTrigger>
+                <TabsTrigger value="effects" className="flex-1 gap-2">
+                  <Music className="h-4 w-4" />
+                  المؤثرات
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="controls" className="mt-4">
+                <Card>
+                  <CardContent className="p-4 space-y-4">
+                    {/* Audio Error Message */}
+                    {audioError && (
+                      <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 flex items-start gap-2">
+                        <AlertCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-medium text-destructive">تعذر تحميل الصوت</p>
+                          <p className="text-xs text-muted-foreground">
+                            قد يكون الملف غير متوفر لهذه السورة
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Playback Controls */}
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-center gap-3">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => skipAyah('backward')}
+                          disabled={currentAyahIndex === 0 || audioError}
+                        >
+                          <SkipForward className="h-5 w-5" />
+                        </Button>
+
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={togglePlay}
+                          disabled={!audioLoaded || audioError}
+                          className="h-14 w-14"
+                        >
+                          {!audioLoaded ? (
+                            <Loader2 className="h-6 w-6 animate-spin" />
+                          ) : isPlaying ? (
+                            <Pause className="h-6 w-6" />
+                          ) : (
+                            <Play className="h-6 w-6" />
+                          )}
+                        </Button>
+
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => skipAyah('forward')}
+                          disabled={currentAyahIndex === ayahs.length - 1 || audioError}
+                        >
+                          <SkipBack className="h-5 w-5" />
+                        </Button>
+
+                        <Button variant="ghost" size="icon" onClick={toggleMute}>
+                          {isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
+                        </Button>
+                      </div>
+
+                      {/* Progress bar */}
+                      <div className="space-y-2">
+                        <Progress value={progress} className="h-2" />
+                        <div className="flex justify-between text-xs text-muted-foreground">
+                          <span>{formatTime(currentTime)}</span>
+                          <span>{formatTime(duration)}</span>
+                        </div>
+                      </div>
+
+                      {/* Ayah Progress */}
+                      <div className="text-center p-2 rounded-lg bg-muted/50">
+                        <p className="text-sm text-muted-foreground">
+                          الآية <span className="font-bold text-foreground">{currentAyahIndex + 1}</span> من{' '}
+                          {ayahs.length}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
 
-                {/* Playback Controls */}
-                <div className="space-y-4">
-                  <div className="flex items-center justify-center gap-3">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => skipAyah('backward')}
-                      disabled={currentAyahIndex === 0 || audioError}
-                    >
-                      <SkipForward className="h-5 w-5" />
-                    </Button>
+              <TabsContent value="effects" className="mt-4">
+                <AudioEffectsPanel
+                  effects={audioEffects.effects}
+                  onChange={audioEffects.setEffects}
+                  disabled={!audioLoaded || audioError}
+                />
+              </TabsContent>
+            </Tabs>
 
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={togglePlay}
-                      disabled={!audioLoaded || audioError}
-                      className="h-14 w-14"
-                    >
-                      {!audioLoaded ? (
-                        <Loader2 className="h-6 w-6 animate-spin" />
-                      ) : isPlaying ? (
-                        <Pause className="h-6 w-6" />
-                      ) : (
-                        <Play className="h-6 w-6" />
-                      )}
-                    </Button>
-
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => skipAyah('forward')}
-                      disabled={currentAyahIndex === ayahs.length - 1 || audioError}
-                    >
-                      <SkipBack className="h-5 w-5" />
-                    </Button>
-
-                    <Button variant="ghost" size="icon" onClick={toggleMute}>
-                      {isMuted ? (
-                        <VolumeX className="h-5 w-5" />
-                      ) : (
-                        <Volume2 className="h-5 w-5" />
-                      )}
-                    </Button>
-                  </div>
-
-                  {/* Progress bar */}
-                  <div className="space-y-2">
-                    <Progress value={progress} className="h-2" />
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>{formatTime(currentTime)}</span>
-                      <span>{formatTime(duration)}</span>
+            {/* Recording / Actions */}
+            <Card>
+              <CardContent className="p-4 space-y-3">
+                {videoRecorder.isRecording ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-primary">
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                      <span className="font-medium">{videoRecorder.stage}</span>
                     </div>
-                  </div>
-
-                  {/* Ayah Progress */}
-                  <div className="text-center p-2 rounded-lg bg-muted/50">
-                    <p className="text-sm text-muted-foreground">
-                      الآية{' '}
-                      <span className="font-bold text-foreground">
-                        {currentAyahIndex + 1}
-                      </span>{' '}
-                      من {ayahs.length}
+                    <Progress value={videoRecorder.progress} className="h-2" />
+                    <p className="text-xs text-muted-foreground text-center">
+                      {Math.round(videoRecorder.progress)}% مكتمل
                     </p>
                   </div>
-                </div>
-
-                {/* Generation */}
-                {!isGenerated ? (
-                  <Button
-                    onClick={handleGenerate}
-                    disabled={isGenerating}
-                    className="w-full gap-2"
-                    size="lg"
-                  >
-                    {isGenerating ? (
-                      <>
-                        <Loader2 className="h-5 w-5 animate-spin" />
-                        جاري الإنشاء... {Math.round(progress)}%
-                      </>
-                    ) : (
-                      <>
-                        <Play className="h-5 w-5" />
-                        إنشاء الفيديو
-                      </>
-                    )}
-                  </Button>
-                ) : (
+                ) : videoRecorder.videoBlob ? (
                   <div className="space-y-3">
-                    <div className="flex items-center justify-center gap-2 text-primary mb-4 p-3 rounded-lg bg-primary/10">
+                    <div className="flex items-center justify-center gap-2 text-primary p-3 rounded-lg bg-primary/10">
                       <Check className="h-5 w-5" />
                       <span className="font-medium">تم إنشاء الفيديو بنجاح!</span>
                     </div>
@@ -513,27 +517,38 @@ export default function PreviewPage() {
                       variant="secondary"
                       className="w-full gap-2"
                     >
-                      {isSaving ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Save className="h-4 w-4" />
-                      )}
+                      {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                       حفظ في المكتبة
                     </Button>
+
+                    <Button onClick={videoRecorder.reset} variant="ghost" className="w-full gap-2">
+                      <RotateCcw className="h-4 w-4" />
+                      إنشاء فيديو جديد
+                    </Button>
                   </div>
+                ) : (
+                  <Button
+                    onClick={handleStartRecording}
+                    disabled={!audioLoaded || audioError}
+                    className="w-full gap-2"
+                    size="lg"
+                  >
+                    <Video className="h-5 w-5" />
+                    تسجيل وإنشاء الفيديو
+                  </Button>
                 )}
 
-                {/* Restart */}
-                <Button
-                  variant="ghost"
-                  onClick={() => navigate('/create')}
-                  className="w-full gap-2"
-                >
-                  <RotateCcw className="h-4 w-4" />
-                  إنشاء فيديو جديد
-                </Button>
+                {videoRecorder.error && (
+                  <p className="text-sm text-destructive text-center">{videoRecorder.error}</p>
+                )}
               </CardContent>
             </Card>
+
+            {/* Back Button */}
+            <Button variant="ghost" onClick={() => navigate('/create')} className="w-full gap-2">
+              <RotateCcw className="h-4 w-4" />
+              العودة للإعدادات
+            </Button>
           </motion.div>
         </div>
       </div>
