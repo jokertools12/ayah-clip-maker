@@ -1,6 +1,21 @@
 import { useRef, useState, useCallback } from 'react';
 import { convertWebmToMp4 } from '@/lib/ffmpeg';
 
+export type ExportQuality = 'low' | 'medium' | 'high' | 'ultra';
+
+export interface QualitySettings {
+  label: string;
+  resolution: string;
+  bitrate: number;
+}
+
+export const QUALITY_PRESETS: Record<ExportQuality, QualitySettings> = {
+  low: { label: '480p - سريع', resolution: '854x480', bitrate: 2000000 },
+  medium: { label: '720p HD', resolution: '1280x720', bitrate: 5000000 },
+  high: { label: '1080p Full HD', resolution: '1920x1080', bitrate: 8000000 },
+  ultra: { label: '4K Ultra HD', resolution: '3840x2160', bitrate: 15000000 },
+};
+
 export interface VideoRecorderState {
   isRecording: boolean;
   progress: number;
@@ -32,10 +47,13 @@ export function useVideoRecorder() {
     canvas: HTMLCanvasElement,
     audioElement: HTMLAudioElement,
     duration: number = 30,
-    audioStream?: MediaStream | null
+    audioStream?: MediaStream | null,
+    quality: ExportQuality = 'high'
   ): Promise<Blob | null> => {
     return new Promise(async (resolve, reject) => {
       try {
+        const qualitySettings = QUALITY_PRESETS[quality];
+        
         setState({
           isRecording: true,
           progress: 0,
@@ -52,8 +70,6 @@ export function useVideoRecorder() {
         const canvasStream = canvas.captureStream(30);
 
         // Combine video + audio tracks.
-        // IMPORTANT: We should not call createMediaElementSource here because the audio element
-        // is already connected to a WebAudio graph for effects (calling it twice throws).
         const tracks = [...canvasStream.getVideoTracks()];
         if (audioStream && audioStream.getAudioTracks().length) {
           tracks.push(...audioStream.getAudioTracks());
@@ -76,7 +92,7 @@ export function useVideoRecorder() {
 
         const mediaRecorder = new MediaRecorder(combinedStream, {
           mimeType,
-          videoBitsPerSecond: 8000000, // 8 Mbps for high quality
+          videoBitsPerSecond: qualitySettings.bitrate,
         });
         mediaRecorderRef.current = mediaRecorder;
 
@@ -118,7 +134,6 @@ export function useVideoRecorder() {
         mediaRecorder.start(100);
 
         // Reset and play audio
-        // Caller should set audioElement.currentTime to the desired start.
         await audioElement.play();
 
         // Progress tracking
@@ -219,7 +234,7 @@ export function useVideoRecorder() {
     }
 
     if (!blob) {
-      // fallback
+      // fallback to webm
       downloadWebm(filename.replace(/\.mp4$/i, '.webm'));
       return;
     }

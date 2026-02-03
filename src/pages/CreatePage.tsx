@@ -8,15 +8,18 @@ import { AyahDisplay } from '@/components/AyahDisplay';
 import { BackgroundSelector } from '@/components/BackgroundSelector';
 import { TextSettingsPanel, TextSettings } from '@/components/TextSettingsPanel';
 import { VideoPreview } from '@/components/VideoPreview';
+import { FamousAyahSelector } from '@/components/FamousAyahSelector';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { surahs } from '@/data/surahs';
-import { reciters } from '@/data/reciters';
+import { reciters, getRecitersByStyle } from '@/data/reciters';
 import { BackgroundItem, getRandomBackground } from '@/data/backgrounds';
+import { FamousAyah } from '@/data/famousAyahs';
 import { useQuranApi } from '@/hooks/useQuranApi';
 import {
   Monitor,
@@ -29,6 +32,7 @@ import {
   Search,
   Settings,
   Sparkles,
+  Bookmark,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -275,26 +279,82 @@ export default function CreatePage() {
                 <CardTitle>اختر القارئ</CardTitle>
               </CardHeader>
               <CardContent>
-                <ScrollArea className="h-[55vh]">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-1">
-                    {reciters.map((reciter) => (
-                      <ReciterCard
-                        key={reciter.id}
-                        reciter={reciter}
-                        isSelected={selectedReciter === reciter.id}
-                        onClick={() => setSelectedReciter(reciter.id)}
-                      />
-                    ))}
-                  </div>
-                </ScrollArea>
+                <Tabs defaultValue="all" className="w-full">
+                  <TabsList className="w-full grid grid-cols-4 mb-4">
+                    <TabsTrigger value="all">الكل</TabsTrigger>
+                    <TabsTrigger value="مرتل">مرتل</TabsTrigger>
+                    <TabsTrigger value="مجود">مجود</TabsTrigger>
+                    <TabsTrigger value="ترتيل">ترتيل</TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="all">
+                    <ScrollArea className="h-[50vh]">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-1">
+                        {reciters.map((reciter) => (
+                          <ReciterCard
+                            key={reciter.id}
+                            reciter={reciter}
+                            isSelected={selectedReciter === reciter.id}
+                            onClick={() => setSelectedReciter(reciter.id)}
+                          />
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </TabsContent>
+                  
+                  <TabsContent value="مرتل">
+                    <ScrollArea className="h-[50vh]">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-1">
+                        {getRecitersByStyle('مرتل').map((reciter) => (
+                          <ReciterCard
+                            key={reciter.id}
+                            reciter={reciter}
+                            isSelected={selectedReciter === reciter.id}
+                            onClick={() => setSelectedReciter(reciter.id)}
+                          />
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </TabsContent>
+                  
+                  <TabsContent value="مجود">
+                    <ScrollArea className="h-[50vh]">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-1">
+                        {getRecitersByStyle('مجود').map((reciter) => (
+                          <ReciterCard
+                            key={reciter.id}
+                            reciter={reciter}
+                            isSelected={selectedReciter === reciter.id}
+                            onClick={() => setSelectedReciter(reciter.id)}
+                          />
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </TabsContent>
+                  
+                  <TabsContent value="ترتيل">
+                    <ScrollArea className="h-[50vh]">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-1">
+                        {getRecitersByStyle('ترتيل').map((reciter) => (
+                          <ReciterCard
+                            key={reciter.id}
+                            reciter={reciter}
+                            isSelected={selectedReciter === reciter.id}
+                            onClick={() => setSelectedReciter(reciter.id)}
+                          />
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </TabsContent>
+                </Tabs>
               </CardContent>
             </Card>
           )}
 
           {/* Step 3: Select Ayahs */}
           {currentStep === 3 && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <Card className="lg:col-span-2">
                 <CardHeader>
                   <CardTitle>حدد نطاق الآيات</CardTitle>
                 </CardHeader>
@@ -316,7 +376,6 @@ export default function CreatePage() {
                         inputMode="numeric"
                         value={startAyahInput}
                         onChange={(e) => {
-                          // Allow any input while typing
                           setStartAyahInput(e.target.value);
                         }}
                         onBlur={() => {
@@ -325,7 +384,6 @@ export default function CreatePage() {
                           const clamped = Math.min(Math.max(val, 1), max);
                           setStartAyah(clamped);
                           setStartAyahInput(clamped.toString());
-                          // Also adjust end if needed
                           if (endAyah < clamped) {
                             setEndAyah(clamped);
                             setEndAyahInput(clamped.toString());
@@ -342,7 +400,6 @@ export default function CreatePage() {
                         inputMode="numeric"
                         value={endAyahInput}
                         onChange={(e) => {
-                          // Allow any input while typing
                           setEndAyahInput(e.target.value);
                         }}
                         onBlur={() => {
@@ -362,33 +419,44 @@ export default function CreatePage() {
                       سيتم تضمين {endAyah - startAyah + 1} آية في الفيديو
                     </p>
                   </div>
+
+                  {/* Preview Ayahs */}
+                  <div>
+                    <Label className="mb-3 block">معاينة الآيات</Label>
+                    {previewLoading || apiLoading ? (
+                      <div className="flex items-center justify-center py-12">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                      </div>
+                    ) : (
+                      <ScrollArea className="h-[200px] border rounded-lg p-3">
+                        <div className="space-y-2">
+                          {ayahs.map((ayah) => (
+                            <AyahDisplay
+                              key={ayah.number}
+                              number={ayah.numberInSurah}
+                              text={ayah.text}
+                            />
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>معاينة الآيات</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {previewLoading || apiLoading ? (
-                    <div className="flex items-center justify-center py-12">
-                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                    </div>
-                  ) : (
-                    <ScrollArea className="h-[350px]">
-                      <div className="space-y-2 pr-4">
-                        {ayahs.map((ayah) => (
-                          <AyahDisplay
-                            key={ayah.number}
-                            number={ayah.numberInSurah}
-                            text={ayah.text}
-                          />
-                        ))}
-                      </div>
-                    </ScrollArea>
-                  )}
-                </CardContent>
-              </Card>
+              {/* Famous Ayahs Selector */}
+              <div>
+                <FamousAyahSelector
+                  onSelect={(ayah: FamousAyah) => {
+                    setSelectedSurah(ayah.surahNumber);
+                    setStartAyah(ayah.startAyah);
+                    setEndAyah(ayah.endAyah);
+                    setStartAyahInput(ayah.startAyah.toString());
+                    setEndAyahInput(ayah.endAyah.toString());
+                    toast.success(`تم اختيار ${ayah.name}`);
+                  }}
+                />
+              </div>
             </div>
           )}
 
