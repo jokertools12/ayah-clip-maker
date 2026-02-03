@@ -11,6 +11,7 @@ const FONT_MAP: Record<string, string> = {
 
 interface VideoPreviewProps {
   background: BackgroundItem | null;
+  customBackground?: string | null;
   surahName: string;
   reciterName: string;
   currentAyah: { numberInSurah: number; text: string } | null;
@@ -30,6 +31,8 @@ interface VideoPreviewProps {
     showAyahText: boolean;
     showAyahNumber: boolean;
     highlightStyle: 'solid' | 'glow' | 'underline';
+    frameStyle: 'none' | 'simple' | 'ornate' | 'golden' | 'geometric';
+    ayahNumberStyle: 'circle' | 'star' | 'diamond' | 'octagon' | 'flower';
   };
   isPlaying: boolean;
   onCanvasReady?: (canvas: HTMLCanvasElement) => void;
@@ -46,11 +49,14 @@ const DEFAULT_DISPLAY_SETTINGS = {
   showReciterName: true,
   showAyahText: true,
   showAyahNumber: true,
-  highlightStyle: 'glow' as const, // Default to golden glow
+  highlightStyle: 'glow' as const,
+  frameStyle: 'ornate' as const,
+  ayahNumberStyle: 'circle' as const,
 };
 
 export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   background,
+  customBackground,
   surahName,
   reciterName,
   currentAyah,
@@ -65,8 +71,10 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [videoReady, setVideoReady] = useState(false);
 
   // Get dimensions based on aspect ratio
   const getDimensions = () => {
@@ -83,24 +91,63 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     return FONT_MAP[fontFamily] || 'Noto Naskh Arabic';
   }, []);
 
-  // Load background image
+  // Load background (image or video)
   useEffect(() => {
-    if (background) {
-      setImageLoaded(false);
+    const bgUrl = customBackground || background?.url;
+    const bgType = background?.type || 'image';
+    
+    if (!bgUrl) return;
+    
+    setImageLoaded(false);
+    setVideoReady(false);
+    
+    if (bgType === 'video') {
+      // Load video background
+      const video = document.createElement('video');
+      video.crossOrigin = 'anonymous';
+      video.muted = true;
+      video.loop = true;
+      video.playsInline = true;
+      video.src = bgUrl;
+      
+      video.onloadeddata = () => {
+        videoRef.current = video;
+        setVideoReady(true);
+        video.play().catch(console.error);
+      };
+      
+      video.onerror = () => {
+        console.error('Failed to load video:', bgUrl);
+        videoRef.current = null;
+        // Fallback to image
+        loadImage(bgUrl);
+      };
+    } else {
+      loadImage(bgUrl);
+    }
+    
+    function loadImage(url: string) {
       const img = new Image();
       img.crossOrigin = 'anonymous';
-      img.src = background.url;
+      img.src = url;
       img.onload = () => {
         imageRef.current = img;
         setImageLoaded(true);
       };
       img.onerror = () => {
-        console.error('Failed to load background image:', background.url);
+        console.error('Failed to load image:', url);
         imageRef.current = null;
         setImageLoaded(false);
       };
     }
-  }, [background]);
+    
+    return () => {
+      if (videoRef.current) {
+        videoRef.current.pause();
+        videoRef.current = null;
+      }
+    };
+  }, [background, customBackground]);
 
   const getTokenHsl = useCallback((token: string, fallback: string) => {
     try {
@@ -117,34 +164,52 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     return num.toString().split('').map(d => arabicNumerals[parseInt(d)] || d).join('');
   };
 
-  // Draw decorative ayah number badge
-  const drawAyahBadge = useCallback((ctx: CanvasRenderingContext2D, x: number, y: number, num: number, size: number) => {
+  // Draw decorative ayah number badge with different styles
+  const drawAyahBadge = useCallback((ctx: CanvasRenderingContext2D, x: number, y: number, num: number, size: number, style: string) => {
     const arabicNum = toArabicNumber(num);
     
-    // Outer decorative circle
     ctx.save();
-    ctx.beginPath();
-    ctx.arc(x, y, size, 0, Math.PI * 2);
+    
+    // Draw shape based on style
+    switch (style) {
+      case 'star':
+        drawStar(ctx, x, y, size, 8);
+        break;
+      case 'diamond':
+        drawDiamond(ctx, x, y, size);
+        break;
+      case 'octagon':
+        drawPolygon(ctx, x, y, size, 8);
+        break;
+      case 'flower':
+        drawFlower(ctx, x, y, size);
+        break;
+      default: // circle
+        ctx.beginPath();
+        ctx.arc(x, y, size, 0, Math.PI * 2);
+    }
+    
+    // Fill with gradient
     const gradient = ctx.createRadialGradient(x, y, 0, x, y, size);
-    gradient.addColorStop(0, 'rgba(212, 175, 55, 0.3)');
-    gradient.addColorStop(0.7, 'rgba(212, 175, 55, 0.15)');
-    gradient.addColorStop(1, 'rgba(212, 175, 55, 0.05)');
+    gradient.addColorStop(0, 'rgba(212, 175, 55, 0.4)');
+    gradient.addColorStop(0.7, 'rgba(212, 175, 55, 0.2)');
+    gradient.addColorStop(1, 'rgba(212, 175, 55, 0.1)');
     ctx.fillStyle = gradient;
     ctx.fill();
     
-    // Inner circle border
-    ctx.beginPath();
-    ctx.arc(x, y, size * 0.85, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(212, 175, 55, 0.6)';
+    // Draw border
+    ctx.strokeStyle = 'rgba(212, 175, 55, 0.7)';
     ctx.lineWidth = 2;
     ctx.stroke();
     
-    // Inner decorative ring
-    ctx.beginPath();
-    ctx.arc(x, y, size * 0.7, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(212, 175, 55, 0.3)';
-    ctx.lineWidth = 1;
-    ctx.stroke();
+    // Inner decoration
+    if (style === 'circle') {
+      ctx.beginPath();
+      ctx.arc(x, y, size * 0.75, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(212, 175, 55, 0.4)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
     
     // Draw number
     ctx.font = `bold ${size * 1.1}px "Noto Naskh Arabic", "Amiri", serif`;
@@ -156,6 +221,250 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     ctx.fillText(arabicNum, x, y + 2);
     ctx.restore();
   }, []);
+
+  // Helper functions for shapes
+  const drawStar = (ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number, points: number) => {
+    const outerRadius = size;
+    const innerRadius = size * 0.5;
+    ctx.beginPath();
+    for (let i = 0; i < points * 2; i++) {
+      const radius = i % 2 === 0 ? outerRadius : innerRadius;
+      const angle = (i * Math.PI) / points - Math.PI / 2;
+      if (i === 0) {
+        ctx.moveTo(cx + radius * Math.cos(angle), cy + radius * Math.sin(angle));
+      } else {
+        ctx.lineTo(cx + radius * Math.cos(angle), cy + radius * Math.sin(angle));
+      }
+    }
+    ctx.closePath();
+  };
+
+  const drawDiamond = (ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number) => {
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - size);
+    ctx.lineTo(cx + size, cy);
+    ctx.lineTo(cx, cy + size);
+    ctx.lineTo(cx - size, cy);
+    ctx.closePath();
+  };
+
+  const drawPolygon = (ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number, sides: number) => {
+    ctx.beginPath();
+    for (let i = 0; i < sides; i++) {
+      const angle = (i * 2 * Math.PI) / sides - Math.PI / 2;
+      const x = cx + size * Math.cos(angle);
+      const y = cy + size * Math.sin(angle);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+  };
+
+  const drawFlower = (ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number) => {
+    const petals = 8;
+    ctx.beginPath();
+    for (let i = 0; i < petals; i++) {
+      const angle = (i * 2 * Math.PI) / petals;
+      const nextAngle = ((i + 1) * 2 * Math.PI) / petals;
+      const midAngle = (angle + nextAngle) / 2;
+      
+      const x1 = cx + size * Math.cos(angle);
+      const y1 = cy + size * Math.sin(angle);
+      const cpX = cx + size * 1.3 * Math.cos(midAngle);
+      const cpY = cy + size * 1.3 * Math.sin(midAngle);
+      const x2 = cx + size * Math.cos(nextAngle);
+      const y2 = cy + size * Math.sin(nextAngle);
+      
+      if (i === 0) ctx.moveTo(x1, y1);
+      ctx.quadraticCurveTo(cpX, cpY, x2, y2);
+    }
+    ctx.closePath();
+  };
+
+  // Draw Islamic decorative frame
+  const drawIslamicFrame = useCallback((ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, style: string) => {
+    if (style === 'none') return;
+    
+    ctx.save();
+    
+    const cornerSize = Math.min(width, height) * 0.1;
+    const goldColor = 'rgba(212, 175, 55, 0.6)';
+    const goldLight = 'rgba(212, 175, 55, 0.3)';
+    
+    switch (style) {
+      case 'simple':
+        // Simple elegant border
+        ctx.strokeStyle = goldColor;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, width, height);
+        
+        // Inner border
+        ctx.strokeStyle = goldLight;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x + 6, y + 6, width - 12, height - 12);
+        break;
+        
+      case 'ornate':
+        // Ornate Islamic frame with corner decorations
+        ctx.strokeStyle = goldColor;
+        ctx.lineWidth = 3;
+        
+        // Main frame
+        ctx.beginPath();
+        ctx.roundRect(x, y, width, height, 10);
+        ctx.stroke();
+        
+        // Corner ornaments
+        drawCornerOrnament(ctx, x, y, cornerSize, 0);
+        drawCornerOrnament(ctx, x + width, y, cornerSize, 90);
+        drawCornerOrnament(ctx, x + width, y + height, cornerSize, 180);
+        drawCornerOrnament(ctx, x, y + height, cornerSize, 270);
+        
+        // Side decorations
+        drawSideDecoration(ctx, x + width / 2, y, cornerSize * 0.6);
+        drawSideDecoration(ctx, x + width / 2, y + height, cornerSize * 0.6);
+        break;
+        
+      case 'golden':
+        // Luxurious golden frame with glow
+        ctx.shadowColor = 'rgba(212, 175, 55, 0.5)';
+        ctx.shadowBlur = 15;
+        
+        // Outer glow border
+        ctx.strokeStyle = goldColor;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.roundRect(x, y, width, height, 15);
+        ctx.stroke();
+        
+        ctx.shadowBlur = 0;
+        
+        // Inner decorative line
+        ctx.strokeStyle = goldLight;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([10, 5]);
+        ctx.beginPath();
+        ctx.roundRect(x + 10, y + 10, width - 20, height - 20, 10);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        
+        // Corner flourishes
+        drawGoldenCorner(ctx, x, y, cornerSize);
+        drawGoldenCorner(ctx, x + width, y, cornerSize, true);
+        drawGoldenCorner(ctx, x + width, y + height, cornerSize, true, true);
+        drawGoldenCorner(ctx, x, y + height, cornerSize, false, true);
+        break;
+        
+      case 'geometric':
+        // Islamic geometric pattern frame
+        ctx.strokeStyle = goldColor;
+        ctx.lineWidth = 2;
+        
+        // Outer border
+        ctx.strokeRect(x, y, width, height);
+        
+        // Geometric corner patterns
+        drawGeometricCorner(ctx, x, y, cornerSize);
+        drawGeometricCorner(ctx, x + width - cornerSize, y, cornerSize);
+        drawGeometricCorner(ctx, x + width - cornerSize, y + height - cornerSize, cornerSize);
+        drawGeometricCorner(ctx, x, y + height - cornerSize, cornerSize);
+        
+        // Connecting geometric lines
+        ctx.beginPath();
+        ctx.moveTo(x + cornerSize, y + cornerSize / 2);
+        ctx.lineTo(x + width - cornerSize, y + cornerSize / 2);
+        ctx.moveTo(x + cornerSize, y + height - cornerSize / 2);
+        ctx.lineTo(x + width - cornerSize, y + height - cornerSize / 2);
+        ctx.strokeStyle = goldLight;
+        ctx.stroke();
+        break;
+    }
+    
+    ctx.restore();
+  }, []);
+
+  // Helper for corner ornament
+  const drawCornerOrnament = (ctx: CanvasRenderingContext2D, x: number, y: number, size: number, rotation: number) => {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate((rotation * Math.PI) / 180);
+    
+    ctx.fillStyle = 'rgba(212, 175, 55, 0.4)';
+    ctx.beginPath();
+    ctx.arc(0, 0, size * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.strokeStyle = 'rgba(212, 175, 55, 0.6)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(size * 0.2, size * 0.2);
+    ctx.quadraticCurveTo(size * 0.5, 0, size * 0.2, -size * 0.2);
+    ctx.stroke();
+    
+    ctx.restore();
+  };
+
+  const drawSideDecoration = (ctx: CanvasRenderingContext2D, x: number, y: number, size: number) => {
+    ctx.save();
+    ctx.translate(x, y);
+    
+    ctx.fillStyle = 'rgba(212, 175, 55, 0.5)';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, size, size * 0.4, 0, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.strokeStyle = 'rgba(212, 175, 55, 0.7)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    
+    ctx.restore();
+  };
+
+  const drawGoldenCorner = (ctx: CanvasRenderingContext2D, x: number, y: number, size: number, flipX = false, flipY = false) => {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(flipX ? -1 : 1, flipY ? -1 : 1);
+    
+    ctx.strokeStyle = 'rgba(212, 175, 55, 0.7)';
+    ctx.lineWidth = 2;
+    
+    // Curved flourish
+    ctx.beginPath();
+    ctx.moveTo(5, 5);
+    ctx.bezierCurveTo(size * 0.5, 5, size, size * 0.5, size, size);
+    ctx.stroke();
+    
+    // Inner accent
+    ctx.beginPath();
+    ctx.arc(size * 0.3, size * 0.3, size * 0.15, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(212, 175, 55, 0.4)';
+    ctx.fill();
+    
+    ctx.restore();
+  };
+
+  const drawGeometricCorner = (ctx: CanvasRenderingContext2D, x: number, y: number, size: number) => {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.strokeStyle = 'rgba(212, 175, 55, 0.5)';
+    ctx.lineWidth = 1;
+    
+    // Create 8-pointed star pattern
+    for (let i = 0; i < 4; i++) {
+      ctx.beginPath();
+      ctx.moveTo(size / 2, 0);
+      ctx.lineTo(size, size / 2);
+      ctx.lineTo(size / 2, size);
+      ctx.lineTo(0, size / 2);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.translate(size / 2, size / 2);
+      ctx.rotate(Math.PI / 4);
+      ctx.translate(-size / 2, -size / 2);
+    }
+    
+    ctx.restore();
+  };
 
   // Draw frame on canvas
   const drawFrame = useCallback(() => {
@@ -172,12 +481,21 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Draw background with Ken Burns effect
-    if (imageRef.current && imageLoaded) {
-      const time = Date.now() / 1000;
-      const scale = 1.1 + Math.sin(time * 0.08) * 0.08;
-      const offsetX = Math.sin(time * 0.04) * 30;
-      const offsetY = Math.cos(time * 0.04) * 30;
-      
+    const time = Date.now() / 1000;
+    const scale = 1.1 + Math.sin(time * 0.08) * 0.08;
+    const offsetX = Math.sin(time * 0.04) * 30;
+    const offsetY = Math.cos(time * 0.04) * 30;
+    
+    if (videoReady && videoRef.current) {
+      // Draw video frame
+      ctx.save();
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.scale(scale, scale);
+      ctx.translate(-canvas.width / 2 + offsetX, -canvas.height / 2 + offsetY);
+      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+      ctx.restore();
+    } else if (imageRef.current && imageLoaded) {
+      // Draw image with Ken Burns
       ctx.save();
       ctx.translate(canvas.width / 2, canvas.height / 2);
       ctx.scale(scale, scale);
@@ -185,7 +503,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       ctx.drawImage(imageRef.current, 0, 0, canvas.width, canvas.height);
       ctx.restore();
     } else {
-      // Gradient fallback with Islamic pattern hint
+      // Gradient fallback
       const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
       gradient.addColorStop(0, '#1a1a2e');
       gradient.addColorStop(0.5, '#16213e');
@@ -281,7 +599,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     // Draw current ayah (if enabled)
     if (currentAyah && displaySettings.showAyahText) {
       const ayahY = canvas.height * 0.52;
-      const maxWidth = canvas.width * 0.88;
+      const maxWidth = canvas.width * 0.85;
       const lineHeight = textSettings.fontSize * 3.2;
       
       // Use selected font family
@@ -312,6 +630,17 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
 
       const totalHeight = lines.length * lineHeight;
       const startY = ayahY - totalHeight / 2;
+
+      // Draw frame around ayah text
+      if (displaySettings.frameStyle !== 'none') {
+        const framePadding = 40;
+        const frameX = canvas.width * 0.075 - framePadding / 2;
+        const frameY = startY - lineHeight / 2 - framePadding;
+        const frameWidth = maxWidth + framePadding * 2;
+        const frameHeight = totalHeight + framePadding * 2;
+        
+        drawIslamicFrame(ctx, frameX, frameY, frameWidth, frameHeight, displaySettings.frameStyle);
+      }
 
       // RTL text direction
       ctx.direction = 'rtl';
@@ -402,10 +731,10 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       // Draw ayah number badge (if enabled)
       if (displaySettings.showAyahNumber) {
         const badgeY = startY + totalHeight + 70;
-        drawAyahBadge(ctx, canvas.width / 2, badgeY, currentAyah.numberInSurah, 36);
+        drawAyahBadge(ctx, canvas.width / 2, badgeY, currentAyah.numberInSurah, 36, displaySettings.ayahNumberStyle);
       }
     }
-  }, [background, imageLoaded, surahName, reciterName, currentAyah, currentAyahWords, highlightedWordIndex, textSettings, displaySettings, dimensions, getTokenHsl, drawAyahBadge, getCanvasFontFamily]);
+  }, [background, customBackground, imageLoaded, videoReady, surahName, reciterName, currentAyah, currentAyahWords, highlightedWordIndex, textSettings, displaySettings, dimensions, getTokenHsl, drawAyahBadge, getCanvasFontFamily, drawIslamicFrame]);
 
   // Animation loop for canvas
   useEffect(() => {

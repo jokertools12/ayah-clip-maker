@@ -2,7 +2,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Eye, EyeOff, Sparkles } from 'lucide-react';
+import { Eye, EyeOff, Sparkles, Frame, Hash } from 'lucide-react';
 
 export interface DisplaySettings {
   showSurahName: boolean;
@@ -10,6 +10,8 @@ export interface DisplaySettings {
   showAyahText: boolean;
   showAyahNumber: boolean;
   highlightStyle: 'solid' | 'glow' | 'underline';
+  frameStyle: 'none' | 'simple' | 'ornate' | 'golden' | 'geometric';
+  ayahNumberStyle: 'circle' | 'star' | 'diamond' | 'octagon' | 'flower';
 }
 
 interface DisplaySettingsPanelProps {
@@ -21,6 +23,22 @@ const highlightOptions = [
   { value: 'solid', label: 'تظليل مملوء', description: 'خلفية ملونة للكلمة' },
   { value: 'glow', label: 'توهج ذهبي', description: 'إضاءة حول الكلمة' },
   { value: 'underline', label: 'خط سفلي', description: 'خط تحت الكلمة' },
+];
+
+const frameOptions = [
+  { value: 'none', label: 'بدون إطار', description: 'نص فقط' },
+  { value: 'simple', label: 'إطار بسيط', description: 'حدود رفيعة' },
+  { value: 'ornate', label: 'إطار مزخرف', description: 'زخارف إسلامية' },
+  { value: 'golden', label: 'إطار ذهبي', description: 'زخرفة ذهبية فاخرة' },
+  { value: 'geometric', label: 'إطار هندسي', description: 'نقوش هندسية' },
+];
+
+const ayahNumberOptions = [
+  { value: 'circle', label: 'دائرة', description: '◯' },
+  { value: 'star', label: 'نجمة', description: '✦' },
+  { value: 'diamond', label: 'معين', description: '◇' },
+  { value: 'octagon', label: 'مثمن', description: '⬡' },
+  { value: 'flower', label: 'زهرة', description: '✿' },
 ];
 
 export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPanelProps) {
@@ -113,6 +131,60 @@ export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPane
             ))}
           </RadioGroup>
         </div>
+
+        {/* Frame Style */}
+        <div className="space-y-3 pt-2 border-t">
+          <Label className="text-sm flex items-center gap-2">
+            <Frame className="h-4 w-4" />
+            إطار النص
+          </Label>
+          <RadioGroup
+            value={settings.frameStyle}
+            onValueChange={(value) => updateSetting('frameStyle', value as DisplaySettings['frameStyle'])}
+            className="grid grid-cols-2 gap-2"
+          >
+            {frameOptions.map((option) => (
+              <div key={option.value} className="relative">
+                <RadioGroupItem value={option.value} id={`frame-${option.value}`} className="peer sr-only" />
+                <Label
+                  htmlFor={`frame-${option.value}`}
+                  className="flex flex-col items-center rounded-lg border-2 border-muted p-2 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all text-center"
+                >
+                  <span className="font-medium text-sm">{option.label}</span>
+                  <span className="text-xs text-muted-foreground">{option.description}</span>
+                </Label>
+              </div>
+            ))}
+          </RadioGroup>
+        </div>
+
+        {/* Ayah Number Style */}
+        {settings.showAyahNumber && (
+          <div className="space-y-3 pt-2 border-t">
+            <Label className="text-sm flex items-center gap-2">
+              <Hash className="h-4 w-4" />
+              شكل رقم الآية
+            </Label>
+            <RadioGroup
+              value={settings.ayahNumberStyle}
+              onValueChange={(value) => updateSetting('ayahNumberStyle', value as DisplaySettings['ayahNumberStyle'])}
+              className="flex flex-wrap gap-2"
+            >
+              {ayahNumberOptions.map((option) => (
+                <div key={option.value} className="relative">
+                  <RadioGroupItem value={option.value} id={`ayahNum-${option.value}`} className="peer sr-only" />
+                  <Label
+                    htmlFor={`ayahNum-${option.value}`}
+                    className="flex flex-col items-center rounded-lg border-2 border-muted px-3 py-2 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all"
+                  >
+                    <span className="text-2xl text-primary">{option.description}</span>
+                    <span className="text-xs">{option.label}</span>
+                  </Label>
+                </div>
+              ))}
+            </RadioGroup>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

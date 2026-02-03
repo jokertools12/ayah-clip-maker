@@ -2,7 +2,7 @@ export interface Reciter {
   id: string;
   name: string;
   englishName: string;
-  style: string;
+  style: 'مرتل' | 'مجود' | 'ترتيل';
   server: string;
   subfolder?: string;
   // Quran Foundation API recitation ID for precise timing
@@ -12,13 +12,14 @@ export interface Reciter {
 // Quran Foundation recitation IDs mapping (verified IDs)
 // https://api.quran.com/api/v4/resources/recitations
 export const reciters: Reciter[] = [
+  // مرتل - Murattal Style
   {
     id: "abdul_basit_murattal",
     name: "عبد الباسط عبد الصمد",
     englishName: "Abdul Basit Abdul Samad",
     style: "مرتل",
     server: "https://server8.mp3quran.net/basit",
-    quranFoundationId: 2, // Abdul Basit Murattal
+    quranFoundationId: 2,
   },
   {
     id: "mishary_alafasy",
@@ -26,7 +27,7 @@ export const reciters: Reciter[] = [
     englishName: "Mishary Rashid Alafasy",
     style: "مرتل",
     server: "https://server8.mp3quran.net/afs",
-    quranFoundationId: 7, // Mishary Rashid Alafasy
+    quranFoundationId: 7,
   },
   {
     id: "maher_muaiqly",
@@ -34,7 +35,7 @@ export const reciters: Reciter[] = [
     englishName: "Maher Al Muaiqly",
     style: "مرتل",
     server: "https://server12.mp3quran.net/maher",
-    quranFoundationId: 9, // Maher Al Muaiqly
+    quranFoundationId: 9,
   },
   {
     id: "saud_shuraim",
@@ -42,7 +43,7 @@ export const reciters: Reciter[] = [
     englishName: "Saud Al-Shuraim",
     style: "مرتل",
     server: "https://server7.mp3quran.net/shur",
-    quranFoundationId: 10, // Saud Al-Shuraim
+    quranFoundationId: 10,
   },
   {
     id: "abdul_rahman_sudais",
@@ -50,7 +51,7 @@ export const reciters: Reciter[] = [
     englishName: "Abdul Rahman Al-Sudais",
     style: "مرتل",
     server: "https://server11.mp3quran.net/sds",
-    quranFoundationId: 4, // Abdul Rahman Al-Sudais
+    quranFoundationId: 4,
   },
   {
     id: "saad_ghamdi",
@@ -58,7 +59,7 @@ export const reciters: Reciter[] = [
     englishName: "Saad Al-Ghamdi",
     style: "مرتل",
     server: "https://server7.mp3quran.net/s_gmd",
-    quranFoundationId: 6, // Saad Al-Ghamdi
+    quranFoundationId: 6,
   },
   {
     id: "ahmad_ajmi",
@@ -66,7 +67,7 @@ export const reciters: Reciter[] = [
     englishName: "Ahmad Al-Ajmi",
     style: "مرتل",
     server: "https://server10.mp3quran.net/ajm",
-    quranFoundationId: 8, // Ahmad Al-Ajmi (Ali Hajjaj Al Suesy reciter ID approximation)
+    quranFoundationId: 8,
   },
   {
     id: "hani_rifai",
@@ -74,7 +75,7 @@ export const reciters: Reciter[] = [
     englishName: "Hani Al-Rifai",
     style: "مرتل",
     server: "https://server8.mp3quran.net/hani",
-    quranFoundationId: 5, // Hani Al-Rifai
+    quranFoundationId: 5,
   },
   {
     id: "fares_abbad",
@@ -82,7 +83,7 @@ export const reciters: Reciter[] = [
     englishName: "Fares Abbad",
     style: "مرتل",
     server: "https://server8.mp3quran.net/frs_a",
-    quranFoundationId: 12, // Fares Abbad
+    quranFoundationId: 12,
   },
   {
     id: "yasser_dosari",
@@ -90,23 +91,91 @@ export const reciters: Reciter[] = [
     englishName: "Yasser Al-Dosari",
     style: "مرتل",
     server: "https://server11.mp3quran.net/yasser",
-    quranFoundationId: 11, // Yasser Al-Dosari
+    quranFoundationId: 11,
+  },
+  
+  // مجود - Mujawwad Style (Tajweed)
+  {
+    id: "abdul_basit_mujawwad",
+    name: "عبد الباسط عبد الصمد - مجود",
+    englishName: "Abdul Basit - Mujawwad",
+    style: "مجود",
+    server: "https://server7.mp3quran.net/basit",
+    quranFoundationId: 1,
+  },
+  {
+    id: "mahmoud_husary_mujawwad",
+    name: "محمود خليل الحصري - مجود",
+    englishName: "Mahmoud Khalil Al-Husary - Mujawwad",
+    style: "مجود",
+    server: "https://server13.mp3quran.net/husr",
+    quranFoundationId: 3,
   },
   {
     id: "mohammad_tablawi",
     name: "محمد الطبلاوي",
     englishName: "Mohammad Al-Tablawi",
-    style: "مرتل",
+    style: "مجود",
     server: "https://server12.mp3quran.net/tblawi",
-    quranFoundationId: 3, // Closest match (Abdur-Rahman as-Sudais)
+    quranFoundationId: 3,
+  },
+  
+  // ترتيل - Tarteel Style
+  {
+    id: "mahmoud_husary_tarteel",
+    name: "محمود خليل الحصري - ترتيل",
+    englishName: "Mahmoud Khalil Al-Husary - Tarteel",
+    style: "ترتيل",
+    server: "https://server13.mp3quran.net/husr",
+    quranFoundationId: 3,
   },
   {
     id: "muhammad_ayyub",
     name: "محمد أيوب",
     englishName: "Muhammad Ayyub",
-    style: "مرتل",
+    style: "ترتيل",
     server: "https://server8.mp3quran.net/ayyub",
-    quranFoundationId: 1, // Closest match (AbdulBaset AbdulSamad Mujawwad)
+    quranFoundationId: 1,
+  },
+  {
+    id: "ibrahim_akhdar",
+    name: "إبراهيم الأخضر",
+    englishName: "Ibrahim Al-Akhdar",
+    style: "ترتيل",
+    server: "https://server8.mp3quran.net/a_hzfy",
+    quranFoundationId: 7,
+  },
+  {
+    id: "nasser_qatami",
+    name: "ناصر القطامي",
+    englishName: "Nasser Al-Qatami",
+    style: "مرتل",
+    server: "https://server6.mp3quran.net/qtm",
+    quranFoundationId: 7,
+  },
+  {
+    id: "abdulmohsen_qasim",
+    name: "عبد المحسن القاسم",
+    englishName: "Abdul Mohsen Al-Qasim",
+    style: "ترتيل",
+    server: "https://server6.mp3quran.net/qasm",
+    quranFoundationId: 7,
+  },
+  {
+    id: "bandar_baleela",
+    name: "بندر بليلة",
+    englishName: "Bandar Baleela",
+    style: "مرتل",
+    server: "https://server8.mp3quran.net/balilah",
+    quranFoundationId: 7,
+  },
+  {
+    id: "abdullah_matrood",
+    name: "عبد الله المطرود",
+    englishName: "Abdullah Al-Matrood",
+    style: "مرتل",
+    server: "https://server11.mp3quran.net/mtrod",
+    quranFoundationId: 7,
   },
 ];
 
@@ -117,4 +186,8 @@ export function getAudioUrl(reciter: Reciter, surahNumber: number): string {
 
 export function getReciterById(id: string): Reciter | undefined {
   return reciters.find(r => r.id === id);
+}
+
+export function getRecitersByStyle(style: Reciter['style']): Reciter[] {
+  return reciters.filter(r => r.style === style);
 }

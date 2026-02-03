@@ -5,17 +5,19 @@ import { Layout } from '@/components/Layout';
 import { VideoPreview, VideoPreviewRef } from '@/components/VideoPreview';
 import { AudioEffectsPanel } from '@/components/AudioEffectsPanel';
 import { DisplaySettingsPanel, DisplaySettings } from '@/components/DisplaySettingsPanel';
+import { CustomBackgroundUploader } from '@/components/CustomBackgroundUploader';
+import { ExportQualitySelector } from '@/components/ExportQualitySelector';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { surahs } from '@/data/surahs';
 import { reciters, getAudioUrl } from '@/data/reciters';
-import { backgroundVideos, backgroundImages, BackgroundItem } from '@/data/backgrounds';
+import { backgroundVideos, backgroundImages, animatedBackgrounds, BackgroundItem } from '@/data/backgrounds';
 import { useQuranApi } from '@/hooks/useQuranApi';
 import { useAuth } from '@/hooks/useAuth';
 import { useAudioEffects } from '@/hooks/useAudioEffects';
-import { useVideoRecorder } from '@/hooks/useVideoRecorder';
+import { useVideoRecorder, ExportQuality } from '@/hooks/useVideoRecorder';
 import {
   fetchChapterRecitationAudioById,
   QuranFoundationTimestamp,
@@ -41,6 +43,7 @@ import {
   Settings,
   Music,
   Eye,
+  Upload,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -50,6 +53,8 @@ const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
   showAyahText: true,
   showAyahNumber: true,
   highlightStyle: 'glow', // Default to golden glow
+  frameStyle: 'ornate',
+  ayahNumberStyle: 'circle',
 };
 
 export default function PreviewPage() {
@@ -80,13 +85,17 @@ export default function PreviewPage() {
 
   // Display settings state
   const [displaySettings, setDisplaySettings] = useState<DisplaySettings>(DEFAULT_DISPLAY_SETTINGS);
+  
+  // Custom background and export quality
+  const [customBackground, setCustomBackground] = useState<string | null>(null);
+  const [exportQuality, setExportQuality] = useState<ExportQuality>('high');
 
   // Data
   const surah = surahs.find((s) => s.number === surahNumber);
   const reciter = reciters.find((r) => r.id === reciterId);
   const background: BackgroundItem | null =
-    [...backgroundVideos, ...backgroundImages].find((bg) => bg.id === backgroundId) ||
-    (backgroundType === 'video' ? backgroundVideos[0] : backgroundImages[0]);
+    [...backgroundVideos, ...backgroundImages, ...animatedBackgrounds].find((bg) => bg.id === backgroundId) ||
+    backgroundImages[0];
 
   // State
   const [ayahs, setAyahs] = useState<{ numberInSurah: number; text: string }[]>([]);
@@ -408,7 +417,8 @@ export default function PreviewPage() {
         canvas,
         audio,
         recordingDuration,
-        audioEffects.getRecordingStream()
+        audioEffects.getRecordingStream(),
+        exportQuality
       );
 
       if (blob) {
@@ -512,6 +522,7 @@ export default function PreviewPage() {
             <VideoPreview
               ref={videoPreviewRef}
               background={background}
+              customBackground={customBackground}
               surahName={surah?.name || ''}
               reciterName={reciter?.name || ''}
               currentAyah={ayahs[currentAyahIndex] || null}
@@ -556,18 +567,26 @@ export default function PreviewPage() {
 
             {/* Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="w-full">
-                <TabsTrigger value="controls" className="flex-1 gap-2">
+              <TabsList className="w-full grid grid-cols-5">
+                <TabsTrigger value="controls" className="gap-1">
                   <Settings className="h-4 w-4" />
-                  التحكم
+                  <span className="hidden sm:inline text-xs">التحكم</span>
                 </TabsTrigger>
-                <TabsTrigger value="display" className="flex-1 gap-2">
+                <TabsTrigger value="display" className="gap-1">
                   <Eye className="h-4 w-4" />
-                  العرض
+                  <span className="hidden sm:inline text-xs">العرض</span>
                 </TabsTrigger>
-                <TabsTrigger value="effects" className="flex-1 gap-2">
+                <TabsTrigger value="effects" className="gap-1">
                   <Music className="h-4 w-4" />
-                  الصوت
+                  <span className="hidden sm:inline text-xs">الصوت</span>
+                </TabsTrigger>
+                <TabsTrigger value="background" className="gap-1">
+                  <Upload className="h-4 w-4" />
+                  <span className="hidden sm:inline text-xs">خلفية</span>
+                </TabsTrigger>
+                <TabsTrigger value="quality" className="gap-1">
+                  <Video className="h-4 w-4" />
+                  <span className="hidden sm:inline text-xs">جودة</span>
                 </TabsTrigger>
               </TabsList>
 
@@ -662,6 +681,21 @@ export default function PreviewPage() {
                   effects={audioEffects.effects}
                   onChange={audioEffects.setEffects}
                   disabled={!audioLoaded || audioError}
+                />
+              </TabsContent>
+
+              <TabsContent value="background" className="mt-4">
+                <CustomBackgroundUploader
+                  currentCustomBackground={customBackground}
+                  onUpload={(url) => setCustomBackground(url)}
+                  onClear={() => setCustomBackground(null)}
+                />
+              </TabsContent>
+
+              <TabsContent value="quality" className="mt-4">
+                <ExportQualitySelector
+                  quality={exportQuality}
+                  onChange={setExportQuality}
                 />
               </TabsContent>
             </Tabs>
