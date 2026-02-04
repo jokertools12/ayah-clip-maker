@@ -1,27 +1,38 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Check, Play, Image as ImageIcon, Sparkles } from 'lucide-react';
+import { Check, Play, Image as ImageIcon, Sparkles, Upload } from 'lucide-react';
 import { BackgroundItem, backgroundVideos, backgroundImages, animatedBackgrounds } from '@/data/backgrounds';
+import { CustomBackgroundUploader } from '@/components/CustomBackgroundUploader';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface BackgroundSelectorProps {
   selectedBackground: BackgroundItem | null;
   onSelect: (background: BackgroundItem) => void;
+  customBackground?: string | null;
+  onCustomBackgroundChange?: (url: string | null) => void;
 }
 
-export function BackgroundSelector({ selectedBackground, onSelect }: BackgroundSelectorProps) {
-  const [activeTab, setActiveTab] = useState<'video' | 'image' | 'animated'>('image');
+export function BackgroundSelector({ 
+  selectedBackground, 
+  onSelect, 
+  customBackground, 
+  onCustomBackgroundChange 
+}: BackgroundSelectorProps) {
+  const [activeTab, setActiveTab] = useState<'custom' | 'image' | 'animated' | 'video'>('image');
 
   const renderBackgroundCard = (bg: BackgroundItem) => {
-    const isSelected = selectedBackground?.id === bg.id;
+    const isSelected = selectedBackground?.id === bg.id && !customBackground;
 
     return (
       <motion.div
         key={bg.id}
         whileHover={{ scale: 1.02 }}
         whileTap={{ scale: 0.98 }}
-        onClick={() => onSelect(bg)}
+        onClick={() => {
+          onCustomBackgroundChange?.(null); // Clear custom when selecting preset
+          onSelect(bg);
+        }}
         className={`relative cursor-pointer rounded-xl overflow-hidden border-2 transition-all ${
           isSelected
             ? 'border-primary ring-2 ring-primary/30'
@@ -71,6 +82,7 @@ export function BackgroundSelector({ selectedBackground, onSelect }: BackgroundS
   };
 
   const tabDescriptions = {
+    custom: 'ارفع صورة أو فيديو من جهازك',
     image: 'صور طبيعية عالية الجودة مع تأثير Ken Burns للحركة',
     animated: 'خلفيات متحركة بتأثيرات بصرية مميزة',
     video: 'مقاطع فيديو طبيعية متحركة',
@@ -78,8 +90,12 @@ export function BackgroundSelector({ selectedBackground, onSelect }: BackgroundS
 
   return (
     <div className="space-y-4">
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'video' | 'image' | 'animated')}>
-        <TabsList className="w-full grid grid-cols-3">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'custom' | 'video' | 'image' | 'animated')}>
+        <TabsList className="w-full grid grid-cols-4">
+          <TabsTrigger value="custom" className="gap-1 text-xs sm:text-sm">
+            <Upload className="h-4 w-4" />
+            <span className="hidden sm:inline">رفع</span>
+          </TabsTrigger>
           <TabsTrigger value="image" className="gap-1 text-xs sm:text-sm">
             <ImageIcon className="h-4 w-4" />
             <span className="hidden sm:inline">صور</span>
@@ -93,6 +109,13 @@ export function BackgroundSelector({ selectedBackground, onSelect }: BackgroundS
             <span className="hidden sm:inline">فيديو</span>
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="custom" className="mt-4">
+          <CustomBackgroundUploader 
+            onUpload={(url) => onCustomBackgroundChange?.(url)}
+            currentBackground={customBackground}
+          />
+        </TabsContent>
 
         <TabsContent value="image" className="mt-4">
           <ScrollArea className="h-[300px] pr-4">

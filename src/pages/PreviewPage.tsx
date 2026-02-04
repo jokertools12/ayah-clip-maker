@@ -123,12 +123,39 @@ export default function PreviewPage() {
   const videoPreviewRef = useRef<VideoPreviewRef>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
 
-  // Load ayahs
+  // Load ayahs - filter out Bismillah if not at start of surah (reciter won't say it)
   useEffect(() => {
     const loadData = async () => {
       const data = await fetchAyahs(surahNumber, startAyah, endAyah);
       if (data) {
-        setAyahs(data);
+        // Process ayahs to remove Bismillah from middle-surah selections
+        const processedAyahs = data.map((ayah, index) => {
+          let text = ayah.text;
+          
+          // If this is the first ayah and NOT ayah 1 of the surah,
+          // and the surah is not Al-Fatiha (1) or At-Tawbah (9),
+          // the reciter won't say Bismillah, so we should check if text starts with it
+          const bismillah = 'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ';
+          const bismillahAlt = 'بسم الله الرحمن الرحيم';
+          
+          // Surah 1 (Fatiha) - Bismillah is part of the first ayah
+          // Surah 9 (Tawbah) - No Bismillah
+          // Other surahs - Bismillah is separate from ayah 1
+          
+          if (index === 0 && startAyah === 1 && surahNumber !== 1 && surahNumber !== 9) {
+            // This is ayah 1 of a surah - remove Bismillah prefix if present
+            // because it's recited separately before the ayah
+            if (text.startsWith(bismillah)) {
+              text = text.replace(bismillah, '').trim();
+            } else if (text.startsWith(bismillahAlt)) {
+              text = text.replace(bismillahAlt, '').trim();
+            }
+          }
+          
+          return { ...ayah, text };
+        });
+        
+        setAyahs(processedAyahs);
       }
     };
     loadData();
@@ -686,9 +713,8 @@ export default function PreviewPage() {
 
               <TabsContent value="background" className="mt-4">
                 <CustomBackgroundUploader
-                  currentCustomBackground={customBackground}
-                  onUpload={(url) => setCustomBackground(url)}
-                  onClear={() => setCustomBackground(null)}
+                  currentBackground={customBackground}
+                  onUpload={(url) => setCustomBackground(url || null)}
                 />
               </TabsContent>
 

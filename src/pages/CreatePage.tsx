@@ -19,7 +19,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { surahs } from '@/data/surahs';
 import { reciters, getRecitersByStyle } from '@/data/reciters';
 import { BackgroundItem, getRandomBackground } from '@/data/backgrounds';
-import { FamousAyah } from '@/data/famousAyahs';
+import { FamousAyah, famousAyahs, ayahCategories, getAyahsByCategory } from '@/data/famousAyahs';
 import { useQuranApi } from '@/hooks/useQuranApi';
 import {
   Monitor,
@@ -236,38 +236,66 @@ export default function CreatePage() {
           exit={{ opacity: 0, x: -20 }}
           className="mb-8"
         >
-          {/* Step 1: Select Surah */}
+          {/* Step 1: Select Surah or Famous Ayah */}
           {currentStep === 1 && (
             <Card>
-              <CardHeader>
+              <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2">
                   <BookOpen className="h-5 w-5" />
-                  اختر السورة
+                  اختر السورة أو الآيات المشهورة
                 </CardTitle>
-                {/* Search */}
-                <div className="relative mt-4">
-                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="ابحث عن سورة..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pr-10"
-                  />
-                </div>
               </CardHeader>
-              <CardContent>
-                <ScrollArea className="h-[55vh]">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 p-1">
-                    {filteredSurahs.map((surah) => (
-                      <SurahCard
-                        key={surah.number}
-                        {...surah}
-                        isSelected={selectedSurah === surah.number}
-                        onClick={() => setSelectedSurah(surah.number)}
+              <CardContent className="pt-0">
+                <Tabs defaultValue="surahs" className="w-full">
+                  <TabsList className="w-full grid grid-cols-2 mb-4">
+                    <TabsTrigger value="surahs" className="gap-1">
+                      <BookOpen className="h-4 w-4" />
+                      السور
+                    </TabsTrigger>
+                    <TabsTrigger value="famous" className="gap-1">
+                      <Bookmark className="h-4 w-4" />
+                      آيات مشهورة
+                    </TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="surahs">
+                    {/* Search */}
+                    <div className="relative mb-4">
+                      <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="ابحث عن سورة..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pr-10"
                       />
-                    ))}
-                  </div>
-                </ScrollArea>
+                    </div>
+                    <ScrollArea className="h-[50vh]">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 p-1">
+                        {filteredSurahs.map((surah) => (
+                          <SurahCard
+                            key={surah.number}
+                            {...surah}
+                            isSelected={selectedSurah === surah.number}
+                            onClick={() => setSelectedSurah(surah.number)}
+                          />
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </TabsContent>
+
+                  <TabsContent value="famous">
+                    <FamousAyahsGrid
+                      onSelect={(ayah) => {
+                        setSelectedSurah(ayah.surahNumber);
+                        setStartAyah(ayah.startAyah);
+                        setEndAyah(ayah.endAyah);
+                        setStartAyahInput(ayah.startAyah.toString());
+                        setEndAyahInput(ayah.endAyah.toString());
+                        handleNextStep();
+                      }}
+                    />
+                  </TabsContent>
+                </Tabs>
               </CardContent>
             </Card>
           )}
@@ -613,5 +641,60 @@ export default function CreatePage() {
         </motion.div>
       </div>
     </Layout>
+  );
+}
+
+// Famous Ayahs Grid Component
+function FamousAyahsGrid({ onSelect }: { onSelect: (ayah: FamousAyah) => void }) {
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const filteredAyahs = getAyahsByCategory(selectedCategory);
+
+  return (
+    <div className="space-y-4">
+      {/* Category Filter */}
+      <ScrollArea className="w-full">
+        <div className="flex gap-2 pb-2">
+          {ayahCategories.map((cat) => (
+            <Button
+              key={cat.id}
+              variant={selectedCategory === cat.id ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setSelectedCategory(cat.id)}
+              className="whitespace-nowrap"
+            >
+              {cat.name}
+            </Button>
+          ))}
+        </div>
+      </ScrollArea>
+
+      {/* Ayahs Grid */}
+      <ScrollArea className="h-[45vh]">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-1">
+          {filteredAyahs.map((ayah) => (
+            <motion.div
+              key={ayah.id}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => onSelect(ayah)}
+              className="cursor-pointer rounded-xl border-2 border-transparent hover:border-primary/50 transition-all p-4 bg-muted/50 hover:bg-muted"
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <h3 className="font-bold text-lg">{ayah.name}</h3>
+                  <p className="text-sm text-muted-foreground">{ayah.description}</p>
+                  <div className="flex gap-2 mt-2">
+                    <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full">
+                      {ayah.endAyah - ayah.startAyah + 1} آية
+                    </span>
+                  </div>
+                </div>
+                <ChevronLeft className="h-5 w-5 text-muted-foreground" />
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      </ScrollArea>
+    </div>
   );
 }

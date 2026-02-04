@@ -228,26 +228,64 @@ export function useVideoRecorder() {
   }, [state.videoBlob]);
 
   const downloadMp4 = useCallback(async (filename: string = 'quran-reel.mp4') => {
+    // Always try to convert to MP4 first
     let blob = state.mp4Blob;
-    if (!blob) {
-      blob = await convertToMp4();
+    
+    if (!blob && state.videoBlob) {
+      try {
+        // Show conversion message
+        setState((prev) => ({
+          ...prev,
+          isConverting: true,
+          stage: 'جاري تحويل الفيديو إلى MP4...',
+        }));
+        
+        blob = await convertToMp4();
+      } catch (error) {
+        console.error('MP4 conversion failed:', error);
+      }
     }
 
-    if (!blob) {
-      // fallback to webm
-      downloadWebm(filename.replace(/\.mp4$/i, '.webm'));
+    // If conversion succeeded, download MP4
+    if (blob) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename.endsWith('.mp4') ? filename : `${filename}.mp4`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      setState((prev) => ({
+        ...prev,
+        isConverting: false,
+        stage: 'تم تحميل الفيديو بنجاح!',
+      }));
       return;
     }
 
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename.endsWith('.mp4') ? filename : `${filename}.mp4`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, [state.mp4Blob, convertToMp4, downloadWebm]);
+    // Fallback to WebM only if MP4 conversion completely failed
+    console.warn('MP4 conversion failed, falling back to WebM');
+    if (state.videoBlob) {
+      const url = URL.createObjectURL(state.videoBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      // Notify user it's WebM
+      const webmFilename = filename.replace(/\.mp4$/i, '.webm');
+      a.download = webmFilename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      setState((prev) => ({
+        ...prev,
+        isConverting: false,
+        stage: 'تم تحميل الفيديو (WebM)',
+      }));
+    }
+  }, [state.mp4Blob, state.videoBlob, convertToMp4]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
