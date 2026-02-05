@@ -42,6 +42,7 @@ export function useVideoRecorder() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const animationFrameRef = useRef<number | null>(null);
+  const conversionInProgressRef = useRef<boolean>(false);
 
   const startRecording = useCallback(async (
     canvas: HTMLCanvasElement,
@@ -65,6 +66,7 @@ export function useVideoRecorder() {
           stage: 'جاري تجهيز التسجيل...',
         });
         chunksRef.current = [];
+      conversionInProgressRef.current = false;
 
         // Get canvas stream at 30fps
         const canvasStream = canvas.captureStream(30);
@@ -108,15 +110,47 @@ export function useVideoRecorder() {
           }
 
           const blob = new Blob(chunksRef.current, { type: mimeType });
+        
+        // Immediately start MP4 conversion after recording
+        setState((prev) => ({
+          ...prev,
+          isRecording: false,
+          progress: 100,
+          videoBlob: blob,
+          mp4Blob: null,
+          isConverting: true,
+          convertProgress: 0,
+          stage: 'جاري تحويل الفيديو إلى MP4...',
+        }));
+
+        // Auto-convert to MP4
+        conversionInProgressRef.current = true;
+        convertWebmToMp4(blob, {
+          onProgress: (ratio) => {
+            setState((prev) => ({
+              ...prev,
+              convertProgress: Math.round(Math.min(Math.max(ratio, 0), 1) * 100),
+            }));
+          },
+        }).then((mp4Blob) => {
+          conversionInProgressRef.current = false;
           setState((prev) => ({
             ...prev,
-            isRecording: false,
-            progress: 100,
-            videoBlob: blob,
-            mp4Blob: null,
-            stage: 'اكتمل التسجيل!',
+            isConverting: false,
+            mp4Blob: mp4Blob,
+            stage: 'جاهز للتحميل بصيغة MP4!',
           }));
           resolve(blob);
+        }).catch((err) => {
+          console.error('Auto MP4 conversion failed:', err);
+          conversionInProgressRef.current = false;
+          setState((prev) => ({
+            ...prev,
+            isConverting: false,
+            stage: 'تم إنشاء الفيديو (يتطلب تحويل يدوي)',
+          }));
+          resolve(blob);
+        });
         };
 
         mediaRecorder.onerror = (e) => {
@@ -174,22 +208,24 @@ export function useVideoRecorder() {
     });
   }, []);
 
-  const downloadWebm = useCallback((filename: string = 'quran-reel.webm') => {
-    if (!state.videoBlob) return;
-    const url = URL.createObjectURL(state.videoBlob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename.endsWith('.webm') ? filename : `${filename}.webm`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, [state.videoBlob]);
-
   const convertToMp4 = useCallback(async (): Promise<Blob | null> => {
+    // If we already have mp4, return it
+    if (state.mp4Blob) return state.mp4Blob;
     if (!state.videoBlob) return null;
+    if (conversionInProgressRef.current) {
+      // Wait for existing conversion
+      return new Promise((resolve) => {
+        const checkInterval = setInterval(() => {
+          if (!conversionInProgressRef.current) {
+            clearInterval(checkInterval);
+            resolve(state.mp4Blob);
+          }
+        }, 500);
+      });
+    }
 
     try {
+      conversionInProgressRef.current = true;
       setState((prev) => ({
         ...prev,
         isConverting: true,
@@ -207,6 +243,7 @@ export function useVideoRecorder() {
         },
       });
 
+      conversionInProgressRef.current = false;
       setState((prev) => ({
         ...prev,
         isConverting: false,
@@ -217,41 +254,56 @@ export function useVideoRecorder() {
       return mp4;
     } catch (e) {
       console.error('MP4 conversion failed:', e);
-      // Fallback silently to WebM without showing error
+      conversionInProgressRef.current = false;
       setState((prev) => ({
         ...prev,
         isConverting: false,
-        stage: '',
+        error: 'فشل التحويل إلى MP4',
+        stage: 'فشل التحويل',
       }));
       return null;
     }
-  }, [state.videoBlob]);
+  }, [state.videoBlob, state.mp4Blob]);
 
   const downloadMp4 = useCallback(async (filename: string = 'quran-reel.mp4') => {
-    // Always try to convert to MP4 first
-    let blob = state.mp4Blob;
-    
-    if (!blob && state.videoBlob) {
-      try {
-        // Show conversion message
-        setState((prev) => ({
-          ...prev,
-          isConverting: true,
-          stage: 'جاري تحويل الفيديو إلى MP4...',
-        }));
-        
-        blob = await convertToMp4();
-      } catch (error) {
-        console.error('MP4 conversion failed:', error);
-      }
+    // Wait if conversion is in progress
+    if (conversionInProgressRef.current || state.isConverting) {
+      // Show waiting message
+      setState((prev) => ({
+        ...prev,
+        stage: 'جاري انتظار اكتمال التحويل...',
+      }));
+      
+      // Wait for conversion to complete
+      await new Promise<void>((resolve) => {
+        const checkInterval = setInterval(() => {
+          if (!conversionInProgressRef.current) {
+            clearInterval(checkInterval);
+            resolve();
+          }
+        }, 500);
+      });
     }
 
-    // If conversion succeeded, download MP4
+    // Now check for mp4Blob
+    let blob = state.mp4Blob;
+    
+    // If still no MP4, try converting now
+    if (!blob && state.videoBlob) {
+      setState((prev) => ({
+        ...prev,
+        stage: 'جاري تحويل الفيديو...',
+      }));
+      blob = await convertToMp4();
+    }
+
+    // Download MP4 if available
     if (blob) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = filename.endsWith('.mp4') ? filename : `${filename}.mp4`;
+      const finalName = filename.endsWith('.mp4') ? filename : `${filename.replace(/\.[^/.]+$/, '')}.mp4`;
+      a.download = finalName;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -259,33 +311,18 @@ export function useVideoRecorder() {
       
       setState((prev) => ({
         ...prev,
-        isConverting: false,
         stage: 'تم تحميل الفيديو بنجاح!',
       }));
       return;
     }
 
-    // Fallback to WebM only if MP4 conversion completely failed
-    console.warn('MP4 conversion failed, falling back to WebM');
-    if (state.videoBlob) {
-      const url = URL.createObjectURL(state.videoBlob);
-      const a = document.createElement('a');
-      a.href = url;
-      // Notify user it's WebM
-      const webmFilename = filename.replace(/\.mp4$/i, '.webm');
-      a.download = webmFilename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      
-      setState((prev) => ({
-        ...prev,
-        isConverting: false,
-        stage: 'تم تحميل الفيديو (WebM)',
-      }));
-    }
-  }, [state.mp4Blob, state.videoBlob, convertToMp4]);
+    // Show error if no blob available
+    setState((prev) => ({
+      ...prev,
+      error: 'فشل في تجهيز الفيديو للتحميل',
+      stage: 'حدث خطأ',
+    }));
+  }, [state.mp4Blob, state.videoBlob, state.isConverting, convertToMp4]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
@@ -298,6 +335,7 @@ export function useVideoRecorder() {
 
   const reset = useCallback(() => {
     stopRecording();
+    conversionInProgressRef.current = false;
     setState({
       isRecording: false,
       progress: 0,
@@ -316,7 +354,6 @@ export function useVideoRecorder() {
     startRecording,
     stopRecording,
     downloadMp4,
-    downloadWebm,
     convertToMp4,
     reset,
   };

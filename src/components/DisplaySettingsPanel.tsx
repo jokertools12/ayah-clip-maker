@@ -27,10 +27,10 @@ const highlightOptions = [
 
 const frameOptions = [
   { value: 'none', label: 'بدون إطار', description: 'نص فقط' },
-  { value: 'simple', label: 'إطار بسيط', description: 'حدود رفيعة' },
-  { value: 'ornate', label: 'إطار مزخرف', description: 'زخارف إسلامية' },
-  { value: 'golden', label: 'إطار ذهبي', description: 'زخرفة ذهبية فاخرة' },
-  { value: 'geometric', label: 'إطار هندسي', description: 'نقوش هندسية' },
+  { value: 'simple', label: 'إطار أنيق', description: 'حدود ذهبية رفيعة' },
+  { value: 'ornate', label: 'إطار مزخرف', description: 'زخرفة إسلامية راقية' },
+  { value: 'golden', label: 'إطار ذهبي فاخر', description: 'توهج ذهبي متوهج' },
+  { value: 'geometric', label: 'إطار هندسي', description: 'أنماط هندسية إسلامية' },
 ];
 
 const ayahNumberOptions = [
@@ -137,6 +137,7 @@ export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPane
           <Label className="text-sm flex items-center gap-2">
             <Frame className="h-4 w-4" />
             إطار النص
+            <span className="text-xs text-muted-foreground mr-auto">(الافتراضي: بدون)</span>
           </Label>
           <RadioGroup
             value={settings.frameStyle}
