@@ -3,15 +3,17 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
 import { AudioEffects } from '@/hooks/useAudioEffects';
-import { Music, Waves, Timer } from 'lucide-react';
+import { Music, Waves, Timer, Shield, AlertTriangle } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
 interface AudioEffectsPanelProps {
   effects: AudioEffects;
   onChange: (effects: AudioEffects) => void;
   disabled?: boolean;
+  onToggleCopyrightProtection?: (enabled: boolean) => void;
 }
 
-export function AudioEffectsPanel({ effects, onChange, disabled }: AudioEffectsPanelProps) {
+export function AudioEffectsPanel({ effects, onChange, disabled, onToggleCopyrightProtection }: AudioEffectsPanelProps) {
   const updateEffect = <K extends keyof AudioEffects>(key: K, value: AudioEffects[K]) => {
     onChange({ ...effects, [key]: value });
   };
@@ -25,6 +27,37 @@ export function AudioEffectsPanel({ effects, onChange, disabled }: AudioEffectsP
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* Copyright Protection */}
+        <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 space-y-3">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="copyrightProtection" className="flex items-center gap-2 cursor-pointer">
+              <Shield className="h-4 w-4 text-amber-500" />
+              <span className="text-amber-700 dark:text-amber-400 font-medium text-sm">حماية حقوق النشر</span>
+            </Label>
+            <Switch
+              id="copyrightProtection"
+              checked={effects.copyrightProtectionEnabled}
+              onCheckedChange={(checked) => {
+                updateEffect('copyrightProtectionEnabled', checked);
+                onToggleCopyrightProtection?.(checked);
+              }}
+              disabled={disabled}
+            />
+          </div>
+          <div className="flex items-start gap-2 text-xs text-muted-foreground">
+            <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0 text-amber-500" />
+            <p>
+              يُطبق تعديلات صوتية طفيفة غير ملحوظة لتجنب اكتشاف الصوت تلقائياً على فيسبوك ويوتيوب
+            </p>
+          </div>
+          {effects.copyrightProtectionEnabled && (
+            <Badge variant="secondary" className="bg-amber-500/20 text-amber-700 dark:text-amber-400 border-0">
+              <Shield className="h-3 w-3 ml-1" />
+              الحماية مُفعّلة
+            </Badge>
+          )}
+        </div>
+
         {/* Reverb (Mosque Effect) */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">

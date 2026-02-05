@@ -9,6 +9,10 @@ const FONT_MAP: Record<string, string> = {
   '"Scheherazade New", serif': 'Scheherazade New',
 };
 
+// Slideshow configuration
+const SLIDESHOW_TRANSITION_DURATION = 1500; // 1.5 seconds for smooth transition
+const SLIDESHOW_DISPLAY_DURATION = 4000; // 4 seconds per image
+
 interface VideoPreviewProps {
   background: BackgroundItem | null;
   customBackground?: string | null;
@@ -50,7 +54,7 @@ const DEFAULT_DISPLAY_SETTINGS = {
   showAyahText: true,
   showAyahNumber: true,
   highlightStyle: 'glow' as const,
-  frameStyle: 'ornate' as const,
+  frameStyle: 'none' as const,
   ayahNumberStyle: 'circle' as const,
 };
 
@@ -76,6 +80,11 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   const [imageLoaded, setImageLoaded] = useState(false);
   const [videoReady, setVideoReady] = useState(false);
 
+  // Slideshow state
+  const slideshowImagesRef = useRef<HTMLImageElement[]>([]);
+  const [slideshowReady, setSlideshowReady] = useState(false);
+  const slideshowStartTimeRef = useRef<number>(Date.now());
+
   // Get dimensions based on aspect ratio
   const getDimensions = () => {
     if (aspectRatio === '9:16') {
@@ -95,13 +104,40 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   useEffect(() => {
     const bgUrl = customBackground || background?.url;
     const bgType = background?.type || 'image';
+    const slideImages = background?.slideImages;
     
     if (!bgUrl) return;
     
     setImageLoaded(false);
     setVideoReady(false);
+    setSlideshowReady(false);
+    slideshowImagesRef.current = [];
     
-    if (bgType === 'video') {
+    // Handle slideshow backgrounds (animated type with slideImages)
+    if (bgType === 'animated' && slideImages && slideImages.length > 1) {
+      // Preload all slideshow images
+      const loadedImages: HTMLImageElement[] = [];
+      let loadedCount = 0;
+      
+      slideImages.forEach((url, index) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.src = url;
+        img.onload = () => {
+          loadedImages[index] = img;
+          loadedCount++;
+          if (loadedCount === slideImages.length) {
+            slideshowImagesRef.current = loadedImages;
+            slideshowStartTimeRef.current = Date.now();
+            setSlideshowReady(true);
+          }
+        };
+        img.onerror = () => {
+          console.error('Failed to load slideshow image:', url);
+          loadedCount++;
+        };
+      });
+    } else if (bgType === 'video') {
       // Load video background
       const video = document.createElement('video');
       video.crossOrigin = 'anonymous';
@@ -146,6 +182,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         videoRef.current.pause();
         videoRef.current = null;
       }
+      slideshowImagesRef.current = [];
     };
   }, [background, customBackground]);
 
@@ -482,11 +519,55 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
 
     // Draw background with Ken Burns effect
     const time = Date.now() / 1000;
-    const scale = 1.1 + Math.sin(time * 0.08) * 0.08;
-    const offsetX = Math.sin(time * 0.04) * 30;
-    const offsetY = Math.cos(time * 0.04) * 30;
+    const scale = 1.12 + Math.sin(time * 0.25) * 0.08;
+    const offsetX = Math.sin(time * 0.15) * 40;
+    const offsetY = Math.cos(time * 0.12) * 35;
     
-    if (videoReady && videoRef.current) {
+    // Handle slideshow backgrounds
+    if (slideshowReady && slideshowImagesRef.current.length > 1) {
+      const images = slideshowImagesRef.current;
+      const elapsed = Date.now() - slideshowStartTimeRef.current;
+      const cycleDuration = SLIDESHOW_DISPLAY_DURATION + SLIDESHOW_TRANSITION_DURATION;
+      const cyclePosition = elapsed % (cycleDuration * images.length);
+      
+      const currentIndex = Math.floor(cyclePosition / cycleDuration) % images.length;
+      const nextIndex = (currentIndex + 1) % images.length;
+      const positionInCycle = cyclePosition % cycleDuration;
+      
+      // Draw current image with Ken Burns
+      ctx.save();
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.scale(scale, scale);
+      ctx.translate(-canvas.width / 2 + offsetX, -canvas.height / 2 + offsetY);
+      
+      const currentImg = images[currentIndex];
+      if (currentImg) {
+        ctx.drawImage(currentImg, 0, 0, canvas.width, canvas.height);
+      }
+      ctx.restore();
+      
+      // Crossfade transition
+      if (positionInCycle > SLIDESHOW_DISPLAY_DURATION) {
+        const fadeProgress = (positionInCycle - SLIDESHOW_DISPLAY_DURATION) / SLIDESHOW_TRANSITION_DURATION;
+        ctx.save();
+        ctx.globalAlpha = fadeProgress;
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        
+        // Different Ken Burns for next image
+        const nextScale = 1.08 + Math.sin(time * 0.2 + 2) * 0.06;
+        const nextOffsetX = Math.cos(time * 0.18) * 35;
+        const nextOffsetY = Math.sin(time * 0.14) * 30;
+        
+        ctx.scale(nextScale, nextScale);
+        ctx.translate(-canvas.width / 2 + nextOffsetX, -canvas.height / 2 + nextOffsetY);
+        
+        const nextImg = images[nextIndex];
+        if (nextImg) {
+          ctx.drawImage(nextImg, 0, 0, canvas.width, canvas.height);
+        }
+        ctx.restore();
+      }
+    } else if (videoReady && videoRef.current) {
       // Draw video frame
       ctx.save();
       ctx.translate(canvas.width / 2, canvas.height / 2);
@@ -734,7 +815,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         drawAyahBadge(ctx, canvas.width / 2, badgeY, currentAyah.numberInSurah, 36, displaySettings.ayahNumberStyle);
       }
     }
-  }, [background, customBackground, imageLoaded, videoReady, surahName, reciterName, currentAyah, currentAyahWords, highlightedWordIndex, textSettings, displaySettings, dimensions, getTokenHsl, drawAyahBadge, getCanvasFontFamily, drawIslamicFrame]);
+  }, [background, customBackground, imageLoaded, videoReady, slideshowReady, surahName, reciterName, currentAyah, currentAyahWords, highlightedWordIndex, textSettings, displaySettings, dimensions, getTokenHsl, drawAyahBadge, getCanvasFontFamily, drawIslamicFrame]);
 
   // Animation loop for canvas
   useEffect(() => {

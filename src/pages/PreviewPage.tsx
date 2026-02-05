@@ -13,7 +13,7 @@ import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { surahs } from '@/data/surahs';
 import { reciters, getAudioUrl } from '@/data/reciters';
-import { backgroundVideos, backgroundImages, animatedBackgrounds, BackgroundItem } from '@/data/backgrounds';
+import { backgroundVideos, backgroundImages, slideshowBackgrounds, BackgroundItem } from '@/data/backgrounds';
 import { useQuranApi } from '@/hooks/useQuranApi';
 import { useAuth } from '@/hooks/useAuth';
 import { useAudioEffects } from '@/hooks/useAudioEffects';
@@ -53,7 +53,7 @@ const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
   showAyahText: true,
   showAyahNumber: true,
   highlightStyle: 'glow', // Default to golden glow
-  frameStyle: 'ornate',
+  frameStyle: 'none', // Default to no frame - user can add if desired
   ayahNumberStyle: 'circle',
 };
 
@@ -94,7 +94,7 @@ export default function PreviewPage() {
   const surah = surahs.find((s) => s.number === surahNumber);
   const reciter = reciters.find((r) => r.id === reciterId);
   const background: BackgroundItem | null =
-    [...backgroundVideos, ...backgroundImages, ...animatedBackgrounds].find((bg) => bg.id === backgroundId) ||
+    [...backgroundVideos, ...backgroundImages, ...slideshowBackgrounds].find((bg) => bg.id === backgroundId) ||
     backgroundImages[0];
 
   // State
@@ -708,6 +708,7 @@ export default function PreviewPage() {
                   effects={audioEffects.effects}
                   onChange={audioEffects.setEffects}
                   disabled={!audioLoaded || audioError}
+                  onToggleCopyrightProtection={audioEffects.toggleCopyrightProtection}
                 />
               </TabsContent>
 

@@ -6,6 +6,10 @@ export interface AudioEffects {
   echoEnabled: boolean;
   echoDelay: number; // 0-1 seconds
   echoFeedback: number; // 0-0.8
+  // Copyright protection effects
+  pitchShift: number; // -0.1 to 0.1 (subtle pitch change)
+  speedAdjust: number; // 0.95 to 1.05 (subtle speed change)
+  copyrightProtectionEnabled: boolean;
 }
 
 const defaultEffects: AudioEffects = {
@@ -14,6 +18,9 @@ const defaultEffects: AudioEffects = {
   echoEnabled: false,
   echoDelay: 0.3,
   echoFeedback: 0.4,
+  pitchShift: 0,
+  speedAdjust: 1.0,
+  copyrightProtectionEnabled: false,
 };
 
 export function useAudioEffects() {
@@ -30,6 +37,8 @@ export function useAudioEffects() {
   const echoGainRef = useRef<GainNode | null>(null);
   const masterGainRef = useRef<GainNode | null>(null);
   const recordingDestRef = useRef<MediaStreamAudioDestinationNode | null>(null);
+  const biquadFilterRef = useRef<BiquadFilterNode | null>(null);
+  const audioElementRef = useRef<HTMLAudioElement | null>(null);
 
   // Create impulse response for reverb (simulates mosque acoustics)
   const createImpulseResponse = useCallback((duration: number, decay: number, reverse: boolean = false) => {
@@ -50,8 +59,8 @@ export function useAudioEffects() {
     return impulse;
   }, []);
 
-  // Initialize audio context and nodes
-  const initializeAudio = useCallback((audioElement: HTMLAudioElement) => {
+  // Initialize audio context and nodes with copyright protection
+  const initializeAudio = useCallback((audioElement: HTMLAudioElement, enableCopyrightProtection = false) => {
     if (isInitialized && sourceNodeRef.current) {
       return;
     }
@@ -63,6 +72,7 @@ export function useAudioEffects() {
       }
 
       const ctx = audioContextRef.current;
+      audioElementRef.current = audioElement;
 
       // Only create source node once
       if (!sourceNodeRef.current) {
@@ -78,6 +88,7 @@ export function useAudioEffects() {
       const echoGain = ctx.createGain();
       const masterGain = ctx.createGain();
       const recordingDest = ctx.createMediaStreamDestination();
+      const biquadFilter = ctx.createBiquadFilter();
 
       // Store refs
       convolverRef.current = convolver;
@@ -88,12 +99,19 @@ export function useAudioEffects() {
       echoGainRef.current = echoGain;
       masterGainRef.current = masterGain;
       recordingDestRef.current = recordingDest;
+      biquadFilterRef.current = biquadFilter;
 
       // Create mosque-like reverb impulse response
       const impulse = createImpulseResponse(3, 2);
       if (impulse) {
         convolver.buffer = impulse;
       }
+
+      // Configure biquad filter for subtle frequency adjustment (copyright protection)
+      biquadFilter.type = 'peaking';
+      biquadFilter.frequency.value = 1000;
+      biquadFilter.Q.value = 0.5;
+      biquadFilter.gain.value = enableCopyrightProtection ? 1.5 : 0;
 
       // Set initial values
       dryGain.gain.value = 1;
@@ -107,8 +125,9 @@ export function useAudioEffects() {
       masterGain.connect(ctx.destination);
       masterGain.connect(recordingDest);
 
-      // Dry path
-      sourceNodeRef.current.connect(dryGain);
+      // Dry path with optional filter for copyright protection
+      sourceNodeRef.current.connect(biquadFilter);
+      biquadFilter.connect(dryGain);
       dryGain.connect(masterGain);
 
       // Reverb path
@@ -122,6 +141,13 @@ export function useAudioEffects() {
       feedback.connect(delay);
       delay.connect(echoGain);
       echoGain.connect(masterGain);
+
+      // Apply copyright protection if enabled
+      if (enableCopyrightProtection) {
+        setEffects(prev => ({ ...prev, copyrightProtectionEnabled: true }));
+        // Apply subtle speed change via playbackRate
+        audioElement.playbackRate = 1.02; // 2% faster - subtle enough to not notice
+      }
 
       setIsInitialized(true);
     } catch (error) {
@@ -144,7 +170,29 @@ export function useAudioEffects() {
       feedbackRef.current.gain.value = effects.echoEnabled ? effects.echoFeedback : 0;
       echoGainRef.current.gain.value = effects.echoEnabled ? 0.6 : 0;
     }
+
+    // Update copyright protection
+    if (biquadFilterRef.current) {
+      biquadFilterRef.current.gain.value = effects.copyrightProtectionEnabled ? 1.5 : 0;
+    }
+
+    if (audioElementRef.current) {
+      audioElementRef.current.playbackRate = effects.copyrightProtectionEnabled ? 1.02 : effects.speedAdjust;
+    }
   }, [effects, isInitialized]);
+
+  // Toggle copyright protection
+  const toggleCopyrightProtection = useCallback((enabled: boolean) => {
+    setEffects(prev => ({ 
+      ...prev, 
+      copyrightProtectionEnabled: enabled,
+      speedAdjust: enabled ? 1.02 : 1.0,
+    }));
+    
+    if (audioElementRef.current) {
+      audioElementRef.current.playbackRate = enabled ? 1.02 : 1.0;
+    }
+  }, []);
 
   const getRecordingStream = useCallback((): MediaStream | null => {
     return recordingDestRef.current?.stream ?? null;
@@ -171,6 +219,7 @@ export function useAudioEffects() {
         echoGainRef.current?.disconnect();
         masterGainRef.current?.disconnect();
         recordingDestRef.current?.disconnect();
+        biquadFilterRef.current?.disconnect();
       } catch (e) {
         // Ignore disconnect errors
       }
@@ -199,5 +248,6 @@ export function useAudioEffects() {
     cleanup,
     getRecordingStream,
     isInitialized,
+    toggleCopyrightProtection,
   };
 }

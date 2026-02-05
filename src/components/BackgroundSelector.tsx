@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Check, Play, Image as ImageIcon, Sparkles, Upload } from 'lucide-react';
-import { BackgroundItem, backgroundVideos, backgroundImages, animatedBackgrounds } from '@/data/backgrounds';
+import { BackgroundItem, backgroundVideos, backgroundImages, slideshowBackgrounds } from '@/data/backgrounds';
 import { CustomBackgroundUploader } from '@/components/CustomBackgroundUploader';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -19,7 +19,7 @@ export function BackgroundSelector({
   customBackground, 
   onCustomBackgroundChange 
 }: BackgroundSelectorProps) {
-  const [activeTab, setActiveTab] = useState<'custom' | 'image' | 'animated' | 'video'>('image');
+  const [activeTab, setActiveTab] = useState<'custom' | 'image' | 'slideshow' | 'video'>('image');
 
   const renderBackgroundCard = (bg: BackgroundItem) => {
     const isSelected = selectedBackground?.id === bg.id && !customBackground;
@@ -59,6 +59,13 @@ export function BackgroundSelector({
             )}
           </div>
 
+          {/* Slideshow indicator */}
+          {bg.slideImages && bg.slideImages.length > 1 && (
+            <div className="absolute bottom-8 left-2 px-2 py-0.5 rounded-full bg-primary/80 text-primary-foreground text-xs">
+              {bg.slideImages.length} صور
+            </div>
+          )}
+
           {/* Selected indicator */}
           {isSelected && (
             <motion.div
@@ -81,16 +88,16 @@ export function BackgroundSelector({
     );
   };
 
-  const tabDescriptions = {
+  const tabDescriptions: Record<string, string> = {
     custom: 'ارفع صورة أو فيديو من جهازك',
     image: 'صور طبيعية عالية الجودة مع تأثير Ken Burns للحركة',
-    animated: 'خلفيات متحركة بتأثيرات بصرية مميزة',
+    slideshow: 'صور متغيرة ومتنوعة تتحرك وتتبدل تلقائياً',
     video: 'مقاطع فيديو طبيعية متحركة',
   };
 
   return (
     <div className="space-y-4">
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'custom' | 'video' | 'image' | 'animated')}>
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'custom' | 'video' | 'image' | 'slideshow')}>
         <TabsList className="w-full grid grid-cols-4">
           <TabsTrigger value="custom" className="gap-1 text-xs sm:text-sm">
             <Upload className="h-4 w-4" />
@@ -100,9 +107,9 @@ export function BackgroundSelector({
             <ImageIcon className="h-4 w-4" />
             <span className="hidden sm:inline">صور</span>
           </TabsTrigger>
-          <TabsTrigger value="animated" className="gap-1 text-xs sm:text-sm">
+          <TabsTrigger value="slideshow" className="gap-1 text-xs sm:text-sm">
             <Sparkles className="h-4 w-4" />
-            <span className="hidden sm:inline">متحركة</span>
+            <span className="hidden sm:inline">متغيرة</span>
           </TabsTrigger>
           <TabsTrigger value="video" className="gap-1 text-xs sm:text-sm">
             <Play className="h-4 w-4" />
@@ -125,10 +132,10 @@ export function BackgroundSelector({
           </ScrollArea>
         </TabsContent>
 
-        <TabsContent value="animated" className="mt-4">
+        <TabsContent value="slideshow" className="mt-4">
           <ScrollArea className="h-[300px] pr-4">
             <div className="grid grid-cols-2 gap-3">
-              {animatedBackgrounds.map(renderBackgroundCard)}
+              {slideshowBackgrounds.map(renderBackgroundCard)}
             </div>
           </ScrollArea>
         </TabsContent>
