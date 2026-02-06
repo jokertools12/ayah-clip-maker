@@ -34,9 +34,11 @@ interface VideoPreviewProps {
     showReciterName: boolean;
     showAyahText: boolean;
     showAyahNumber: boolean;
-    highlightStyle: 'solid' | 'glow' | 'underline';
-    frameStyle: 'none' | 'simple' | 'ornate' | 'golden' | 'geometric';
-    ayahNumberStyle: 'circle' | 'star' | 'diamond' | 'octagon' | 'flower';
+    highlightStyle: 'solid' | 'glow' | 'underline' | 'shadow';
+    frameStyle: 'none' | 'simple' | 'ornate' | 'golden' | 'geometric' | 'modern' | 'minimal';
+    ayahNumberStyle: 'circle' | 'star' | 'diamond' | 'octagon' | 'flower' | 'square' | 'hexagon';
+    surahNamePosition?: 'top' | 'bottom' | 'topLeft' | 'topRight';
+    textShadowStyle?: 'soft' | 'strong' | 'none' | 'glow';
   };
   isPlaying: boolean;
   onCanvasReady?: (canvas: HTMLCanvasElement) => void;
@@ -56,6 +58,8 @@ const DEFAULT_DISPLAY_SETTINGS = {
   highlightStyle: 'glow' as const,
   frameStyle: 'none' as const,
   ayahNumberStyle: 'circle' as const,
+  surahNamePosition: 'top' as const,
+  textShadowStyle: 'soft' as const,
 };
 
 export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
