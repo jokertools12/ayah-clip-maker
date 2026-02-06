@@ -9,9 +9,11 @@ export interface DisplaySettings {
   showReciterName: boolean;
   showAyahText: boolean;
   showAyahNumber: boolean;
-  highlightStyle: 'solid' | 'glow' | 'underline';
-  frameStyle: 'none' | 'simple' | 'ornate' | 'golden' | 'geometric';
-  ayahNumberStyle: 'circle' | 'star' | 'diamond' | 'octagon' | 'flower';
+  highlightStyle: 'solid' | 'glow' | 'underline' | 'shadow';
+  frameStyle: 'none' | 'simple' | 'ornate' | 'golden' | 'geometric' | 'modern' | 'minimal';
+  ayahNumberStyle: 'circle' | 'star' | 'diamond' | 'octagon' | 'flower' | 'square' | 'hexagon';
+  surahNamePosition: 'top' | 'bottom' | 'topLeft' | 'topRight';
+  textShadowStyle: 'soft' | 'strong' | 'none' | 'glow';
 }
 
 interface DisplaySettingsPanelProps {
@@ -23,14 +25,17 @@ const highlightOptions = [
   { value: 'solid', label: 'تظليل مملوء', description: 'خلفية ملونة للكلمة' },
   { value: 'glow', label: 'توهج ذهبي', description: 'إضاءة حول الكلمة' },
   { value: 'underline', label: 'خط سفلي', description: 'خط تحت الكلمة' },
+  { value: 'shadow', label: 'ظل عميق', description: 'ظل ناعم محيط' },
 ];
 
 const frameOptions = [
   { value: 'none', label: 'بدون إطار', description: 'نص فقط' },
-  { value: 'simple', label: 'إطار أنيق', description: 'حدود ذهبية رفيعة' },
-  { value: 'ornate', label: 'إطار مزخرف', description: 'زخرفة إسلامية راقية' },
-  { value: 'golden', label: 'إطار ذهبي فاخر', description: 'توهج ذهبي متوهج' },
-  { value: 'geometric', label: 'إطار هندسي', description: 'أنماط هندسية إسلامية' },
+  { value: 'simple', label: 'إطار أنيق', description: 'حدود رفيعة' },
+  { value: 'ornate', label: 'إطار مزخرف', description: 'زخرفة إسلامية' },
+  { value: 'golden', label: 'إطار ذهبي', description: 'توهج ذهبي' },
+  { value: 'geometric', label: 'إطار هندسي', description: 'أنماط هندسية' },
+  { value: 'modern', label: 'إطار عصري', description: 'خطوط ناعمة' },
+  { value: 'minimal', label: 'إطار بسيط', description: 'حد واحد رفيع' },
 ];
 
 const ayahNumberOptions = [
@@ -39,6 +44,22 @@ const ayahNumberOptions = [
   { value: 'diamond', label: 'معين', description: '◇' },
   { value: 'octagon', label: 'مثمن', description: '⬡' },
   { value: 'flower', label: 'زهرة', description: '✿' },
+  { value: 'square', label: 'مربع', description: '◻' },
+  { value: 'hexagon', label: 'سداسي', description: '⬢' },
+];
+
+const surahPositionOptions = [
+  { value: 'top', label: 'أعلى المنتصف', description: 'مركز الأعلى' },
+  { value: 'bottom', label: 'أسفل', description: 'مركز الأسفل' },
+  { value: 'topLeft', label: 'أعلى يسار', description: 'الزاوية العليا' },
+  { value: 'topRight', label: 'أعلى يمين', description: 'الزاوية اليمنى' },
+];
+
+const textShadowOptions = [
+  { value: 'soft', label: 'ظل ناعم', description: 'ظل خفيف' },
+  { value: 'strong', label: 'ظل قوي', description: 'ظل عميق' },
+  { value: 'glow', label: 'توهج', description: 'إضاءة محيطة' },
+  { value: 'none', label: 'بدون ظل', description: 'نص مسطح' },
 ];
 
 export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPanelProps) {
@@ -186,6 +207,58 @@ export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPane
             </RadioGroup>
           </div>
         )}
+
+        {/* Surah Name Position */}
+        {settings.showSurahName && (
+          <div className="space-y-3 pt-2 border-t">
+            <Label className="text-sm flex items-center gap-2">
+              موضع اسم السورة
+            </Label>
+            <RadioGroup
+              value={settings.surahNamePosition || 'top'}
+              onValueChange={(value) => updateSetting('surahNamePosition', value as DisplaySettings['surahNamePosition'])}
+              className="grid grid-cols-2 gap-2"
+            >
+              {surahPositionOptions.map((option) => (
+                <div key={option.value} className="relative">
+                  <RadioGroupItem value={option.value} id={`pos-${option.value}`} className="peer sr-only" />
+                  <Label
+                    htmlFor={`pos-${option.value}`}
+                    className="flex flex-col items-center rounded-lg border-2 border-muted p-2 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all text-center"
+                  >
+                    <span className="font-medium text-sm">{option.label}</span>
+                    <span className="text-xs text-muted-foreground">{option.description}</span>
+                  </Label>
+                </div>
+              ))}
+            </RadioGroup>
+          </div>
+        )}
+
+        {/* Text Shadow Style */}
+        <div className="space-y-3 pt-2 border-t">
+          <Label className="text-sm flex items-center gap-2">
+            نمط ظل النص
+          </Label>
+          <RadioGroup
+            value={settings.textShadowStyle || 'soft'}
+            onValueChange={(value) => updateSetting('textShadowStyle', value as DisplaySettings['textShadowStyle'])}
+            className="grid grid-cols-2 gap-2"
+          >
+            {textShadowOptions.map((option) => (
+              <div key={option.value} className="relative">
+                <RadioGroupItem value={option.value} id={`shadow-${option.value}`} className="peer sr-only" />
+                <Label
+                  htmlFor={`shadow-${option.value}`}
+                  className="flex flex-col items-center rounded-lg border-2 border-muted p-2 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all text-center"
+                >
+                  <span className="font-medium text-sm">{option.label}</span>
+                  <span className="text-xs text-muted-foreground">{option.description}</span>
+                </Label>
+              </div>
+            ))}
+          </RadioGroup>
+        </div>
       </CardContent>
     </Card>
   );

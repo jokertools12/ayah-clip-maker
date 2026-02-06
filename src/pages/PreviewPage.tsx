@@ -7,6 +7,8 @@ import { AudioEffectsPanel } from '@/components/AudioEffectsPanel';
 import { DisplaySettingsPanel, DisplaySettings } from '@/components/DisplaySettingsPanel';
 import { CustomBackgroundUploader } from '@/components/CustomBackgroundUploader';
 import { ExportQualitySelector } from '@/components/ExportQualitySelector';
+import { PresetSelector } from '@/components/PresetSelector';
+import { VIDEO_PRESETS, VideoPreset } from '@/data/videoPresets';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -44,6 +46,7 @@ import {
   Music,
   Eye,
   Upload,
+  Palette,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -52,9 +55,11 @@ const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
   showReciterName: true,
   showAyahText: true,
   showAyahNumber: true,
-  highlightStyle: 'glow', // Default to golden glow
-  frameStyle: 'none', // Default to no frame - user can add if desired
+  highlightStyle: 'glow',
+  frameStyle: 'none',
   ayahNumberStyle: 'circle',
+  surahNamePosition: 'top',
+  textShadowStyle: 'soft',
 };
 
 export default function PreviewPage() {
@@ -111,6 +116,18 @@ export default function PreviewPage() {
   // Custom background and export quality
   const [customBackground, setCustomBackground] = useState<string | null>(null);
   const [exportQuality, setExportQuality] = useState<ExportQuality>('high');
+  const [selectedPresetId, setSelectedPresetId] = useState<string | undefined>(undefined);
+
+  // Handler to apply a preset
+  const applyPreset = useCallback((preset: VideoPreset) => {
+    setSelectedPresetId(preset.id);
+    setDisplaySettings((prev) => ({
+      ...prev,
+      ...preset.displaySettings,
+    }));
+    setExportQuality(preset.exportQuality);
+    toast.success(`تم تطبيق قالب "${preset.name}"`);
+  }, []);
 
   // Data
   const surah = surahs.find((s) => s.number === surahNumber);
@@ -619,7 +636,11 @@ export default function PreviewPage() {
 
             {/* Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="w-full grid grid-cols-5">
+              <TabsList className="w-full grid grid-cols-6">
+                <TabsTrigger value="presets" className="gap-1">
+                  <Palette className="h-4 w-4" />
+                  <span className="hidden sm:inline text-xs">قوالب</span>
+                </TabsTrigger>
                 <TabsTrigger value="controls" className="gap-1">
                   <Settings className="h-4 w-4" />
                   <span className="hidden sm:inline text-xs">التحكم</span>
@@ -641,6 +662,14 @@ export default function PreviewPage() {
                   <span className="hidden sm:inline text-xs">جودة</span>
                 </TabsTrigger>
               </TabsList>
+
+              {/* Presets Tab */}
+              <TabsContent value="presets" className="mt-4">
+                <PresetSelector
+                  selectedPresetId={selectedPresetId}
+                  onSelectPreset={applyPreset}
+                />
+              </TabsContent>
 
               <TabsContent value="controls" className="mt-4">
                 <Card>
