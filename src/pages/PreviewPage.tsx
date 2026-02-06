@@ -65,6 +65,28 @@ export default function PreviewPage() {
   const audioEffects = useAudioEffects();
   const videoRecorder = useVideoRecorder();
 
+  // A stable object URL so the download is a real user-click on an <a download> (more reliable inside iframes).
+  const [mp4Url, setMp4Url] = useState<string | null>(null);
+  useEffect(() => {
+    if (!videoRecorder.mp4Blob) {
+      setMp4Url((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+      return;
+    }
+
+    const url = URL.createObjectURL(videoRecorder.mp4Blob);
+    setMp4Url((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return url;
+    });
+
+    return () => {
+      URL.revokeObjectURL(url);
+    };
+  }, [videoRecorder.mp4Blob]);
+
   // Get params
   const surahNumber = parseInt(searchParams.get('surah') || '1');
   const reciterId = searchParams.get('reciter') || 'mishary_alafasy';
@@ -457,15 +479,18 @@ export default function PreviewPage() {
     }
   };
 
-  // Download recorded video as MP4 (converted)
-  const handleDownload = async () => {
+  const downloadFilename = `${surah?.name || 'quran'}-${reciter?.name || 'reciter'}.mp4`;
+
+  const handleConvertToMp4 = async () => {
     if (!videoRecorder.videoBlob) {
-      toast.error('لا يوجد فيديو للتحميل، قم بإنشاء الفيديو أولاً');
+      toast.error('لا يوجد فيديو للتحويل، قم بإنشاء الفيديو أولاً');
       return;
     }
-    const filename = `${surah?.name || 'quran'}-${reciter?.name || 'reciter'}.mp4`;
-    toast.info('جاري تجهيز الفيديو...');
-    await videoRecorder.downloadMp4(filename);
+
+    toast.info('جاري تحويل الفيديو إلى MP4...');
+    const mp4 = await videoRecorder.convertToMp4();
+    if (mp4) toast.success('تم تجهيز MP4 — يمكنك التحميل الآن');
+    else toast.error('فشل التحويل إلى MP4');
   };
 
   // Save to library
@@ -756,16 +781,34 @@ export default function PreviewPage() {
                       </div>
                     ) : (
                       <>
-                        <div className="flex items-center justify-center gap-2 text-primary p-3 rounded-lg bg-primary/10">
-                          <Check className="h-5 w-5" />
-                          <span className="font-medium">تم إنشاء الفيديو بنجاح!</span>
-                        </div>
+                        {videoRecorder.mp4Blob && mp4Url ? (
+                          <div className="flex items-center justify-center gap-2 text-primary p-3 rounded-lg bg-primary/10">
+                            <Check className="h-5 w-5" />
+                            <span className="font-medium">جاهز للتحميل بصيغة MP4!</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-center gap-2 text-destructive p-3 rounded-lg bg-destructive/10">
+                            <AlertCircle className="h-5 w-5" />
+                            <span className="font-medium">
+                              {videoRecorder.error ? 'تعذر تحويل الفيديو إلى MP4 تلقائياً' : 'الفيديو جاهز — اضغط لتحويله إلى MP4'}
+                            </span>
+                          </div>
+                        )}
 
                         <div className="grid grid-cols-2 gap-3">
-                          <Button onClick={handleDownload} className="gap-2">
-                            <Download className="h-4 w-4" />
-                            تحميل
-                          </Button>
+                          {videoRecorder.mp4Blob && mp4Url ? (
+                            <Button asChild className="gap-2">
+                              <a href={mp4Url} download={downloadFilename}>
+                                <Download className="h-4 w-4" />
+                                تحميل MP4
+                              </a>
+                            </Button>
+                          ) : (
+                            <Button onClick={handleConvertToMp4} className="gap-2" disabled={videoRecorder.isConverting}>
+                              <Video className="h-4 w-4" />
+                              تحويل MP4
+                            </Button>
+                          )}
                           <Button onClick={handleShare} variant="outline" className="gap-2">
                             <Share2 className="h-4 w-4" />
                             مشاركة
