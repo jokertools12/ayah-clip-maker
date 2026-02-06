@@ -15,12 +15,27 @@ export async function getFFmpeg(onProgress?: (ratio: number) => void): Promise<F
     }
 
     // Lazy-load core from CDN to avoid bundling massive WASM into the app.
-    // If CDN is blocked, conversion will fail gracefully and we'll fallback to WebM download.
-    const coreBase = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
-    await ffmpeg.load({
-      coreURL: await toBlobURL(`${coreBase}/ffmpeg-core.js`, 'text/javascript'),
-      wasmURL: await toBlobURL(`${coreBase}/ffmpeg-core.wasm`, 'application/wasm'),
-    });
+    // If one CDN is blocked, try another.
+    const coreBases = [
+      'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd',
+      'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd',
+    ];
+
+    let lastErr: unknown = null;
+    for (const coreBase of coreBases) {
+      try {
+        await ffmpeg.load({
+          coreURL: await toBlobURL(`${coreBase}/ffmpeg-core.js`, 'text/javascript'),
+          wasmURL: await toBlobURL(`${coreBase}/ffmpeg-core.wasm`, 'application/wasm'),
+        });
+        lastErr = null;
+        break;
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+
+    if (lastErr) throw lastErr;
 
     ffmpegSingleton = ffmpeg;
     return ffmpeg;

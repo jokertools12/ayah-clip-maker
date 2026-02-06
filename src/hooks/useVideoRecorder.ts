@@ -42,7 +42,10 @@ export function useVideoRecorder() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const animationFrameRef = useRef<number | null>(null);
+
+  // Used to coordinate async conversion across callbacks without stale closures.
   const conversionInProgressRef = useRef<boolean>(false);
+  const mp4BlobRef = useRef<Blob | null>(null);
 
   const startRecording = useCallback(async (
     canvas: HTMLCanvasElement,
@@ -134,20 +137,25 @@ export function useVideoRecorder() {
           },
         }).then((mp4Blob) => {
           conversionInProgressRef.current = false;
+          mp4BlobRef.current = mp4Blob;
           setState((prev) => ({
             ...prev,
             isConverting: false,
-            mp4Blob: mp4Blob,
+            mp4Blob,
+            error: null,
             stage: 'جاهز للتحميل بصيغة MP4!',
           }));
           resolve(blob);
         }).catch((err) => {
           console.error('Auto MP4 conversion failed:', err);
           conversionInProgressRef.current = false;
+          mp4BlobRef.current = null;
           setState((prev) => ({
             ...prev,
             isConverting: false,
-            stage: 'تم إنشاء الفيديو (يتطلب تحويل يدوي)',
+            mp4Blob: null,
+            error: 'تعذر تحويل الفيديو إلى MP4 تلقائياً. تأكد من اتصال الإنترنت ثم أعد المحاولة.',
+            stage: 'فشل التحويل إلى MP4',
           }));
           resolve(blob);
         });
@@ -209,18 +217,20 @@ export function useVideoRecorder() {
   }, []);
 
   const convertToMp4 = useCallback(async (): Promise<Blob | null> => {
-    // If we already have mp4, return it
+    // If we already have MP4, return it (use ref to avoid stale closures).
+    if (mp4BlobRef.current) return mp4BlobRef.current;
     if (state.mp4Blob) return state.mp4Blob;
     if (!state.videoBlob) return null;
+
     if (conversionInProgressRef.current) {
       // Wait for existing conversion
       return new Promise((resolve) => {
         const checkInterval = setInterval(() => {
           if (!conversionInProgressRef.current) {
             clearInterval(checkInterval);
-            resolve(state.mp4Blob);
+            resolve(mp4BlobRef.current);
           }
-        }, 500);
+        }, 300);
       });
     }
 
@@ -244,10 +254,12 @@ export function useVideoRecorder() {
       });
 
       conversionInProgressRef.current = false;
+      mp4BlobRef.current = mp4;
       setState((prev) => ({
         ...prev,
         isConverting: false,
         mp4Blob: mp4,
+        error: null,
         stage: 'جاهز للتحميل بصيغة MP4',
       }));
 
@@ -265,40 +277,24 @@ export function useVideoRecorder() {
     }
   }, [state.videoBlob, state.mp4Blob]);
 
-  const downloadMp4 = useCallback(async (filename: string = 'quran-reel.mp4') => {
-    // Wait if conversion is in progress
-    if (conversionInProgressRef.current || state.isConverting) {
-      // Show waiting message
-      setState((prev) => ({
-        ...prev,
-        stage: 'جاري انتظار اكتمال التحويل...',
-      }));
-      
-      // Wait for conversion to complete
-      await new Promise<void>((resolve) => {
-        const checkInterval = setInterval(() => {
-          if (!conversionInProgressRef.current) {
-            clearInterval(checkInterval);
-            resolve();
-          }
-        }, 500);
-      });
-    }
+  const downloadMp4 = useCallback(
+    async (filename: string = 'quran-reel.mp4') => {
+      // IMPORTANT: programmatic downloads can be blocked if they happen after an awaited async task.
+      // So we only download when MP4 is already ready.
+      const blob = mp4BlobRef.current ?? state.mp4Blob;
 
-    // Now check for mp4Blob
-    let blob = state.mp4Blob;
-    
-    // If still no MP4, try converting now
-    if (!blob && state.videoBlob) {
-      setState((prev) => ({
-        ...prev,
-        stage: 'جاري تحويل الفيديو...',
-      }));
-      blob = await convertToMp4();
-    }
+      if (!blob) {
+        setState((prev) => ({
+          ...prev,
+          error: prev.isConverting || conversionInProgressRef.current ? null : 'ملف MP4 غير جاهز بعد',
+          stage:
+            prev.isConverting || conversionInProgressRef.current
+              ? 'جاري التحويل إلى MP4...'
+              : 'MP4 غير متوفر بعد',
+        }));
+        return;
+      }
 
-    // Download MP4 if available
-    if (blob) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -307,22 +303,18 @@ export function useVideoRecorder() {
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      
+
+      // Some browsers may cancel the download if we revoke immediately.
+      window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+
       setState((prev) => ({
         ...prev,
-        stage: 'تم تحميل الفيديو بنجاح!',
+        stage: 'تم بدء التحميل!',
+        error: null,
       }));
-      return;
-    }
-
-    // Show error if no blob available
-    setState((prev) => ({
-      ...prev,
-      error: 'فشل في تجهيز الفيديو للتحميل',
-      stage: 'حدث خطأ',
-    }));
-  }, [state.mp4Blob, state.videoBlob, state.isConverting, convertToMp4]);
+    },
+    [state.mp4Blob]
+  );
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
@@ -336,6 +328,7 @@ export function useVideoRecorder() {
   const reset = useCallback(() => {
     stopRecording();
     conversionInProgressRef.current = false;
+    mp4BlobRef.current = null;
     setState({
       isRecording: false,
       progress: 0,
