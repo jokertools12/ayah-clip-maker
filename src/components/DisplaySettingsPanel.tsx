@@ -14,6 +14,8 @@ export interface DisplaySettings {
   ayahNumberStyle: 'circle' | 'star' | 'diamond' | 'octagon' | 'flower' | 'square' | 'hexagon';
   surahNamePosition: 'top' | 'bottom' | 'topLeft' | 'topRight';
   textShadowStyle: 'soft' | 'strong' | 'none' | 'glow';
+  // New: decoration around the ayah text area
+  decorationStyle: 'none' | 'sideBorder' | 'separator' | 'both';
 }
 
 interface DisplaySettingsPanelProps {
@@ -60,6 +62,13 @@ const textShadowOptions = [
   { value: 'strong', label: 'ظل قوي', description: 'ظل عميق' },
   { value: 'glow', label: 'توهج', description: 'إضاءة محيطة' },
   { value: 'none', label: 'بدون ظل', description: 'نص مسطح' },
+];
+
+const decorationOptions = [
+  { value: 'none', label: 'نظيف', description: 'بدون زخرفة' },
+  { value: 'sideBorder', label: 'زخارف جانبية', description: 'رموز يمين/يسار' },
+  { value: 'separator', label: 'فاصل علوي', description: 'خط/موجة فوق الآيات' },
+  { value: 'both', label: 'كلاهما', description: 'جانبية + فاصل' },
 ];
 
 export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPanelProps) {
@@ -250,6 +259,32 @@ export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPane
                 <RadioGroupItem value={option.value} id={`shadow-${option.value}`} className="peer sr-only" />
                 <Label
                   htmlFor={`shadow-${option.value}`}
+                  className="flex flex-col items-center rounded-lg border-2 border-muted p-2 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all text-center"
+                >
+                  <span className="font-medium text-sm">{option.label}</span>
+                  <span className="text-xs text-muted-foreground">{option.description}</span>
+                </Label>
+              </div>
+            ))}
+          </RadioGroup>
+        </div>
+
+        {/* Decoration Style */}
+        <div className="space-y-3 pt-2 border-t">
+          <Label className="text-sm flex items-center gap-2">
+            <Sparkles className="h-4 w-4" />
+            زخرفة حول الآيات
+          </Label>
+          <RadioGroup
+            value={settings.decorationStyle || 'none'}
+            onValueChange={(value) => updateSetting('decorationStyle', value as DisplaySettings['decorationStyle'])}
+            className="grid grid-cols-2 gap-2"
+          >
+            {decorationOptions.map((option) => (
+              <div key={option.value} className="relative">
+                <RadioGroupItem value={option.value} id={`deco-${option.value}`} className="peer sr-only" />
+                <Label
+                  htmlFor={`deco-${option.value}`}
                   className="flex flex-col items-center rounded-lg border-2 border-muted p-2 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all text-center"
                 >
                   <span className="font-medium text-sm">{option.label}</span>

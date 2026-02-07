@@ -60,6 +60,7 @@ const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
   ayahNumberStyle: 'circle',
   surahNamePosition: 'top',
   textShadowStyle: 'soft',
+  decorationStyle: 'separator',
 };
 
 export default function PreviewPage() {
