@@ -142,26 +142,39 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         };
       });
     } else if (bgType === 'video') {
-      // Load video background
-      const video = document.createElement('video');
-      video.crossOrigin = 'anonymous';
-      video.muted = true;
-      video.loop = true;
-      video.playsInline = true;
-      video.src = bgUrl;
-      
-      video.onloadeddata = () => {
-        videoRef.current = video;
-        setVideoReady(true);
-        video.play().catch(console.error);
-      };
-      
-      video.onerror = () => {
-        console.error('Failed to load video:', bgUrl);
-        videoRef.current = null;
-        // Fallback to image
-        loadImage(bgUrl);
-      };
+      const isCustomVideo =
+        !!customBackground && /\.(mp4|webm|mov)(\?|#|$)/i.test(bgUrl);
+
+      // NOTE: External "video backgrounds" often fail with CORS when drawing to a canvas.
+      // For reliability we render built-in video backgrounds as a static thumbnail.
+      if (!isCustomVideo) {
+        const fallbackImage = background?.thumbnail || bgUrl;
+        loadImage(fallbackImage);
+      } else {
+        // Load custom video background
+        const video = document.createElement('video');
+        video.crossOrigin = 'anonymous';
+        video.muted = true;
+        video.loop = true;
+        video.playsInline = true;
+        video.preload = 'auto';
+        video.playbackRate = 5; // speed x5 as requested
+        video.src = bgUrl;
+
+        video.onloadeddata = () => {
+          videoRef.current = video;
+          setVideoReady(true);
+          video.play().catch(console.error);
+        };
+
+        video.onerror = () => {
+          console.error('Failed to load video:', bgUrl);
+          videoRef.current = null;
+          // Fallback to image
+          const fallbackImage = background?.thumbnail || bgUrl;
+          loadImage(fallbackImage);
+        };
+      }
     } else {
       loadImage(bgUrl);
     }
@@ -522,15 +535,16 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Draw background with Ken Burns effect
-    const time = Date.now() / 1000;
-    const scale = 1.12 + Math.sin(time * 0.25) * 0.08;
-    const offsetX = Math.sin(time * 0.15) * 40;
-    const offsetY = Math.cos(time * 0.12) * 35;
+    const motionSpeed = 5;
+    const t = (Date.now() / 1000) * motionSpeed;
+    const scale = 1.12 + Math.sin(t * 0.25) * 0.08;
+    const offsetX = Math.sin(t * 0.15) * 40;
+    const offsetY = Math.cos(t * 0.12) * 35;
     
     // Handle slideshow backgrounds
     if (slideshowReady && slideshowImagesRef.current.length > 1) {
       const images = slideshowImagesRef.current;
-      const elapsed = Date.now() - slideshowStartTimeRef.current;
+      const elapsed = (Date.now() - slideshowStartTimeRef.current) * motionSpeed;
       const cycleDuration = SLIDESHOW_DISPLAY_DURATION + SLIDESHOW_TRANSITION_DURATION;
       const cyclePosition = elapsed % (cycleDuration * images.length);
       
@@ -558,9 +572,9 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         ctx.translate(canvas.width / 2, canvas.height / 2);
         
         // Different Ken Burns for next image
-        const nextScale = 1.08 + Math.sin(time * 0.2 + 2) * 0.06;
-        const nextOffsetX = Math.cos(time * 0.18) * 35;
-        const nextOffsetY = Math.sin(time * 0.14) * 30;
+        const nextScale = 1.08 + Math.sin(t * 0.2 + 2) * 0.06;
+        const nextOffsetX = Math.cos(t * 0.18) * 35;
+        const nextOffsetY = Math.sin(t * 0.14) * 30;
         
         ctx.scale(nextScale, nextScale);
         ctx.translate(-canvas.width / 2 + nextOffsetX, -canvas.height / 2 + nextOffsetY);

@@ -65,7 +65,7 @@ export default function CreatePage() {
   const [startAyahInput, setStartAyahInput] = useState('1');
   const [endAyahInput, setEndAyahInput] = useState('5');
   const [selectedBackground, setSelectedBackground] = useState<BackgroundItem | null>(
-    () => getRandomBackground('video')
+    () => getRandomBackground('animated')
   );
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('9:16');
   const [textSettings, setTextSettings] = useState<TextSettings>(defaultTextSettings);
@@ -652,8 +652,8 @@ function FamousAyahsGrid({ onSelect }: { onSelect: (ayah: FamousAyah) => void })
   return (
     <div className="space-y-4">
       {/* Category Filter */}
-      <ScrollArea className="w-full">
-        <div className="flex gap-2 pb-2">
+      <div className="w-full overflow-x-auto pb-2" style={{ WebkitOverflowScrolling: 'touch' }}>
+        <div className="flex gap-2 min-w-max">
           {ayahCategories.map((cat) => (
             <Button
               key={cat.id}
@@ -666,8 +666,7 @@ function FamousAyahsGrid({ onSelect }: { onSelect: (ayah: FamousAyah) => void })
             </Button>
           ))}
         </div>
-      </ScrollArea>
-
+      </div>
       {/* Ayahs Grid */}
       <ScrollArea className="h-[45vh]">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-1">

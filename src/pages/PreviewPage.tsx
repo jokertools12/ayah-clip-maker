@@ -70,27 +70,7 @@ export default function PreviewPage() {
   const audioEffects = useAudioEffects();
   const videoRecorder = useVideoRecorder();
 
-  // A stable object URL so the download is a real user-click on an <a download> (more reliable inside iframes).
-  const [mp4Url, setMp4Url] = useState<string | null>(null);
-  useEffect(() => {
-    if (!videoRecorder.mp4Blob) {
-      setMp4Url((prev) => {
-        if (prev) URL.revokeObjectURL(prev);
-        return null;
-      });
-      return;
-    }
-
-    const url = URL.createObjectURL(videoRecorder.mp4Blob);
-    setMp4Url((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return url;
-    });
-
-    return () => {
-      URL.revokeObjectURL(url);
-    };
-  }, [videoRecorder.mp4Blob]);
+  // Note: download uses a fresh ObjectURL at click time for maximum reliability across browsers/iframes.
 
   // Get params
   const surahNumber = parseInt(searchParams.get('surah') || '1');
@@ -496,7 +476,20 @@ export default function PreviewPage() {
     }
   };
 
-  const downloadFilename = `${surah?.name || 'quran'}-${reciter?.name || 'reciter'}.mp4`;
+  const toSafeFilename = useCallback((input: string) => {
+    const s = input
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^\w.-]+/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_+|_+$/g, '');
+    return (s || 'quran-reel').slice(0, 80);
+  }, []);
+
+  const downloadFilename = useMemo(() => {
+    const base = `${surah?.englishName || surah?.name || 'quran'}-${reciter?.id || 'reciter'}`;
+    return `${toSafeFilename(base)}.mp4`;
+  }, [surah?.englishName, surah?.name, reciter?.id, toSafeFilename]);
 
   const handleConvertToMp4 = async () => {
     if (!videoRecorder.videoBlob) {
@@ -546,21 +539,42 @@ export default function PreviewPage() {
 
   // Share
   const handleShare = async () => {
+    const title = `${surah?.name} - قرآن ريلز`;
+    const text = `استمع لتلاوة ${surah?.name} بصوت ${reciter?.name}`;
+
+    // Prefer sharing the actual MP4 file when available (great fallback on mobile if downloads are blocked).
+    const navAny = navigator as Navigator & { canShare?: (data: ShareData) => boolean };
+    if (videoRecorder.mp4Blob && navigator.share && navAny.canShare) {
+      const file = new File([videoRecorder.mp4Blob], downloadFilename, { type: 'video/mp4' });
+      if (navAny.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ title, text, files: [file] });
+          return;
+        } catch {
+          // user cancelled or share failed -> continue to link sharing
+        }
+      }
+    }
+
     const shareData = {
-      title: `${surah?.name} - قرآن ريلز`,
-      text: `استمع لتلاوة ${surah?.name} بصوت ${reciter?.name}`,
+      title,
+      text,
       url: window.location.href,
     };
 
     if (navigator.share) {
       try {
         await navigator.share(shareData);
-      } catch (err) {
-        console.log('Share cancelled');
+      } catch {
+        // cancelled
       }
     } else {
-      navigator.clipboard.writeText(window.location.href);
-      toast.success('تم نسخ الرابط!');
+      try {
+        await navigator.clipboard.writeText(window.location.href);
+        toast.success('تم نسخ الرابط!');
+      } catch {
+        toast.error('تعذر نسخ الرابط');
+      }
     }
   };
 
@@ -810,7 +824,7 @@ export default function PreviewPage() {
                       </div>
                     ) : (
                       <>
-                        {videoRecorder.mp4Blob && mp4Url ? (
+                        {videoRecorder.mp4Blob ? (
                           <div className="flex items-center justify-center gap-2 text-primary p-3 rounded-lg bg-primary/10">
                             <Check className="h-5 w-5" />
                             <span className="font-medium">جاهز للتحميل بصيغة MP4!</span>
@@ -825,12 +839,13 @@ export default function PreviewPage() {
                         )}
 
                         <div className="grid grid-cols-2 gap-3">
-                          {videoRecorder.mp4Blob && mp4Url ? (
-                            <Button asChild className="gap-2">
-                              <a href={mp4Url} download={downloadFilename}>
-                                <Download className="h-4 w-4" />
-                                تحميل MP4
-                              </a>
+                          {videoRecorder.mp4Blob ? (
+                            <Button
+                              onClick={() => void videoRecorder.downloadMp4(downloadFilename)}
+                              className="gap-2"
+                            >
+                              <Download className="h-4 w-4" />
+                              تحميل MP4
                             </Button>
                           ) : (
                             <Button onClick={handleConvertToMp4} className="gap-2" disabled={videoRecorder.isConverting}>

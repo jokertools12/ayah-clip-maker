@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Check, Play, Image as ImageIcon, Sparkles, Upload } from 'lucide-react';
-import { BackgroundItem, backgroundVideos, backgroundImages, slideshowBackgrounds } from '@/data/backgrounds';
+import { Check, Image as ImageIcon, Sparkles, Upload } from 'lucide-react';
+import { BackgroundItem, backgroundImages, slideshowBackgrounds } from '@/data/backgrounds';
 import { CustomBackgroundUploader } from '@/components/CustomBackgroundUploader';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -19,7 +19,7 @@ export function BackgroundSelector({
   customBackground, 
   onCustomBackgroundChange 
 }: BackgroundSelectorProps) {
-  const [activeTab, setActiveTab] = useState<'custom' | 'image' | 'slideshow' | 'video'>('image');
+  const [activeTab, setActiveTab] = useState<'custom' | 'image' | 'slideshow'>('image');
 
   const renderBackgroundCard = (bg: BackgroundItem) => {
     const isSelected = selectedBackground?.id === bg.id && !customBackground;
@@ -49,15 +49,13 @@ export function BackgroundSelector({
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
           
           {/* Type indicator */}
-          <div className="absolute top-2 right-2 p-1.5 rounded-full bg-black/50 text-white">
-            {bg.type === 'video' ? (
-              <Play className="h-3 w-3" />
-            ) : bg.type === 'animated' ? (
-              <Sparkles className="h-3 w-3" />
-            ) : (
-              <ImageIcon className="h-3 w-3" />
-            )}
-          </div>
+           <div className="absolute top-2 right-2 p-1.5 rounded-full bg-black/50 text-white">
+             {bg.type === 'animated' ? (
+               <Sparkles className="h-3 w-3" />
+             ) : (
+               <ImageIcon className="h-3 w-3" />
+             )}
+           </div>
 
           {/* Slideshow indicator */}
           {bg.slideImages && bg.slideImages.length > 1 && (
@@ -92,13 +90,12 @@ export function BackgroundSelector({
     custom: 'ارفع صورة أو فيديو من جهازك',
     image: 'صور طبيعية عالية الجودة مع تأثير Ken Burns للحركة',
     slideshow: 'صور متغيرة ومتنوعة تتحرك وتتبدل تلقائياً',
-    video: 'مقاطع فيديو طبيعية متحركة',
   };
 
   return (
     <div className="space-y-4">
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'custom' | 'video' | 'image' | 'slideshow')}>
-        <TabsList className="w-full grid grid-cols-4">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'custom' | 'image' | 'slideshow')}>
+        <TabsList className="w-full grid grid-cols-3">
           <TabsTrigger value="custom" className="gap-1 text-xs sm:text-sm">
             <Upload className="h-4 w-4" />
             <span className="hidden sm:inline">رفع</span>
@@ -110,10 +107,6 @@ export function BackgroundSelector({
           <TabsTrigger value="slideshow" className="gap-1 text-xs sm:text-sm">
             <Sparkles className="h-4 w-4" />
             <span className="hidden sm:inline">متغيرة</span>
-          </TabsTrigger>
-          <TabsTrigger value="video" className="gap-1 text-xs sm:text-sm">
-            <Play className="h-4 w-4" />
-            <span className="hidden sm:inline">فيديو</span>
           </TabsTrigger>
         </TabsList>
 
@@ -140,18 +133,9 @@ export function BackgroundSelector({
           </ScrollArea>
         </TabsContent>
 
-        <TabsContent value="video" className="mt-4">
-          <ScrollArea className="h-[300px] pr-4">
-            <div className="grid grid-cols-2 gap-3">
-              {backgroundVideos.map(renderBackgroundCard)}
-            </div>
-          </ScrollArea>
-        </TabsContent>
       </Tabs>
 
-      <p className="text-xs text-muted-foreground text-center">
-        {tabDescriptions[activeTab]}
-      </p>
+      <p className="text-xs text-muted-foreground text-center">{tabDescriptions[activeTab]}</p>
     </div>
   );
 }
