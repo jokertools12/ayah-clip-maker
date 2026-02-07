@@ -39,6 +39,7 @@ interface VideoPreviewProps {
     ayahNumberStyle: 'circle' | 'star' | 'diamond' | 'octagon' | 'flower' | 'square' | 'hexagon';
     surahNamePosition?: 'top' | 'bottom' | 'topLeft' | 'topRight';
     textShadowStyle?: 'soft' | 'strong' | 'none' | 'glow';
+    decorationStyle?: 'none' | 'sideBorder' | 'separator' | 'both';
   };
   isPlaying: boolean;
   onCanvasReady?: (canvas: HTMLCanvasElement) => void;
@@ -60,6 +61,7 @@ const DEFAULT_DISPLAY_SETTINGS = {
   ayahNumberStyle: 'circle' as const,
   surahNamePosition: 'top' as const,
   textShadowStyle: 'soft' as const,
+  decorationStyle: 'separator' as const,
 };
 
 export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
@@ -640,59 +642,95 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     ctx.shadowOffsetX = 2;
     ctx.shadowOffsetY = 2;
 
-    // Draw surah name badge (if enabled)
+    // Draw surah name badge (if enabled) - Arabic calligraphic style
     if (displaySettings.showSurahName) {
-      const badgeY = canvas.height * 0.12;
-      
-      // Elegant badge background
-      const badgeWidth = 320;
-      const badgeHeight = 90;
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+      const badgeY = canvas.height * 0.11;
+
+      // Elegant semi-transparent pill background
+      const badgeWidth = 360;
+      const badgeHeight = 100;
+      ctx.save();
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
       ctx.beginPath();
-      ctx.roundRect(canvas.width / 2 - badgeWidth / 2, badgeY - badgeHeight / 2, badgeWidth, badgeHeight, 45);
+      ctx.roundRect(canvas.width / 2 - badgeWidth / 2, badgeY - badgeHeight / 2, badgeWidth, badgeHeight, 50);
       ctx.fill();
-      
-      // Golden border
-      ctx.strokeStyle = 'rgba(212, 175, 55, 0.4)';
-      ctx.lineWidth = 2;
+
+      // Double golden border for ornate look
+      ctx.strokeStyle = 'rgba(212, 175, 55, 0.45)';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(212, 175, 55, 0.25)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(canvas.width / 2 - (badgeWidth - 10) / 2, badgeY - (badgeHeight - 10) / 2, badgeWidth - 10, badgeHeight - 10, 46);
       ctx.stroke();
 
-      // Surah name with selected font
-      ctx.font = `bold ${textSettings.fontSize * 2.2}px "${fontName}", "Noto Naskh Arabic", serif`;
+      // Draw surah name in a decorative calligraphic style
+      ctx.font = `bold ${textSettings.fontSize * 2.5}px "Amiri", "Scheherazade New", serif`;
       ctx.fillStyle = textSettings.textColor;
+      ctx.shadowColor = 'rgba(212, 175, 55, 0.35)';
+      ctx.shadowBlur = 8;
       ctx.fillText(surahName, canvas.width / 2, badgeY);
+      ctx.shadowBlur = 0;
+      ctx.restore();
     }
 
     // Draw reciter name (if enabled)
     if (displaySettings.showReciterName) {
-      const reciterY = displaySettings.showSurahName ? canvas.height * 0.19 : canvas.height * 0.12;
-      ctx.font = `${textSettings.fontSize * 1.1}px "${fontName}", "Noto Naskh Arabic", serif`;
+      const reciterY = displaySettings.showSurahName ? canvas.height * 0.175 : canvas.height * 0.12;
+      ctx.font = `${textSettings.fontSize * 1.0}px "${fontName}", "Noto Naskh Arabic", serif`;
       ctx.fillStyle = textSettings.textColor;
-      ctx.globalAlpha = 0.75;
+      ctx.globalAlpha = 0.7;
       ctx.fillText(`بصوت ${reciterName}`, canvas.width / 2, reciterY);
       ctx.globalAlpha = 1;
     }
 
-    // Draw decorative separator line
+    // Draw decorative separator (waveform-inspired) - Minimal ornate line
     if (displaySettings.showSurahName || displaySettings.showReciterName) {
-      const lineY = canvas.height * 0.24;
-      const lineWidth = 150;
-      
-      // Center ornament
+      const lineY = displaySettings.showReciterName ? canvas.height * 0.21 : canvas.height * 0.17;
+      const lineHalf = 120;
+
+      // Draw small circles on ends + center dot
+      ctx.save();
       ctx.fillStyle = 'rgba(212, 175, 55, 0.5)';
       ctx.beginPath();
-      ctx.arc(canvas.width / 2, lineY, 4, 0, Math.PI * 2);
+      ctx.arc(canvas.width / 2, lineY, 5, 0, Math.PI * 2);
       ctx.fill();
-      
-      // Lines on both sides
-      ctx.strokeStyle = 'rgba(212, 175, 55, 0.3)';
-      ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(canvas.width / 2 - lineWidth, lineY);
-      ctx.lineTo(canvas.width / 2 - 15, lineY);
-      ctx.moveTo(canvas.width / 2 + 15, lineY);
-      ctx.lineTo(canvas.width / 2 + lineWidth, lineY);
+      ctx.arc(canvas.width / 2 - lineHalf, lineY, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(canvas.width / 2 + lineHalf, lineY, 3, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Lines
+      ctx.strokeStyle = 'rgba(212, 175, 55, 0.35)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(canvas.width / 2 - lineHalf + 6, lineY);
+      ctx.lineTo(canvas.width / 2 - 10, lineY);
+      ctx.moveTo(canvas.width / 2 + 10, lineY);
+      ctx.lineTo(canvas.width / 2 + lineHalf - 6, lineY);
       ctx.stroke();
+
+      // Side ornaments (symmetric little arrows)
+      drawSideOrnament(ctx, canvas.width / 2 - lineHalf - 20, lineY, 12, false);
+      drawSideOrnament(ctx, canvas.width / 2 + lineHalf + 20, lineY, 12, true);
+      ctx.restore();
+    }
+
+    // Helper for side ornaments
+    function drawSideOrnament(c: CanvasRenderingContext2D, x: number, y: number, size: number, flip: boolean) {
+      c.save();
+      c.translate(x, y);
+      if (flip) c.scale(-1, 1);
+      c.fillStyle = 'rgba(212, 175, 55, 0.45)';
+      c.beginPath();
+      c.moveTo(0, -size / 2);
+      c.quadraticCurveTo(-size, 0, 0, size / 2);
+      c.quadraticCurveTo(-size / 2, 0, 0, -size / 2);
+      c.fill();
+      c.restore();
     }
 
     // Draw current ayah (if enabled)
@@ -730,6 +768,20 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       const totalHeight = lines.length * lineHeight;
       const startY = ayahY - totalHeight / 2;
 
+      // Draw decoration (side borders or separator) based on decorationStyle
+      const decoStyle = displaySettings.decorationStyle || 'none';
+
+      // Draw side ornaments (left & right of ayah area)
+      if (decoStyle === 'sideBorder' || decoStyle === 'both') {
+        drawAyahSideOrnaments(ctx, canvas.width * 0.05, ayahY, totalHeight);
+        drawAyahSideOrnaments(ctx, canvas.width * 0.95, ayahY, totalHeight, true);
+      }
+
+      // Draw separator line above the ayah
+      if (decoStyle === 'separator' || decoStyle === 'both') {
+        drawAyahSeparator(ctx, canvas.width / 2, startY - 40, 180);
+      }
+
       // Draw frame around ayah text
       if (displaySettings.frameStyle !== 'none') {
         const framePadding = 40;
@@ -740,6 +792,52 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         
         drawIslamicFrame(ctx, frameX, frameY, frameWidth, frameHeight, displaySettings.frameStyle);
       }
+
+    // Helper: draw decorative vertical ornament on side
+    function drawAyahSideOrnaments(c: CanvasRenderingContext2D, x: number, centerY: number, h: number, flipX = false) {
+      c.save();
+      c.translate(x, centerY);
+      if (flipX) c.scale(-1, 1);
+      c.strokeStyle = 'rgba(212, 175, 55, 0.4)';
+      c.lineWidth = 2;
+      c.beginPath();
+      c.moveTo(0, -h / 2);
+      c.bezierCurveTo(30, -h / 4, 30, h / 4, 0, h / 2);
+      c.stroke();
+
+      // Small end circles
+      c.fillStyle = 'rgba(212, 175, 55, 0.5)';
+      c.beginPath();
+      c.arc(0, -h / 2, 4, 0, Math.PI * 2);
+      c.fill();
+      c.beginPath();
+      c.arc(0, h / 2, 4, 0, Math.PI * 2);
+      c.fill();
+      c.restore();
+    }
+
+    // Helper: draw horizontal separator line (subtle wave-like)
+    function drawAyahSeparator(c: CanvasRenderingContext2D, cx: number, cy: number, width: number) {
+      c.save();
+      c.strokeStyle = 'rgba(212, 175, 55, 0.35)';
+      c.lineWidth = 1.5;
+      const hw = width / 2;
+      c.beginPath();
+      c.moveTo(cx - hw, cy);
+      c.bezierCurveTo(cx - hw + 30, cy - 6, cx - 30, cy + 6, cx, cy);
+      c.bezierCurveTo(cx + 30, cy - 6, cx + hw - 30, cy + 6, cx + hw, cy);
+      c.stroke();
+
+      // End dots
+      c.fillStyle = 'rgba(212, 175, 55, 0.5)';
+      c.beginPath();
+      c.arc(cx - hw - 5, cy, 3, 0, Math.PI * 2);
+      c.fill();
+      c.beginPath();
+      c.arc(cx + hw + 5, cy, 3, 0, Math.PI * 2);
+      c.fill();
+      c.restore();
+    }
 
       // RTL text direction
       ctx.direction = 'rtl';
