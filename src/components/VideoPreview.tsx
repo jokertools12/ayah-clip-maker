@@ -536,8 +536,8 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Draw background with Ken Burns effect
-    const motionSpeed = 5;
+    // Draw background with Ken Burns effect - speed x3
+    const motionSpeed = 3;
     const t = (Date.now() / 1000) * motionSpeed;
     const scale = 1.12 + Math.sin(t * 0.25) * 0.08;
     const offsetX = Math.sin(t * 0.15) * 40;
