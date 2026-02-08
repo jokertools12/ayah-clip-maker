@@ -8,6 +8,7 @@ import { DisplaySettingsPanel, DisplaySettings } from '@/components/DisplaySetti
 import { CustomBackgroundUploader } from '@/components/CustomBackgroundUploader';
 import { ExportQualitySelector } from '@/components/ExportQualitySelector';
 import { PresetSelector } from '@/components/PresetSelector';
+import { SocialShareButtons } from '@/components/SocialShareButtons';
 import { VIDEO_PRESETS, VideoPreset } from '@/data/videoPresets';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -28,7 +29,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { TextSettings } from '@/components/TextSettingsPanel';
 import {
   Download,
-  Share2,
   RotateCcw,
   Loader2,
   Play,
@@ -538,46 +538,7 @@ export default function PreviewPage() {
     }
   };
 
-  // Share
-  const handleShare = async () => {
-    const title = `${surah?.name} - قرآن ريلز`;
-    const text = `استمع لتلاوة ${surah?.name} بصوت ${reciter?.name}`;
-
-    // Prefer sharing the actual MP4 file when available (great fallback on mobile if downloads are blocked).
-    const navAny = navigator as Navigator & { canShare?: (data: ShareData) => boolean };
-    if (videoRecorder.mp4Blob && navigator.share && navAny.canShare) {
-      const file = new File([videoRecorder.mp4Blob], downloadFilename, { type: 'video/mp4' });
-      if (navAny.canShare({ files: [file] })) {
-        try {
-          await navigator.share({ title, text, files: [file] });
-          return;
-        } catch {
-          // user cancelled or share failed -> continue to link sharing
-        }
-      }
-    }
-
-    const shareData = {
-      title,
-      text,
-      url: window.location.href,
-    };
-
-    if (navigator.share) {
-      try {
-        await navigator.share(shareData);
-      } catch {
-        // cancelled
-      }
-    } else {
-      try {
-        await navigator.clipboard.writeText(window.location.href);
-        toast.success('تم نسخ الرابط!');
-      } catch {
-        toast.error('تعذر نسخ الرابط');
-      }
-    }
-  };
+  // Share functionality is now handled by SocialShareButtons component
 
   return (
     <Layout>
@@ -839,26 +800,31 @@ export default function PreviewPage() {
                           </div>
                         )}
 
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="flex flex-col gap-3">
                           {videoRecorder.mp4Blob ? (
                             <Button
                               onClick={() => void videoRecorder.downloadMp4(downloadFilename)}
-                              className="gap-2"
+                              className="w-full gap-2"
+                              size="lg"
                             >
-                              <Download className="h-4 w-4" />
+                              <Download className="h-5 w-5" />
                               تحميل MP4
                             </Button>
                           ) : (
-                            <Button onClick={handleConvertToMp4} className="gap-2" disabled={videoRecorder.isConverting}>
+                            <Button onClick={handleConvertToMp4} className="w-full gap-2" disabled={videoRecorder.isConverting}>
                               <Video className="h-4 w-4" />
                               تحويل MP4
                             </Button>
                           )}
-                          <Button onClick={handleShare} variant="outline" className="gap-2">
-                            <Share2 className="h-4 w-4" />
-                            مشاركة
-                          </Button>
                         </div>
+
+                        {/* Social Share Buttons */}
+                        <SocialShareButtons
+                          videoBlob={videoRecorder.mp4Blob}
+                          title={`${surah?.name} - قرآن ريلز`}
+                          text={`استمع لتلاوة ${surah?.name} بصوت ${reciter?.name}`}
+                          filename={downloadFilename}
+                        />
 
                         <Button
                           onClick={handleSave}
