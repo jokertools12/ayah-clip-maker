@@ -143,7 +143,7 @@ export function useVideoRecorder() {
             isConverting: false,
             mp4Blob,
             error: null,
-            stage: 'جاهز للتحميل بصيغة MP4!',
+            stage: 'جاهز للتحميل!',
           }));
           resolve(blob);
         }).catch((err) => {
@@ -154,8 +154,8 @@ export function useVideoRecorder() {
             ...prev,
             isConverting: false,
             mp4Blob: null,
-            error: 'تعذر تحويل الفيديو إلى MP4 تلقائياً. تأكد من اتصال الإنترنت ثم أعد المحاولة.',
-            stage: 'فشل التحويل إلى MP4',
+            error: 'تعذر تحويل الفيديو إلى MP4. يمكنك تحميل WebM مباشرة.',
+            stage: 'جاهز للتحميل بصيغة WebM',
           }));
           resolve(blob);
         });
@@ -316,6 +316,38 @@ export function useVideoRecorder() {
     [state.mp4Blob]
   );
 
+  const downloadWebm = useCallback(
+    (filename: string = 'quran-reel.webm') => {
+      const blob = state.videoBlob;
+
+      if (!blob) {
+        setState((prev) => ({
+          ...prev,
+          error: 'لا يوجد فيديو WebM للتحميل',
+        }));
+        return;
+      }
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const finalName = filename.endsWith('.webm') ? filename : `${filename.replace(/\.[^/.]+$/, '')}.webm`;
+      a.download = finalName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+
+      setState((prev) => ({
+        ...prev,
+        stage: 'تم تحميل WebM!',
+        error: null,
+      }));
+    },
+    [state.videoBlob]
+  );
+
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
@@ -347,6 +379,7 @@ export function useVideoRecorder() {
     startRecording,
     stopRecording,
     downloadMp4,
+    downloadWebm,
     convertToMp4,
     reset,
   };

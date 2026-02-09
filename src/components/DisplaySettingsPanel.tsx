@@ -2,7 +2,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Eye, EyeOff, Sparkles, Frame, Hash } from 'lucide-react';
+import { Eye, EyeOff, Sparkles, Frame, Hash, Wand2 } from 'lucide-react';
 
 export interface DisplaySettings {
   showSurahName: boolean;
@@ -16,6 +16,8 @@ export interface DisplaySettings {
   textShadowStyle: 'soft' | 'strong' | 'none' | 'glow';
   // New: decoration around the ayah text area
   decorationStyle: 'none' | 'sideBorder' | 'separator' | 'both';
+  // New: ayah transition animation
+  ayahTransition: 'none' | 'fade' | 'slide' | 'zoom' | 'blur';
 }
 
 interface DisplaySettingsPanelProps {
@@ -69,6 +71,14 @@ const decorationOptions = [
   { value: 'sideBorder', label: 'زخارف جانبية', description: 'رموز يمين/يسار' },
   { value: 'separator', label: 'فاصل علوي', description: 'خط/موجة فوق الآيات' },
   { value: 'both', label: 'كلاهما', description: 'جانبية + فاصل' },
+];
+
+const transitionOptions = [
+  { value: 'none', label: 'بدون انتقال', description: 'ظهور مباشر' },
+  { value: 'fade', label: 'تلاشي', description: 'ظهور تدريجي' },
+  { value: 'slide', label: 'انزلاق', description: 'دخول من الأسفل' },
+  { value: 'zoom', label: 'تكبير', description: 'تكبير للداخل' },
+  { value: 'blur', label: 'ضبابي', description: 'إزالة الضبابية' },
 ];
 
 export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPanelProps) {
@@ -285,6 +295,32 @@ export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPane
                 <RadioGroupItem value={option.value} id={`deco-${option.value}`} className="peer sr-only" />
                 <Label
                   htmlFor={`deco-${option.value}`}
+                  className="flex flex-col items-center rounded-lg border-2 border-muted p-2 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all text-center"
+                >
+                  <span className="font-medium text-sm">{option.label}</span>
+                  <span className="text-xs text-muted-foreground">{option.description}</span>
+                </Label>
+              </div>
+            ))}
+          </RadioGroup>
+        </div>
+
+        {/* Ayah Transition */}
+        <div className="space-y-3 pt-2 border-t">
+          <Label className="text-sm flex items-center gap-2">
+            <Wand2 className="h-4 w-4" />
+            انتقال بين الآيات
+          </Label>
+          <RadioGroup
+            value={settings.ayahTransition || 'fade'}
+            onValueChange={(value) => updateSetting('ayahTransition', value as DisplaySettings['ayahTransition'])}
+            className="grid grid-cols-3 gap-2"
+          >
+            {transitionOptions.map((option) => (
+              <div key={option.value} className="relative">
+                <RadioGroupItem value={option.value} id={`trans-${option.value}`} className="peer sr-only" />
+                <Label
+                  htmlFor={`trans-${option.value}`}
                   className="flex flex-col items-center rounded-lg border-2 border-muted p-2 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all text-center"
                 >
                   <span className="font-medium text-sm">{option.label}</span>

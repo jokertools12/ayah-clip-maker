@@ -40,9 +40,11 @@ interface VideoPreviewProps {
     surahNamePosition?: 'top' | 'bottom' | 'topLeft' | 'topRight';
     textShadowStyle?: 'soft' | 'strong' | 'none' | 'glow';
     decorationStyle?: 'none' | 'sideBorder' | 'separator' | 'both';
+    ayahTransition?: 'none' | 'fade' | 'slide' | 'zoom' | 'blur';
   };
   isPlaying: boolean;
   onCanvasReady?: (canvas: HTMLCanvasElement) => void;
+  motionSpeed?: number; // 1-10, default 3
 }
 
 export interface VideoPreviewRef {
@@ -62,6 +64,7 @@ const DEFAULT_DISPLAY_SETTINGS = {
   surahNamePosition: 'top' as const,
   textShadowStyle: 'soft' as const,
   decorationStyle: 'separator' as const,
+  ayahTransition: 'fade' as const,
 };
 
 export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
@@ -77,6 +80,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   displaySettings = DEFAULT_DISPLAY_SETTINGS,
   isPlaying,
   onCanvasReady,
+  motionSpeed = 3,
 }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -536,8 +540,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Draw background with Ken Burns effect - speed x3
-    const motionSpeed = 3;
+    // Draw background with Ken Burns effect - use prop motionSpeed
     const t = (Date.now() / 1000) * motionSpeed;
     const scale = 1.12 + Math.sin(t * 0.25) * 0.08;
     const offsetX = Math.sin(t * 0.15) * 40;
@@ -782,12 +785,13 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         drawAyahSeparator(ctx, canvas.width / 2, startY - 40, 180);
       }
 
-      // Draw frame around ayah text
+      // Draw frame around ayah text - centered properly
       if (displaySettings.frameStyle !== 'none') {
         const framePadding = 40;
-        const frameX = canvas.width * 0.075 - framePadding / 2;
-        const frameY = startY - lineHeight / 2 - framePadding;
+        // Center the frame horizontally
         const frameWidth = maxWidth + framePadding * 2;
+        const frameX = (canvas.width - frameWidth) / 2;
+        const frameY = startY - lineHeight / 2 - framePadding;
         const frameHeight = totalHeight + framePadding * 2;
         
         drawIslamicFrame(ctx, frameX, frameY, frameWidth, frameHeight, displaySettings.frameStyle);
@@ -931,7 +935,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         drawAyahBadge(ctx, canvas.width / 2, badgeY, currentAyah.numberInSurah, 36, displaySettings.ayahNumberStyle);
       }
     }
-  }, [background, customBackground, imageLoaded, videoReady, slideshowReady, surahName, reciterName, currentAyah, currentAyahWords, highlightedWordIndex, textSettings, displaySettings, dimensions, getTokenHsl, drawAyahBadge, getCanvasFontFamily, drawIslamicFrame]);
+  }, [background, customBackground, imageLoaded, videoReady, slideshowReady, surahName, reciterName, currentAyah, currentAyahWords, highlightedWordIndex, textSettings, displaySettings, dimensions, getTokenHsl, drawAyahBadge, getCanvasFontFamily, drawIslamicFrame, motionSpeed]);
 
   // Animation loop for canvas
   useEffect(() => {

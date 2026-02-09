@@ -10,6 +10,9 @@ export interface AudioEffects {
   pitchShift: number; // -0.1 to 0.1 (subtle pitch change)
   speedAdjust: number; // 0.95 to 1.05 (subtle speed change)
   copyrightProtectionEnabled: boolean;
+  // Audio enhancement
+  normalizeEnabled: boolean;
+  eqEnabled: boolean;
 }
 
 const defaultEffects: AudioEffects = {
@@ -21,6 +24,8 @@ const defaultEffects: AudioEffects = {
   pitchShift: 0,
   speedAdjust: 1.0,
   copyrightProtectionEnabled: false,
+  normalizeEnabled: false,
+  eqEnabled: false,
 };
 
 export function useAudioEffects() {

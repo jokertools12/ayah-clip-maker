@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Check, Image as ImageIcon, Sparkles, Upload } from 'lucide-react';
+import { Check, Image as ImageIcon, Sparkles, Upload, Video } from 'lucide-react';
 import { BackgroundItem, backgroundImages, slideshowBackgrounds } from '@/data/backgrounds';
 import { CustomBackgroundUploader } from '@/components/CustomBackgroundUploader';
+import { PexelsVideoSelector } from '@/components/PexelsVideoSelector';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
@@ -19,7 +20,7 @@ export function BackgroundSelector({
   customBackground, 
   onCustomBackgroundChange 
 }: BackgroundSelectorProps) {
-  const [activeTab, setActiveTab] = useState<'custom' | 'image' | 'slideshow'>('image');
+  const [activeTab, setActiveTab] = useState<'custom' | 'image' | 'slideshow' | 'pexels'>('image');
 
   const renderBackgroundCard = (bg: BackgroundItem) => {
     const isSelected = selectedBackground?.id === bg.id && !customBackground;
@@ -86,16 +87,31 @@ export function BackgroundSelector({
     );
   };
 
+  const handlePexelsVideoSelect = (videoUrl: string, thumbnailUrl: string) => {
+    // Create a custom background item for the Pexels video
+    const pexelsBackground: BackgroundItem = {
+      id: `pexels-${Date.now()}`,
+      name: 'فيديو Pexels',
+      url: videoUrl,
+      thumbnail: thumbnailUrl,
+      type: 'video',
+      category: 'nature',
+    };
+    onCustomBackgroundChange?.(null);
+    onSelect(pexelsBackground);
+  };
+
   const tabDescriptions: Record<string, string> = {
     custom: 'ارفع صورة أو فيديو من جهازك',
     image: 'صور طبيعية عالية الجودة مع تأثير Ken Burns للحركة',
     slideshow: 'صور متغيرة ومتنوعة تتحرك وتتبدل تلقائياً',
+    pexels: 'فيديوهات احترافية من Pexels',
   };
 
   return (
     <div className="space-y-4">
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'custom' | 'image' | 'slideshow')}>
-        <TabsList className="w-full grid grid-cols-3">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
+        <TabsList className="w-full grid grid-cols-4">
           <TabsTrigger value="custom" className="gap-1 text-xs sm:text-sm">
             <Upload className="h-4 w-4" />
             <span className="hidden sm:inline">رفع</span>
@@ -107,6 +123,10 @@ export function BackgroundSelector({
           <TabsTrigger value="slideshow" className="gap-1 text-xs sm:text-sm">
             <Sparkles className="h-4 w-4" />
             <span className="hidden sm:inline">متغيرة</span>
+          </TabsTrigger>
+          <TabsTrigger value="pexels" className="gap-1 text-xs sm:text-sm">
+            <Video className="h-4 w-4" />
+            <span className="hidden sm:inline">فيديو</span>
           </TabsTrigger>
         </TabsList>
 
@@ -133,6 +153,9 @@ export function BackgroundSelector({
           </ScrollArea>
         </TabsContent>
 
+        <TabsContent value="pexels" className="mt-4">
+          <PexelsVideoSelector onSelect={handlePexelsVideoSelect} />
+        </TabsContent>
       </Tabs>
 
       <p className="text-xs text-muted-foreground text-center">{tabDescriptions[activeTab]}</p>
