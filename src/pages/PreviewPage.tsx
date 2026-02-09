@@ -6,7 +6,8 @@ import { VideoPreview, VideoPreviewRef } from '@/components/VideoPreview';
 import { AudioEffectsPanel } from '@/components/AudioEffectsPanel';
 import { DisplaySettingsPanel, DisplaySettings } from '@/components/DisplaySettingsPanel';
 import { CustomBackgroundUploader } from '@/components/CustomBackgroundUploader';
-import { ExportQualitySelector } from '@/components/ExportQualitySelector';
+import { ExportFormatSelector, ExportSettings, ExportFormat } from '@/components/ExportFormatSelector';
+import { MotionSpeedControl } from '@/components/MotionSpeedControl';
 import { PresetSelector } from '@/components/PresetSelector';
 import { SocialShareButtons } from '@/components/SocialShareButtons';
 import { VIDEO_PRESETS, VideoPreset } from '@/data/videoPresets';
@@ -47,6 +48,7 @@ import {
   Eye,
   Upload,
   Palette,
+  Gauge,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -61,6 +63,13 @@ const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
   surahNamePosition: 'top',
   textShadowStyle: 'soft',
   decorationStyle: 'separator',
+  ayahTransition: 'fade',
+};
+
+const DEFAULT_EXPORT_SETTINGS: ExportSettings = {
+  format: 'mp4',
+  quality: 'high',
+  motionSpeed: 3,
 };
 
 export default function PreviewPage() {
@@ -94,9 +103,9 @@ export default function PreviewPage() {
   // Display settings state
   const [displaySettings, setDisplaySettings] = useState<DisplaySettings>(DEFAULT_DISPLAY_SETTINGS);
   
-  // Custom background and export quality
+  // Custom background and export settings
   const [customBackground, setCustomBackground] = useState<string | null>(null);
-  const [exportQuality, setExportQuality] = useState<ExportQuality>('high');
+  const [exportSettings, setExportSettings] = useState<ExportSettings>(DEFAULT_EXPORT_SETTINGS);
   const [selectedPresetId, setSelectedPresetId] = useState<string | undefined>(undefined);
 
   // Handler to apply a preset
@@ -106,7 +115,10 @@ export default function PreviewPage() {
       ...prev,
       ...preset.displaySettings,
     }));
-    setExportQuality(preset.exportQuality);
+    setExportSettings((prev) => ({
+      ...prev,
+      quality: preset.exportQuality,
+    }));
     toast.success(`تم تطبيق قالب "${preset.name}"`);
   }, []);
 
@@ -465,7 +477,7 @@ export default function PreviewPage() {
         audio,
         recordingDuration,
         audioEffects.getRecordingStream(),
-        exportQuality
+        exportSettings.quality
       );
 
       if (blob) {
@@ -503,6 +515,33 @@ export default function PreviewPage() {
     if (mp4) toast.success('تم تجهيز MP4 — يمكنك التحميل الآن');
     else toast.error('فشل التحويل إلى MP4');
   };
+
+  // Handle export based on format
+  const handleExport = useCallback((format: ExportFormat) => {
+    const baseFilename = toSafeFilename(
+      `${surah?.englishName || surah?.name || 'quran'}-${reciter?.id || 'reciter'}`
+    );
+
+    switch (format) {
+      case 'mp4':
+        if (videoRecorder.mp4Blob) {
+          videoRecorder.downloadMp4(`${baseFilename}.mp4`);
+        } else {
+          toast.error('ملف MP4 غير جاهز بعد');
+        }
+        break;
+      case 'webm':
+        if (videoRecorder.videoBlob) {
+          videoRecorder.downloadWebm(`${baseFilename}.webm`);
+        } else {
+          toast.error('لا يوجد فيديو للتحميل');
+        }
+        break;
+      case 'gif':
+        toast.info('تحميل GIF غير متاح حالياً - جاري العمل عليه');
+        break;
+    }
+  }, [surah, reciter, toSafeFilename, videoRecorder]);
 
   // Save to library
   const handleSave = async () => {
@@ -577,6 +616,7 @@ export default function PreviewPage() {
               textSettings={textSettings}
               displaySettings={displaySettings}
               isPlaying={isPlaying}
+              motionSpeed={exportSettings.motionSpeed}
             />
 
             {/* Audio Element */}
@@ -603,7 +643,7 @@ export default function PreviewPage() {
                   الآيات {startAyah} - {endAyah} | {reciter?.name}
                 </p>
                 {!useQuranFoundation && (
-                  <p className="text-xs text-amber-500 mt-1">
+                  <p className="text-xs text-muted-foreground mt-1">
                     ⚠️ يتم استخدام الملف الصوتي الكامل (التزامن تقديري)
                   </p>
                 )}
@@ -750,10 +790,21 @@ export default function PreviewPage() {
               </TabsContent>
 
               <TabsContent value="quality" className="mt-4">
-                <ExportQualitySelector
-                  quality={exportQuality}
-                  onChange={setExportQuality}
-                />
+                <div className="space-y-4">
+                  <ExportFormatSelector
+                    settings={exportSettings}
+                    onChange={setExportSettings}
+                    onExport={handleExport}
+                    videoBlob={videoRecorder.videoBlob}
+                    mp4Blob={videoRecorder.mp4Blob}
+                    isConverting={videoRecorder.isConverting}
+                    isRecording={videoRecorder.isRecording}
+                  />
+                  <MotionSpeedControl
+                    speed={exportSettings.motionSpeed}
+                    onChange={(speed) => setExportSettings((prev) => ({ ...prev, motionSpeed: speed }))}
+                  />
+                </div>
               </TabsContent>
             </Tabs>
 

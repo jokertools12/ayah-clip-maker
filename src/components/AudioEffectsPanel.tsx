@@ -3,7 +3,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
 import { AudioEffects } from '@/hooks/useAudioEffects';
-import { Music, Waves, Timer, Shield, AlertTriangle } from 'lucide-react';
+import { Music, Waves, Timer, Shield, AlertTriangle, Volume2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 interface AudioEffectsPanelProps {
@@ -28,11 +28,11 @@ export function AudioEffectsPanel({ effects, onChange, disabled, onToggleCopyrig
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Copyright Protection */}
-        <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 space-y-3">
+        <div className="p-3 rounded-lg bg-primary/10 border border-primary/20 space-y-3">
           <div className="flex items-center justify-between">
             <Label htmlFor="copyrightProtection" className="flex items-center gap-2 cursor-pointer">
-              <Shield className="h-4 w-4 text-amber-500" />
-              <span className="text-amber-700 dark:text-amber-400 font-medium text-sm">حماية حقوق النشر</span>
+              <Shield className="h-4 w-4 text-primary" />
+              <span className="text-primary font-medium text-sm">حماية حقوق النشر</span>
             </Label>
             <Switch
               id="copyrightProtection"
@@ -45,21 +45,61 @@ export function AudioEffectsPanel({ effects, onChange, disabled, onToggleCopyrig
             />
           </div>
           <div className="flex items-start gap-2 text-xs text-muted-foreground">
-            <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0 text-amber-500" />
+            <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0 text-primary" />
             <p>
               يُطبق تعديلات صوتية طفيفة غير ملحوظة لتجنب اكتشاف الصوت تلقائياً على فيسبوك ويوتيوب
             </p>
           </div>
           {effects.copyrightProtectionEnabled && (
-            <Badge variant="secondary" className="bg-amber-500/20 text-amber-700 dark:text-amber-400 border-0">
+            <Badge variant="secondary" className="bg-primary/20 text-primary border-0">
               <Shield className="h-3 w-3 ml-1" />
               الحماية مُفعّلة
             </Badge>
           )}
         </div>
 
-        {/* Reverb (Mosque Effect) */}
+        {/* Audio Normalization */}
         <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="normalize" className="flex items-center gap-2 cursor-pointer">
+              <Volume2 className="h-4 w-4 text-primary" />
+              <span>تسوية الصوت (Normalization)</span>
+            </Label>
+            <Switch
+              id="normalize"
+              checked={effects.normalizeEnabled ?? false}
+              onCheckedChange={(checked) => updateEffect('normalizeEnabled' as keyof AudioEffects, checked as never)}
+              disabled={disabled}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground pr-6">
+            تسوية مستوى الصوت تلقائياً لضمان وضوح ثابت
+          </p>
+        </div>
+
+        {/* EQ Enhancement */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="eq" className="flex items-center gap-2 cursor-pointer">
+              <svg className="h-4 w-4 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M4 21v-8M8 21V9M12 21v-6M16 21v-10M20 21V5" />
+              </svg>
+              <span>تحسين EQ</span>
+            </Label>
+            <Switch
+              id="eq"
+              checked={effects.eqEnabled ?? false}
+              onCheckedChange={(checked) => updateEffect('eqEnabled' as keyof AudioEffects, checked as never)}
+              disabled={disabled}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground pr-6">
+            تحسين الوضوح وتقليل الضجيج للحصول على صوت أكثر نقاءً
+          </p>
+        </div>
+
+        {/* Reverb (Mosque Effect) */}
+        <div className="space-y-4 pt-2 border-t">
           <div className="flex items-center justify-between">
             <Label htmlFor="reverb" className="flex items-center gap-2 cursor-pointer">
               <Waves className="h-4 w-4 text-primary" />
