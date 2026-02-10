@@ -1,5 +1,5 @@
 // Pexels API for fetching video backgrounds
-const PEXELS_API_KEY = '1Mm7g8hkrqF1baxPp6KUyjRGN9GJkEm0Nr7xge8zN0Jz89OlA7';
+const PEXELS_API_KEY = '1Mm7g8hkrqF1baxPp6KUyjRGN9GTo6E9GJkEm0Nr7xge8zN0Jz89OlA7';
 const BASE_URL = 'https://api.pexels.com/videos';
 
 export interface PexelsVideo {

@@ -10,8 +10,8 @@ const FONT_MAP: Record<string, string> = {
 };
 
 // Slideshow configuration
-const SLIDESHOW_TRANSITION_DURATION = 1500; // 1.5 seconds for smooth transition
-const SLIDESHOW_DISPLAY_DURATION = 4000; // 4 seconds per image
+const SLIDESHOW_TRANSITION_DURATION = 2500; // 2.5 seconds for ultra-smooth crossfade
+const SLIDESHOW_DISPLAY_DURATION = 5000; // 5 seconds per image
 
 interface VideoPreviewProps {
   background: BackgroundItem | null;
@@ -549,13 +549,19 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     // Handle slideshow backgrounds
     if (slideshowReady && slideshowImagesRef.current.length > 1) {
       const images = slideshowImagesRef.current;
-      const elapsed = (Date.now() - slideshowStartTimeRef.current) * motionSpeed;
+      // Don't multiply elapsed by motionSpeed for slideshow timing — it makes transitions jerky.
+      // motionSpeed only affects the Ken Burns pan/zoom intensity.
+      const elapsed = Date.now() - slideshowStartTimeRef.current;
       const cycleDuration = SLIDESHOW_DISPLAY_DURATION + SLIDESHOW_TRANSITION_DURATION;
-      const cyclePosition = elapsed % (cycleDuration * images.length);
+      const totalCycle = cycleDuration * images.length;
+      const cyclePosition = elapsed % totalCycle;
       
       const currentIndex = Math.floor(cyclePosition / cycleDuration) % images.length;
       const nextIndex = (currentIndex + 1) % images.length;
       const positionInCycle = cyclePosition % cycleDuration;
+      
+      // Smooth ease-in-out for crossfade
+      const easeInOut = (p: number) => p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
       
       // Draw current image with Ken Burns
       ctx.save();
@@ -569,17 +575,18 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       }
       ctx.restore();
       
-      // Crossfade transition
+      // Crossfade transition with easing
       if (positionInCycle > SLIDESHOW_DISPLAY_DURATION) {
-        const fadeProgress = (positionInCycle - SLIDESHOW_DISPLAY_DURATION) / SLIDESHOW_TRANSITION_DURATION;
+        const rawProgress = (positionInCycle - SLIDESHOW_DISPLAY_DURATION) / SLIDESHOW_TRANSITION_DURATION;
+        const fadeProgress = easeInOut(Math.min(rawProgress, 1));
         ctx.save();
         ctx.globalAlpha = fadeProgress;
         ctx.translate(canvas.width / 2, canvas.height / 2);
         
         // Different Ken Burns for next image
         const nextScale = 1.08 + Math.sin(t * 0.2 + 2) * 0.06;
-        const nextOffsetX = Math.cos(t * 0.18) * 35;
-        const nextOffsetY = Math.sin(t * 0.14) * 30;
+        const nextOffsetX = Math.cos(t * 0.18) * 25;
+        const nextOffsetY = Math.sin(t * 0.14) * 20;
         
         ctx.scale(nextScale, nextScale);
         ctx.translate(-canvas.width / 2 + nextOffsetX, -canvas.height / 2 + nextOffsetY);

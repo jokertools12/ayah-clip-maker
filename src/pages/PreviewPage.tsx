@@ -831,47 +831,54 @@ export default function PreviewPage() {
                           <span className="font-medium">جاري تجهيز الفيديو...</span>
                         </div>
                         <Progress value={videoRecorder.convertProgress} className="h-2" />
-                        <p className="text-xs text-muted-foreground text-center">
-                          {Math.round(videoRecorder.convertProgress)}% مكتمل
-                        </p>
                       </div>
                     ) : (
                       <>
-                        {videoRecorder.mp4Blob ? (
-                          <div className="flex items-center justify-center gap-2 text-primary p-3 rounded-lg bg-primary/10">
-                            <Check className="h-5 w-5" />
-                            <span className="font-medium">جاهز للتحميل بصيغة MP4!</span>
-                          </div>
-                        ) : (
-                          <div className="flex items-center justify-center gap-2 text-destructive p-3 rounded-lg bg-destructive/10">
-                            <AlertCircle className="h-5 w-5" />
-                            <span className="font-medium">
-                              {videoRecorder.error ? 'تعذر تحويل الفيديو إلى MP4 تلقائياً' : 'الفيديو جاهز — اضغط لتحويله إلى MP4'}
-                            </span>
-                          </div>
-                        )}
-
-                        <div className="flex flex-col gap-3">
-                          {videoRecorder.mp4Blob ? (
-                            <Button
-                              onClick={() => void videoRecorder.downloadMp4(downloadFilename)}
-                              className="w-full gap-2"
-                              size="lg"
-                            >
-                              <Download className="h-5 w-5" />
-                              تحميل MP4
-                            </Button>
-                          ) : (
-                            <Button onClick={handleConvertToMp4} className="w-full gap-2" disabled={videoRecorder.isConverting}>
-                              <Video className="h-4 w-4" />
-                              تحويل MP4
-                            </Button>
-                          )}
+                        <div className="flex items-center justify-center gap-2 text-primary p-3 rounded-lg bg-primary/10">
+                          <Check className="h-5 w-5" />
+                          <span className="font-medium">تم إنشاء الفيديو بنجاح!</span>
                         </div>
+
+                        {/* Primary download - WebM (always works) */}
+                        <Button
+                          onClick={() => {
+                            const baseFilename = toSafeFilename(
+                              `${surah?.englishName || surah?.name || 'quran'}-${reciter?.id || 'reciter'}`
+                            );
+                            videoRecorder.downloadWebm(`${baseFilename}.webm`);
+                          }}
+                          className="w-full gap-2"
+                          size="lg"
+                        >
+                          <Download className="h-5 w-5" />
+                          تحميل الفيديو (WebM)
+                        </Button>
+
+                        {/* MP4 download - optional */}
+                        {videoRecorder.mp4Blob ? (
+                          <Button
+                            onClick={() => void videoRecorder.downloadMp4(downloadFilename)}
+                            variant="outline"
+                            className="w-full gap-2"
+                          >
+                            <Download className="h-4 w-4" />
+                            تحميل MP4
+                          </Button>
+                        ) : (
+                          <Button
+                            onClick={handleConvertToMp4}
+                            variant="outline"
+                            className="w-full gap-2"
+                            disabled={videoRecorder.isConverting}
+                          >
+                            <Video className="h-4 w-4" />
+                            تحويل وتحميل MP4 (اختياري)
+                          </Button>
+                        )}
 
                         {/* Social Share Buttons */}
                         <SocialShareButtons
-                          videoBlob={videoRecorder.mp4Blob}
+                          videoBlob={videoRecorder.videoBlob}
                           title={`${surah?.name} - قرآن ريلز`}
                           text={`استمع لتلاوة ${surah?.name} بصوت ${reciter?.name}`}
                           filename={downloadFilename}
