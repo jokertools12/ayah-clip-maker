@@ -5,8 +5,15 @@ import { BackgroundItem } from '@/data/backgrounds';
 const FONT_MAP: Record<string, string> = {
   '"Noto Naskh Arabic", serif': 'Noto Naskh Arabic',
   '"Amiri", serif': 'Amiri',
+  '"Amiri Quran", serif': 'Amiri Quran',
   '"Cairo", sans-serif': 'Cairo',
   '"Scheherazade New", serif': 'Scheherazade New',
+  '"Aref Ruqaa", serif': 'Aref Ruqaa',
+  '"Reem Kufi", sans-serif': 'Reem Kufi',
+  '"Lateef", serif': 'Lateef',
+  '"El Messiri", sans-serif': 'El Messiri',
+  '"Tajawal", sans-serif': 'Tajawal',
+  '"Mada", sans-serif': 'Mada',
 };
 
 // Slideshow configuration
