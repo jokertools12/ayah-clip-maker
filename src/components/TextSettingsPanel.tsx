@@ -20,8 +20,15 @@ interface TextSettingsPanelProps {
 const fontOptions = [
   { value: '"Noto Naskh Arabic", serif', label: 'نسخ' },
   { value: '"Amiri", serif', label: 'أميري' },
-  { value: '"Cairo", sans-serif', label: 'القاهرة' },
+  { value: '"Amiri Quran", serif', label: 'أميري قرآن' },
   { value: '"Scheherazade New", serif', label: 'شهرزاد' },
+  { value: '"Aref Ruqaa", serif', label: 'رقعة' },
+  { value: '"Reem Kufi", sans-serif', label: 'ريم كوفي' },
+  { value: '"Lateef", serif', label: 'لطيف' },
+  { value: '"Cairo", sans-serif', label: 'القاهرة' },
+  { value: '"El Messiri", sans-serif', label: 'المسيري' },
+  { value: '"Tajawal", sans-serif', label: 'تجول' },
+  { value: '"Mada", sans-serif', label: 'مدى' },
 ];
 
 const colorOptions = [
@@ -70,7 +77,7 @@ export function TextSettingsPanel({ settings, onChange }: TextSettingsPanelProps
           <RadioGroup
             value={settings.fontFamily}
             onValueChange={(value) => updateSetting('fontFamily', value)}
-            className="grid grid-cols-2 gap-2"
+            className="grid grid-cols-3 gap-2"
           >
             {fontOptions.map((font) => (
               <div key={font.value} className="relative">

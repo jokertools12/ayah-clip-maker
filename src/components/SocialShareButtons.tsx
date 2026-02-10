@@ -28,7 +28,11 @@ export function SocialShareButtons({ videoBlob, title, text, filename }: SocialS
       return;
     }
 
-    const file = new File([videoBlob], filename, { type: 'video/mp4' });
+    // Determine MIME type from the blob
+    const mimeType = videoBlob.type || 'video/webm';
+    const ext = mimeType.includes('mp4') ? '.mp4' : '.webm';
+    const shareFilename = filename.replace(/\.[^/.]+$/, ext);
+    const file = new File([videoBlob], shareFilename, { type: mimeType });
     const navAny = navigator as Navigator & { canShare?: (data: ShareData) => boolean };
 
     // For Instagram, TikTok - we use native share to open the app
