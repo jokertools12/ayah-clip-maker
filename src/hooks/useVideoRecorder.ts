@@ -114,51 +114,21 @@ export function useVideoRecorder() {
 
           const blob = new Blob(chunksRef.current, { type: mimeType });
         
-        // Immediately start MP4 conversion after recording
-        setState((prev) => ({
-          ...prev,
-          isRecording: false,
-          progress: 100,
-          videoBlob: blob,
-          mp4Blob: null,
-          isConverting: true,
-          convertProgress: 0,
-          stage: 'جاري تحويل الفيديو إلى MP4...',
-        }));
-
-        // Auto-convert to MP4
-        conversionInProgressRef.current = true;
-        convertWebmToMp4(blob, {
-          onProgress: (ratio) => {
-            setState((prev) => ({
-              ...prev,
-              convertProgress: Math.round(Math.min(Math.max(ratio, 0), 1) * 100),
-            }));
-          },
-        }).then((mp4Blob) => {
-          conversionInProgressRef.current = false;
-          mp4BlobRef.current = mp4Blob;
+          // Video is ready as WebM — no auto-conversion (FFmpeg often fails in browser).
+          // User can optionally trigger MP4 conversion manually.
           setState((prev) => ({
             ...prev,
+            isRecording: false,
+            progress: 100,
+            videoBlob: blob,
+            mp4Blob: null,
             isConverting: false,
-            mp4Blob,
+            convertProgress: 0,
             error: null,
             stage: 'جاهز للتحميل!',
           }));
+
           resolve(blob);
-        }).catch((err) => {
-          console.error('Auto MP4 conversion failed:', err);
-          conversionInProgressRef.current = false;
-          mp4BlobRef.current = null;
-          setState((prev) => ({
-            ...prev,
-            isConverting: false,
-            mp4Blob: null,
-            error: 'تعذر تحويل الفيديو إلى MP4. يمكنك تحميل WebM مباشرة.',
-            stage: 'جاهز للتحميل بصيغة WebM',
-          }));
-          resolve(blob);
-        });
         };
 
         mediaRecorder.onerror = (e) => {
