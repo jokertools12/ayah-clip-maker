@@ -13,10 +13,9 @@ export interface DisplaySettings {
   frameStyle: 'none' | 'simple' | 'ornate' | 'golden' | 'geometric' | 'modern' | 'minimal';
   ayahNumberStyle: 'circle' | 'star' | 'diamond' | 'octagon' | 'flower' | 'square' | 'hexagon';
   surahNamePosition: 'top' | 'bottom' | 'topLeft' | 'topRight';
+  surahNameStyle: 'classic' | 'banner' | 'calligraphy' | 'circle' | 'diamond' | 'ribbon';
   textShadowStyle: 'soft' | 'strong' | 'none' | 'glow';
-  // New: decoration around the ayah text area
   decorationStyle: 'none' | 'sideBorder' | 'separator' | 'both';
-  // New: ayah transition animation
   ayahTransition: 'none' | 'fade' | 'slide' | 'zoom' | 'blur';
 }
 
@@ -79,6 +78,15 @@ const transitionOptions = [
   { value: 'slide', label: 'انزلاق', description: 'دخول من الأسفل' },
   { value: 'zoom', label: 'تكبير', description: 'تكبير للداخل' },
   { value: 'blur', label: 'ضبابي', description: 'إزالة الضبابية' },
+];
+
+const surahNameStyleOptions = [
+  { value: 'classic', label: 'كلاسيكي', description: 'شارة مستطيلة مزخرفة' },
+  { value: 'banner', label: 'لافتة', description: 'شريط عريض متدرج' },
+  { value: 'calligraphy', label: 'خطي', description: 'نص مزخرف فقط' },
+  { value: 'circle', label: 'دائرة', description: 'داخل دائرة ذهبية' },
+  { value: 'diamond', label: 'معين', description: 'شكل ماسي أنيق' },
+  { value: 'ribbon', label: 'شريط', description: 'شريط ذهبي ملفوف' },
 ];
 
 export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPanelProps) {
@@ -243,6 +251,34 @@ export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPane
                   <RadioGroupItem value={option.value} id={`pos-${option.value}`} className="peer sr-only" />
                   <Label
                     htmlFor={`pos-${option.value}`}
+                    className="flex flex-col items-center rounded-lg border-2 border-muted p-2 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all text-center"
+                  >
+                    <span className="font-medium text-sm">{option.label}</span>
+                    <span className="text-xs text-muted-foreground">{option.description}</span>
+                  </Label>
+                </div>
+              ))}
+            </RadioGroup>
+          </div>
+        )}
+
+        {/* Surah Name Style */}
+        {settings.showSurahName && (
+          <div className="space-y-3 pt-2 border-t">
+            <Label className="text-sm flex items-center gap-2">
+              <Wand2 className="h-4 w-4" />
+              شكل اسم السورة
+            </Label>
+            <RadioGroup
+              value={settings.surahNameStyle || 'classic'}
+              onValueChange={(value) => updateSetting('surahNameStyle', value as DisplaySettings['surahNameStyle'])}
+              className="grid grid-cols-3 gap-2"
+            >
+              {surahNameStyleOptions.map((option) => (
+                <div key={option.value} className="relative">
+                  <RadioGroupItem value={option.value} id={`sname-${option.value}`} className="peer sr-only" />
+                  <Label
+                    htmlFor={`sname-${option.value}`}
                     className="flex flex-col items-center rounded-lg border-2 border-muted p-2 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all text-center"
                   >
                     <span className="font-medium text-sm">{option.label}</span>

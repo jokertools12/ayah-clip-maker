@@ -9,6 +9,7 @@ import { BackgroundSelector } from '@/components/BackgroundSelector';
 import { TextSettingsPanel, TextSettings } from '@/components/TextSettingsPanel';
 import { VideoPreview } from '@/components/VideoPreview';
 import { FamousAyahSelector } from '@/components/FamousAyahSelector';
+import { IslamicContentSelector } from '@/components/IslamicContentSelector';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -247,7 +248,7 @@ export default function CreatePage() {
               </CardHeader>
               <CardContent className="pt-0">
                 <Tabs defaultValue="surahs" className="w-full">
-                  <TabsList className="w-full grid grid-cols-2 mb-4">
+                  <TabsList className="w-full grid grid-cols-3 mb-4">
                     <TabsTrigger value="surahs" className="gap-1">
                       <BookOpen className="h-4 w-4" />
                       السور
@@ -255,6 +256,10 @@ export default function CreatePage() {
                     <TabsTrigger value="famous" className="gap-1">
                       <Bookmark className="h-4 w-4" />
                       آيات مشهورة
+                    </TabsTrigger>
+                    <TabsTrigger value="islamic" className="gap-1">
+                      <Sparkles className="h-4 w-4" />
+                      أحاديث وخطب
                     </TabsTrigger>
                   </TabsList>
 
@@ -292,6 +297,20 @@ export default function CreatePage() {
                         setStartAyahInput(ayah.startAyah.toString());
                         setEndAyahInput(ayah.endAyah.toString());
                         handleNextStep();
+                      }}
+                    />
+                  </TabsContent>
+
+                  <TabsContent value="islamic">
+                    <IslamicContentSelector
+                      onSelect={(item) => {
+                        // For Islamic content, we don't navigate to a surah
+                        // Instead, show a toast with the content for now
+                        // In future, this could generate a text-only video
+                        toast.info(`تم اختيار: ${item.text.substring(0, 50)}...`);
+                        toast('هذا المحتوى سيُضاف في الإصدار القادم كفيديو نصي مستقل', {
+                          description: item.source,
+                        });
                       }}
                     />
                   </TabsContent>

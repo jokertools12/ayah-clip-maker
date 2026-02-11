@@ -45,6 +45,7 @@ interface VideoPreviewProps {
     frameStyle: 'none' | 'simple' | 'ornate' | 'golden' | 'geometric' | 'modern' | 'minimal';
     ayahNumberStyle: 'circle' | 'star' | 'diamond' | 'octagon' | 'flower' | 'square' | 'hexagon';
     surahNamePosition?: 'top' | 'bottom' | 'topLeft' | 'topRight';
+    surahNameStyle?: 'classic' | 'banner' | 'calligraphy' | 'circle' | 'diamond' | 'ribbon';
     textShadowStyle?: 'soft' | 'strong' | 'none' | 'glow';
     decorationStyle?: 'none' | 'sideBorder' | 'separator' | 'both';
     ayahTransition?: 'none' | 'fade' | 'slide' | 'zoom' | 'blur';
@@ -69,6 +70,7 @@ const DEFAULT_DISPLAY_SETTINGS = {
   frameStyle: 'none' as const,
   ayahNumberStyle: 'circle' as const,
   surahNamePosition: 'top' as const,
+  surahNameStyle: 'classic' as const,
   textShadowStyle: 'soft' as const,
   decorationStyle: 'separator' as const,
   ayahTransition: 'fade' as const,
@@ -659,32 +661,125 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     ctx.shadowOffsetX = 2;
     ctx.shadowOffsetY = 2;
 
-    // Draw surah name badge (if enabled) - Arabic calligraphic style
+    // Draw surah name badge (if enabled) based on surahNameStyle
     if (displaySettings.showSurahName) {
       const badgeY = canvas.height * 0.11;
+      const nameStyle = displaySettings.surahNameStyle || 'classic';
 
-      // Elegant semi-transparent pill background
-      const badgeWidth = 360;
-      const badgeHeight = 100;
       ctx.save();
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-      ctx.beginPath();
-      ctx.roundRect(canvas.width / 2 - badgeWidth / 2, badgeY - badgeHeight / 2, badgeWidth, badgeHeight, 50);
-      ctx.fill();
 
-      // Double golden border for ornate look
-      ctx.strokeStyle = 'rgba(212, 175, 55, 0.45)';
-      ctx.lineWidth = 3;
-      ctx.stroke();
-      ctx.strokeStyle = 'rgba(212, 175, 55, 0.25)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.roundRect(canvas.width / 2 - (badgeWidth - 10) / 2, badgeY - (badgeHeight - 10) / 2, badgeWidth - 10, badgeHeight - 10, 46);
-      ctx.stroke();
+      switch (nameStyle) {
+        case 'banner': {
+          // Wide gradient banner
+          const bw = 500, bh = 90;
+          const grad = ctx.createLinearGradient(canvas.width / 2 - bw / 2, badgeY, canvas.width / 2 + bw / 2, badgeY);
+          grad.addColorStop(0, 'rgba(212, 175, 55, 0)');
+          grad.addColorStop(0.2, 'rgba(212, 175, 55, 0.25)');
+          grad.addColorStop(0.5, 'rgba(212, 175, 55, 0.35)');
+          grad.addColorStop(0.8, 'rgba(212, 175, 55, 0.25)');
+          grad.addColorStop(1, 'rgba(212, 175, 55, 0)');
+          ctx.fillStyle = grad;
+          ctx.fillRect(canvas.width / 2 - bw / 2, badgeY - bh / 2, bw, bh);
+          // Top/bottom lines
+          ctx.strokeStyle = 'rgba(212, 175, 55, 0.5)';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(canvas.width / 2 - bw / 2 + 40, badgeY - bh / 2);
+          ctx.lineTo(canvas.width / 2 + bw / 2 - 40, badgeY - bh / 2);
+          ctx.moveTo(canvas.width / 2 - bw / 2 + 40, badgeY + bh / 2);
+          ctx.lineTo(canvas.width / 2 + bw / 2 - 40, badgeY + bh / 2);
+          ctx.stroke();
+          break;
+        }
+        case 'calligraphy': {
+          // No background, just decorative dots around
+          ctx.fillStyle = 'rgba(212, 175, 55, 0.5)';
+          [-100, -60, 60, 100].forEach(dx => {
+            ctx.beginPath();
+            ctx.arc(canvas.width / 2 + dx, badgeY - 35, 3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(canvas.width / 2 + dx, badgeY + 35, 3, 0, Math.PI * 2);
+            ctx.fill();
+          });
+          break;
+        }
+        case 'circle': {
+          const radius = 75;
+          ctx.beginPath();
+          ctx.arc(canvas.width / 2, badgeY, radius, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(212, 175, 55, 0.6)';
+          ctx.lineWidth = 3;
+          ctx.stroke();
+          // Inner circle
+          ctx.beginPath();
+          ctx.arc(canvas.width / 2, badgeY, radius - 8, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(212, 175, 55, 0.3)';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          break;
+        }
+        case 'diamond': {
+          const s = 80;
+          ctx.beginPath();
+          ctx.moveTo(canvas.width / 2, badgeY - s);
+          ctx.lineTo(canvas.width / 2 + s * 1.8, badgeY);
+          ctx.lineTo(canvas.width / 2, badgeY + s);
+          ctx.lineTo(canvas.width / 2 - s * 1.8, badgeY);
+          ctx.closePath();
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(212, 175, 55, 0.6)';
+          ctx.lineWidth = 2.5;
+          ctx.stroke();
+          break;
+        }
+        case 'ribbon': {
+          const rw = 420, rh = 70;
+          const rx = canvas.width / 2 - rw / 2;
+          // Ribbon shape with folded ends
+          ctx.beginPath();
+          ctx.moveTo(rx + 20, badgeY - rh / 2);
+          ctx.lineTo(rx + rw - 20, badgeY - rh / 2);
+          ctx.lineTo(rx + rw, badgeY);
+          ctx.lineTo(rx + rw - 20, badgeY + rh / 2);
+          ctx.lineTo(rx + 20, badgeY + rh / 2);
+          ctx.lineTo(rx, badgeY);
+          ctx.closePath();
+          ctx.fillStyle = 'rgba(212, 175, 55, 0.2)';
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(212, 175, 55, 0.6)';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          break;
+        }
+        default: {
+          // Classic pill badge
+          const badgeWidth = 360;
+          const badgeHeight = 100;
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+          ctx.beginPath();
+          ctx.roundRect(canvas.width / 2 - badgeWidth / 2, badgeY - badgeHeight / 2, badgeWidth, badgeHeight, 50);
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(212, 175, 55, 0.45)';
+          ctx.lineWidth = 3;
+          ctx.stroke();
+          ctx.strokeStyle = 'rgba(212, 175, 55, 0.25)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.roundRect(canvas.width / 2 - (badgeWidth - 10) / 2, badgeY - (badgeHeight - 10) / 2, badgeWidth - 10, badgeHeight - 10, 46);
+          ctx.stroke();
+          break;
+        }
+      }
 
-      // Draw surah name in a decorative calligraphic style
+      // Draw surah name text
       ctx.font = `bold ${textSettings.fontSize * 2.5}px "Amiri", "Scheherazade New", serif`;
       ctx.fillStyle = textSettings.textColor;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
       ctx.shadowColor = 'rgba(212, 175, 55, 0.35)';
       ctx.shadowBlur = 8;
       ctx.fillText(surahName, canvas.width / 2, badgeY);

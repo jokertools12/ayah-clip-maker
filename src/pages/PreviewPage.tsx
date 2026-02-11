@@ -61,6 +61,7 @@ const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
   frameStyle: 'none',
   ayahNumberStyle: 'circle',
   surahNamePosition: 'top',
+  surahNameStyle: 'classic',
   textShadowStyle: 'soft',
   decorationStyle: 'separator',
   ayahTransition: 'fade',
