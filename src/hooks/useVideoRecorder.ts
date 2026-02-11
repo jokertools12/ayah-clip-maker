@@ -1,5 +1,6 @@
 import { useRef, useState, useCallback } from 'react';
 import { convertWebmToMp4 } from '@/lib/ffmpeg';
+import fixWebmDuration from 'fix-webm-duration';
 
 export type ExportQuality = 'low' | 'medium' | 'high' | 'ultra';
 
@@ -107,15 +108,25 @@ export function useVideoRecorder() {
           }
         };
 
-        mediaRecorder.onstop = () => {
+        // Track recording start time for duration fix
+        const startTime = Date.now();
+
+        mediaRecorder.onstop = async () => {
           if (animationFrameRef.current) {
             cancelAnimationFrame(animationFrameRef.current);
           }
 
-          const blob = new Blob(chunksRef.current, { type: mimeType });
-        
-          // Video is ready as WebM — no auto-conversion (FFmpeg often fails in browser).
-          // User can optionally trigger MP4 conversion manually.
+          const rawBlob = new Blob(chunksRef.current, { type: mimeType });
+          
+          // Fix WebM duration metadata so platforms (Instagram, TikTok) don't show 0 seconds
+          const elapsed = Date.now() - startTime;
+          let blob: Blob;
+          try {
+            blob = await fixWebmDuration(rawBlob, elapsed, { logger: false });
+          } catch {
+            blob = rawBlob; // fallback to unfixed blob
+          }
+
           setState((prev) => ({
             ...prev,
             isRecording: false,
@@ -149,7 +160,7 @@ export function useVideoRecorder() {
         await audioElement.play();
 
         // Progress tracking
-        const startTime = Date.now();
+        
         const progressInterval = setInterval(() => {
           const elapsed = (Date.now() - startTime) / 1000;
           const progress = Math.min((elapsed / duration) * 100, 100);
