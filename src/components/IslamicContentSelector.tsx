@@ -30,27 +30,26 @@ export function IslamicContentSelector({ onSelect }: IslamicContentSelectorProps
       <ScrollArea className="h-[45vh]">
         <div className="space-y-2 p-1">
           {items.map((item) => (
-            <Button
+            <div
               key={item.id}
-              variant="ghost"
-              className="w-full justify-between h-auto py-3 px-4 hover:bg-muted/80 text-right"
+              className="w-full rounded-lg border border-border/50 p-4 hover:bg-muted/80 cursor-pointer transition-colors"
               onClick={() => onSelect(item)}
             >
-              <div className="text-right flex-1">
-                <p className="font-semibold text-sm leading-relaxed" style={{ fontFamily: '"Amiri", serif' }}>
-                  {item.text.length > 80 ? item.text.substring(0, 80) + '...' : item.text}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {item.source}
+              <p className="font-semibold text-sm leading-loose text-right whitespace-pre-wrap" style={{ fontFamily: '"Amiri", serif' }}>
+                {item.text}
+              </p>
+              <div className="flex items-center justify-between mt-2">
+                <ChevronLeft className="h-4 w-4 text-muted-foreground shrink-0" />
+                <div className="flex items-center gap-2 text-right">
                   {item.subcategory && (
-                    <span className="mr-2 px-1.5 py-0.5 rounded bg-primary/10 text-primary text-[10px]">
+                    <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary text-[10px]">
                       {item.subcategory}
                     </span>
                   )}
-                </p>
+                  <span className="text-xs text-muted-foreground">{item.source}</span>
+                </div>
               </div>
-              <ChevronLeft className="h-4 w-4 text-muted-foreground shrink-0 mr-2" />
-            </Button>
+            </div>
           ))}
         </div>
       </ScrollArea>

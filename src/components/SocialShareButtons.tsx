@@ -111,7 +111,7 @@ export function SocialShareButtons({ videoBlob, title, text, filename }: SocialS
         <Button
           variant="outline"
           size="sm"
-          onClick={() => shareToSocial('instagram')}
+          onClick={(e) => { e.stopPropagation(); shareToSocial('instagram'); }}
           disabled={!videoBlob}
           className="flex flex-col items-center gap-1 h-auto py-2 bg-gradient-to-br from-purple-600 to-pink-500 hover:from-purple-700 hover:to-pink-600 text-white border-0"
         >
@@ -123,7 +123,7 @@ export function SocialShareButtons({ videoBlob, title, text, filename }: SocialS
         <Button
           variant="outline"
           size="sm"
-          onClick={() => shareToSocial('tiktok')}
+          onClick={(e) => { e.stopPropagation(); shareToSocial('tiktok'); }}
           disabled={!videoBlob}
           className="flex flex-col items-center gap-1 h-auto py-2 bg-black hover:bg-gray-900 text-white border-0"
         >
@@ -135,7 +135,7 @@ export function SocialShareButtons({ videoBlob, title, text, filename }: SocialS
         <Button
           variant="outline"
           size="sm"
-          onClick={() => shareToSocial('facebook')}
+          onClick={(e) => { e.stopPropagation(); shareToSocial('facebook'); }}
           disabled={!videoBlob}
           className="flex flex-col items-center gap-1 h-auto py-2 bg-blue-600 hover:bg-blue-700 text-white border-0"
         >
@@ -147,7 +147,7 @@ export function SocialShareButtons({ videoBlob, title, text, filename }: SocialS
         <Button
           variant="outline"
           size="sm"
-          onClick={() => shareToSocial('native')}
+          onClick={(e) => { e.stopPropagation(); shareToSocial('native'); }}
           disabled={!videoBlob}
           className="flex flex-col items-center gap-1 h-auto py-2"
         >
