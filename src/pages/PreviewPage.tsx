@@ -505,17 +505,7 @@ export default function PreviewPage() {
     return `${toSafeFilename(base)}.mp4`;
   }, [surah?.englishName, surah?.name, reciter?.id, toSafeFilename]);
 
-  const handleConvertToMp4 = async () => {
-    if (!videoRecorder.videoBlob) {
-      toast.error('لا يوجد فيديو للتحويل، قم بإنشاء الفيديو أولاً');
-      return;
-    }
-
-    toast.info('جاري تحويل الفيديو إلى MP4...');
-    const mp4 = await videoRecorder.convertToMp4();
-    if (mp4) toast.success('تم تجهيز MP4 — يمكنك التحميل الآن');
-    else toast.error('فشل التحويل إلى MP4');
-  };
+  // MP4 conversion removed - using WebM directly
 
   // Handle export based on format
   const handleExport = useCallback((format: ExportFormat) => {
@@ -855,27 +845,6 @@ export default function PreviewPage() {
                           تحميل الفيديو (WebM)
                         </Button>
 
-                        {/* MP4 download - optional */}
-                        {videoRecorder.mp4Blob ? (
-                          <Button
-                            onClick={() => void videoRecorder.downloadMp4(downloadFilename)}
-                            variant="outline"
-                            className="w-full gap-2"
-                          >
-                            <Download className="h-4 w-4" />
-                            تحميل MP4
-                          </Button>
-                        ) : (
-                          <Button
-                            onClick={handleConvertToMp4}
-                            variant="outline"
-                            className="w-full gap-2"
-                            disabled={videoRecorder.isConverting}
-                          >
-                            <Video className="h-4 w-4" />
-                            تحويل وتحميل MP4 (اختياري)
-                          </Button>
-                        )}
 
                         {/* Social Share Buttons */}
                         <SocialShareButtons

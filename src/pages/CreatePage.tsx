@@ -304,13 +304,15 @@ export default function CreatePage() {
                   <TabsContent value="islamic">
                     <IslamicContentSelector
                       onSelect={(item) => {
-                        // For Islamic content, we don't navigate to a surah
-                        // Instead, show a toast with the content for now
-                        // In future, this could generate a text-only video
-                        toast.info(`تم اختيار: ${item.text.substring(0, 50)}...`);
-                        toast('هذا المحتوى سيُضاف في الإصدار القادم كفيديو نصي مستقل', {
-                          description: item.source,
-                        });
+                        toast.success(`تم اختيار: ${item.source}`);
+                        // Skip surah selection - go directly to reciter step
+                        // We'll set a default surah (Al-Fatiha) so the flow works
+                        setSelectedSurah(1);
+                        setStartAyah(1);
+                        setEndAyah(7);
+                        setStartAyahInput('1');
+                        setEndAyahInput('7');
+                        setCurrentStep(2);
                       }}
                     />
                   </TabsContent>
@@ -400,8 +402,8 @@ export default function CreatePage() {
 
           {/* Step 3: Select Ayahs */}
           {currentStep === 3 && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <Card className="lg:col-span-2">
+            <div className="grid grid-cols-1 gap-6">
+              <Card>
                 <CardHeader>
                   <CardTitle>حدد نطاق الآيات</CardTitle>
                 </CardHeader>
@@ -491,19 +493,6 @@ export default function CreatePage() {
                 </CardContent>
               </Card>
 
-              {/* Famous Ayahs Selector */}
-              <div>
-                <FamousAyahSelector
-                  onSelect={(ayah: FamousAyah) => {
-                    setSelectedSurah(ayah.surahNumber);
-                    setStartAyah(ayah.startAyah);
-                    setEndAyah(ayah.endAyah);
-                    setStartAyahInput(ayah.startAyah.toString());
-                    setEndAyahInput(ayah.endAyah.toString());
-                    toast.success(`تم اختيار ${ayah.name}`);
-                  }}
-                />
-              </div>
             </div>
           )}
 

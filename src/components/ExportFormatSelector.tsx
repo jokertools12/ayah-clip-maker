@@ -26,9 +26,7 @@ interface ExportFormatSelectorProps {
 }
 
 const FORMAT_OPTIONS: { id: ExportFormat; label: string; description: string; icon: typeof FileVideo }[] = [
-  { id: 'mp4', label: 'MP4', description: 'الأكثر توافقاً - للمشاركة على كل المنصات', icon: FileVideo },
-  { id: 'webm', label: 'WebM', description: 'حجم أصغر - للويب والمتصفحات', icon: FileVideo },
-  { id: 'gif', label: 'GIF', description: 'صورة متحركة - بدون صوت', icon: Image },
+  { id: 'webm', label: 'WebM', description: 'الصيغة الأساسية - متوافقة مع كل المنصات', icon: FileVideo },
 ];
 
 export function ExportFormatSelector({
