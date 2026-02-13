@@ -50,7 +50,7 @@ export function useVideoRecorder() {
 
   const startRecording = useCallback(async (
     canvas: HTMLCanvasElement,
-    audioElement: HTMLAudioElement,
+    audioElement: HTMLAudioElement | null,
     duration: number = 30,
     audioStream?: MediaStream | null,
     quality: ExportQuality = 'high'
@@ -79,7 +79,7 @@ export function useVideoRecorder() {
         const tracks = [...canvasStream.getVideoTracks()];
         if (audioStream && audioStream.getAudioTracks().length) {
           tracks.push(...audioStream.getAudioTracks());
-        } else {
+        } else if (audioElement) {
           // Fallback: try capturing audio directly from the <audio> element if supported.
           const anyAudio = audioElement as unknown as { captureStream?: () => MediaStream; mozCaptureStream?: () => MediaStream };
           const elStream = anyAudio.captureStream?.() ?? anyAudio.mozCaptureStream?.();
@@ -156,8 +156,10 @@ export function useVideoRecorder() {
         setState((prev) => ({ ...prev, stage: 'جاري بدء التسجيل...' }));
         mediaRecorder.start(100);
 
-        // Reset and play audio
-        await audioElement.play();
+        // Reset and play audio (if available)
+        if (audioElement) {
+          await audioElement.play();
+        }
 
         // Progress tracking
         
@@ -176,7 +178,7 @@ export function useVideoRecorder() {
           if (elapsed >= duration) {
             clearInterval(progressInterval);
             mediaRecorder.stop();
-            audioElement.pause();
+            if (audioElement) audioElement.pause();
           }
         }, 100);
 

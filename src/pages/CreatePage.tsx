@@ -75,6 +75,7 @@ export default function CreatePage() {
   const [ayahs, setAyahs] = useState<{ number: number; numberInSurah: number; text: string }[]>([]);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewAyahIndex, setPreviewAyahIndex] = useState(0);
+  const [islamicContentItem, setIslamicContent] = useState<import('@/data/islamicContent').IslamicContentItem | null>(null);
 
   const selectedSurahData = surahs.find((s) => s.number === selectedSurah);
   const selectedReciterData = reciters.find((r) => r.id === selectedReciter);
@@ -114,12 +115,14 @@ export default function CreatePage() {
     setPreviewLoading(false);
   };
 
+  const isIslamicMode = !!islamicContentItem;
+
   const handleNextStep = () => {
-    if (currentStep === 1 && !selectedSurah) {
-      toast.error('الرجاء اختيار سورة');
+    if (currentStep === 1 && !selectedSurah && !isIslamicMode) {
+      toast.error('الرجاء اختيار سورة أو محتوى');
       return;
     }
-    if (currentStep === 2 && !selectedReciter) {
+    if (currentStep === 2 && !selectedReciter && !isIslamicMode) {
       toast.error('الرجاء اختيار قارئ');
       return;
     }
@@ -127,25 +130,34 @@ export default function CreatePage() {
       toast.error('الرجاء اختيار خلفية');
       return;
     }
+    // In islamic mode, skip steps 2 (reciter) and 3 (ayahs)
+    if (isIslamicMode && currentStep === 1) {
+      setCurrentStep(4);
+      return;
+    }
     setCurrentStep((prev) => Math.min(prev + 1, 5));
   };
 
   const handlePrevStep = () => {
+    // In islamic mode, from step 4 go back to step 1
+    if (isIslamicMode && currentStep === 4) {
+      setCurrentStep(1);
+      return;
+    }
     setCurrentStep((prev) => Math.max(prev - 1, 1));
   };
 
   const handleCreateVideo = () => {
-    if (!selectedSurah || !selectedReciter || !selectedBackground) {
+    if (!isIslamicMode && (!selectedSurah || !selectedReciter)) {
       toast.error('الرجاء إكمال جميع الخطوات');
       return;
     }
+    if (!selectedBackground) {
+      toast.error('الرجاء اختيار خلفية');
+      return;
+    }
 
-    // Navigate to preview page with all settings
     const params = new URLSearchParams({
-      surah: selectedSurah.toString(),
-      reciter: selectedReciter,
-      start: startAyah.toString(),
-      end: endAyah.toString(),
       background: selectedBackground.id,
       backgroundType: selectedBackground.type,
       ratio: aspectRatio,
@@ -155,6 +167,18 @@ export default function CreatePage() {
       shadowIntensity: textSettings.shadowIntensity.toString(),
       overlayOpacity: textSettings.overlayOpacity.toString(),
     });
+
+    if (isIslamicMode && islamicContentItem) {
+      params.set('contentMode', 'islamic');
+      params.set('contentText', islamicContentItem.text);
+      params.set('contentSource', islamicContentItem.source);
+      params.set('contentCategory', islamicContentItem.category);
+    } else {
+      params.set('surah', selectedSurah!.toString());
+      params.set('reciter', selectedReciter!);
+      params.set('start', startAyah.toString());
+      params.set('end', endAyah.toString());
+    }
 
     navigate(`/preview?${params.toString()}`);
   };
@@ -305,14 +329,10 @@ export default function CreatePage() {
                     <IslamicContentSelector
                       onSelect={(item) => {
                         toast.success(`تم اختيار: ${item.source}`);
-                        // Skip surah selection - go directly to reciter step
-                        // We'll set a default surah (Al-Fatiha) so the flow works
-                        setSelectedSurah(1);
-                        setStartAyah(1);
-                        setEndAyah(7);
-                        setStartAyahInput('1');
-                        setEndAyahInput('7');
-                        setCurrentStep(2);
+                        // Store the islamic content for later use
+                        setIslamicContent(item);
+                        // Skip to background selection (step 4) - no reciter or ayah selection needed
+                        setCurrentStep(4);
                       }}
                     />
                   </TabsContent>
@@ -565,9 +585,9 @@ export default function CreatePage() {
               <div className="flex justify-center">
                 <VideoPreview
                   background={selectedBackground}
-                  surahName={selectedSurahData?.name || ''}
-                  reciterName={selectedReciterData?.name || ''}
-                  currentAyah={ayahs[previewAyahIndex] || null}
+                  surahName={isIslamicMode ? (islamicContentItem?.category === 'hadith' ? 'حديث نبوي' : islamicContentItem?.category === 'sermon' ? 'خطبة' : 'حكمة') : (selectedSurahData?.name || '')}
+                  reciterName={isIslamicMode ? (islamicContentItem?.source || '') : (selectedReciterData?.name || '')}
+                  currentAyah={isIslamicMode && islamicContentItem ? { numberInSurah: 1, text: islamicContentItem.text } : (ayahs[previewAyahIndex] || null)}
                   aspectRatio={aspectRatio}
                   textSettings={textSettings}
                   isPlaying={true}
@@ -581,20 +601,37 @@ export default function CreatePage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-3">
-                    <div className="flex justify-between py-3 border-b border-border/50">
-                      <span className="text-muted-foreground">السورة</span>
-                      <span className="font-medium">{selectedSurahData?.name}</span>
-                    </div>
-                    <div className="flex justify-between py-3 border-b border-border/50">
-                      <span className="text-muted-foreground">القارئ</span>
-                      <span className="font-medium">{selectedReciterData?.name}</span>
-                    </div>
-                    <div className="flex justify-between py-3 border-b border-border/50">
-                      <span className="text-muted-foreground">الآيات</span>
-                      <span className="font-medium">
-                        من {startAyah} إلى {endAyah} ({endAyah - startAyah + 1} آية)
-                      </span>
-                    </div>
+                    {isIslamicMode ? (
+                      <>
+                        <div className="flex justify-between py-3 border-b border-border/50">
+                          <span className="text-muted-foreground">النوع</span>
+                          <span className="font-medium">
+                            {islamicContentItem?.category === 'hadith' ? 'حديث نبوي' : islamicContentItem?.category === 'sermon' ? 'خطبة' : 'حكمة'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between py-3 border-b border-border/50">
+                          <span className="text-muted-foreground">المصدر</span>
+                          <span className="font-medium">{islamicContentItem?.source}</span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex justify-between py-3 border-b border-border/50">
+                          <span className="text-muted-foreground">السورة</span>
+                          <span className="font-medium">{selectedSurahData?.name}</span>
+                        </div>
+                        <div className="flex justify-between py-3 border-b border-border/50">
+                          <span className="text-muted-foreground">القارئ</span>
+                          <span className="font-medium">{selectedReciterData?.name}</span>
+                        </div>
+                        <div className="flex justify-between py-3 border-b border-border/50">
+                          <span className="text-muted-foreground">الآيات</span>
+                          <span className="font-medium">
+                            من {startAyah} إلى {endAyah} ({endAyah - startAyah + 1} آية)
+                          </span>
+                        </div>
+                      </>
+                    )}
                     <div className="flex justify-between py-3 border-b border-border/50">
                       <span className="text-muted-foreground">الخلفية</span>
                       <span className="font-medium">{selectedBackground?.name}</span>

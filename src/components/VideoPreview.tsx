@@ -104,6 +104,12 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   const [slideshowReady, setSlideshowReady] = useState(false);
   const slideshowStartTimeRef = useRef<number>(Date.now());
 
+  // Verse transition state
+  const prevAyahRef = useRef<{ numberInSurah: number; text: string } | null>(null);
+  const transitionStartRef = useRef<number>(0);
+  const isTransitioningRef = useRef(false);
+  const VERSE_TRANSITION_DURATION = 800; // ms
+
   // Get dimensions based on aspect ratio
   const getDimensions = () => {
     if (aspectRatio === '9:16') {
@@ -584,21 +590,25 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       }
       ctx.restore();
       
-      // Crossfade transition with easing
+      // Crossfade + slide transition with easing
       if (positionInCycle > SLIDESHOW_DISPLAY_DURATION) {
         const rawProgress = (positionInCycle - SLIDESHOW_DISPLAY_DURATION) / SLIDESHOW_TRANSITION_DURATION;
         const fadeProgress = easeInOut(Math.min(rawProgress, 1));
+        
         ctx.save();
         ctx.globalAlpha = fadeProgress;
-        ctx.translate(canvas.width / 2, canvas.height / 2);
         
         // Different Ken Burns for next image
         const nextScale = 1.08 + Math.sin(t * 0.2 + 2) * 0.06;
         const nextOffsetX = Math.cos(t * 0.18) * 25;
         const nextOffsetY = Math.sin(t * 0.14) * 20;
         
+        // Slide effect - next image slides in from right
+        const slideOffset = (1 - fadeProgress) * canvas.width * 0.15;
+        
+        ctx.translate(canvas.width / 2, canvas.height / 2);
         ctx.scale(nextScale, nextScale);
-        ctx.translate(-canvas.width / 2 + nextOffsetX, -canvas.height / 2 + nextOffsetY);
+        ctx.translate(-canvas.width / 2 + nextOffsetX + slideOffset, -canvas.height / 2 + nextOffsetY);
         
         const nextImg = images[nextIndex];
         if (nextImg) {
@@ -845,13 +855,37 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       c.restore();
     }
 
+    // Detect ayah change and start transition
+    if (currentAyah && prevAyahRef.current && 
+        currentAyah.numberInSurah !== prevAyahRef.current.numberInSurah) {
+      transitionStartRef.current = Date.now();
+      isTransitioningRef.current = true;
+    }
+    if (currentAyah) {
+      prevAyahRef.current = currentAyah;
+    }
+
+    // Calculate transition progress
+    const transitionType = displaySettings.ayahTransition || 'fade';
+    let transitionProgress = 1; // 1 = fully visible
+    if (isTransitioningRef.current && transitionType !== 'none') {
+      const elapsed = Date.now() - transitionStartRef.current;
+      transitionProgress = Math.min(elapsed / VERSE_TRANSITION_DURATION, 1);
+      if (transitionProgress >= 1) {
+        isTransitioningRef.current = false;
+      }
+    }
+
+    // Ease function for smooth transitions
+    const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+    const easedProgress = easeOutCubic(transitionProgress);
+
     // Draw current ayah (if enabled)
     if (currentAyah && displaySettings.showAyahText) {
       const ayahY = canvas.height * 0.52;
       const maxWidth = canvas.width * 0.85;
       const lineHeight = textSettings.fontSize * 3.2;
       
-      // Use selected font family
       ctx.font = `${textSettings.fontSize * 2}px "${fontName}", "Noto Naskh Arabic", serif`;
       ctx.fillStyle = textSettings.textColor;
       
@@ -952,6 +986,30 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       c.restore();
     }
 
+      // Apply verse transition effects
+      ctx.save();
+      if (isTransitioningRef.current && transitionType !== 'none') {
+        switch (transitionType) {
+          case 'fade':
+            ctx.globalAlpha = easedProgress;
+            break;
+          case 'slide':
+            ctx.translate(0, (1 - easedProgress) * 80);
+            ctx.globalAlpha = easedProgress;
+            break;
+          case 'zoom':
+            const scaleVal = 0.85 + easedProgress * 0.15;
+            ctx.translate(canvas.width / 2 * (1 - scaleVal), canvas.height * 0.52 * (1 - scaleVal));
+            ctx.scale(scaleVal, scaleVal);
+            ctx.globalAlpha = easedProgress;
+            break;
+          case 'blur':
+            // Simulate blur with multiple slightly-offset semi-transparent draws
+            ctx.globalAlpha = easedProgress;
+            break;
+        }
+      }
+
       // RTL text direction
       ctx.direction = 'rtl';
       ctx.textAlign = 'right';
@@ -1043,6 +1101,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         const badgeY = startY + totalHeight + 70;
         drawAyahBadge(ctx, canvas.width / 2, badgeY, currentAyah.numberInSurah, 36, displaySettings.ayahNumberStyle);
       }
+      ctx.restore(); // End verse transition transform
     }
   }, [background, customBackground, imageLoaded, videoReady, slideshowReady, surahName, reciterName, currentAyah, currentAyahWords, highlightedWordIndex, textSettings, displaySettings, dimensions, getTokenHsl, drawAyahBadge, getCanvasFontFamily, drawIslamicFrame, motionSpeed]);
 

@@ -84,6 +84,12 @@ export default function PreviewPage() {
   // Note: download uses a fresh ObjectURL at click time for maximum reliability across browsers/iframes.
 
   // Get params
+  const contentMode = searchParams.get('contentMode') || 'quran';
+  const isIslamicMode = contentMode === 'islamic';
+  const islamicText = searchParams.get('contentText') || '';
+  const islamicSource = searchParams.get('contentSource') || '';
+  const islamicCategory = searchParams.get('contentCategory') || 'hadith';
+
   const surahNumber = parseInt(searchParams.get('surah') || '1');
   const reciterId = searchParams.get('reciter') || 'mishary_alafasy';
   const startAyah = parseInt(searchParams.get('start') || '1');
@@ -156,38 +162,33 @@ export default function PreviewPage() {
   const videoPreviewRef = useRef<VideoPreviewRef>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
 
-  // Load ayahs - filter out Bismillah if not at start of surah (reciter won't say it)
+  // Load ayahs or islamic content
   useEffect(() => {
+    if (isIslamicMode) {
+      // For islamic content mode, set the text directly as a single "ayah"
+      setAyahs([{ numberInSurah: 1, text: islamicText }]);
+      setAudioLoaded(true); // No audio needed
+      setAudioError(false);
+      return;
+    }
+
     const loadData = async () => {
       const data = await fetchAyahs(surahNumber, startAyah, endAyah);
       if (data) {
-        // Process ayahs to remove Bismillah from middle-surah selections
         const processedAyahs = data.map((ayah, index) => {
           let text = ayah.text;
-          
-          // If this is the first ayah and NOT ayah 1 of the surah,
-          // and the surah is not Al-Fatiha (1) or At-Tawbah (9),
-          // the reciter won't say Bismillah, so we should check if text starts with it
           const bismillah = 'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ';
           const bismillahAlt = 'بسم الله الرحمن الرحيم';
           
-          // Surah 1 (Fatiha) - Bismillah is part of the first ayah
-          // Surah 9 (Tawbah) - No Bismillah
-          // Other surahs - Bismillah is separate from ayah 1
-          
           if (index === 0 && startAyah === 1 && surahNumber !== 1 && surahNumber !== 9) {
-            // This is ayah 1 of a surah - remove Bismillah prefix if present
-            // because it's recited separately before the ayah
             if (text.startsWith(bismillah)) {
               text = text.replace(bismillah, '').trim();
             } else if (text.startsWith(bismillahAlt)) {
               text = text.replace(bismillahAlt, '').trim();
             }
           }
-          
           return { ...ayah, text };
         });
-        
         setAyahs(processedAyahs);
       }
     };
@@ -204,7 +205,7 @@ export default function PreviewPage() {
     let cancelled = false;
 
     const loadTimings = async () => {
-      if (!reciter) return;
+      if (isIslamicMode || !reciter) return;
       setTimingsLoading(true);
       setAudioError(false);
       setAudioLoaded(false);
@@ -452,32 +453,36 @@ export default function PreviewPage() {
     const canvas = videoPreviewRef.current?.getCanvas();
     const audio = audioRef.current;
 
-    if (!canvas || !audio) {
+    if (!canvas) {
       toast.error('حدث خطأ في تجهيز التسجيل');
       return;
     }
 
     try {
-      await audioEffects.resumeContext();
+      if (!isIslamicMode) {
+        await audioEffects.resumeContext();
+      }
 
       let recordingDuration: number;
       
-      if (useQuranFoundation && rangeMs) {
+      if (isIslamicMode) {
+        // Islamic content mode - record for 10 seconds (text display)
+        recordingDuration = 10;
+      } else if (useQuranFoundation && rangeMs) {
         recordingDuration = Math.max((rangeMs.to - rangeMs.from) / 1000, 1);
-        audio.currentTime = rangeMs.from / 1000;
+        if (audio) audio.currentTime = rangeMs.from / 1000;
       } else {
-        // For fallback mode, record the full audio or estimate
-        recordingDuration = audio.duration > 0 ? audio.duration : 60;
-        audio.currentTime = 0;
+        recordingDuration = audio && audio.duration > 0 ? audio.duration : 60;
+        if (audio) audio.currentTime = 0;
       }
 
       toast.info('بدء التسجيل... لا تغلق هذه الصفحة');
 
       const blob = await videoRecorder.startRecording(
         canvas,
-        audio,
+        isIslamicMode ? null : audio,
         recordingDuration,
-        audioEffects.getRecordingStream(),
+        isIslamicMode ? undefined : audioEffects.getRecordingStream(),
         exportSettings.quality
       );
 
@@ -598,25 +603,27 @@ export default function PreviewPage() {
               ref={videoPreviewRef}
               background={background}
               customBackground={customBackground}
-              surahName={surah?.name || ''}
-              reciterName={reciter?.name || ''}
+              surahName={isIslamicMode ? (islamicCategory === 'hadith' ? 'حديث نبوي' : islamicCategory === 'sermon' ? 'خطبة' : 'حكمة') : (surah?.name || '')}
+              reciterName={isIslamicMode ? islamicSource : (reciter?.name || '')}
               currentAyah={ayahs[currentAyahIndex] || null}
               currentAyahWords={currentAyahWords}
               highlightedWordIndex={highlightWordIndex}
               aspectRatio={aspectRatio}
               textSettings={textSettings}
               displaySettings={displaySettings}
-              isPlaying={isPlaying}
+              isPlaying={isPlaying || isIslamicMode}
               motionSpeed={exportSettings.motionSpeed}
             />
 
-            {/* Audio Element */}
-            <audio
-              ref={audioRef}
-              src={audioUrl}
-              preload="auto"
-              crossOrigin="anonymous"
-            />
+            {/* Audio Element - only for Quran mode */}
+            {!isIslamicMode && (
+              <audio
+                ref={audioRef}
+                src={audioUrl}
+                preload="auto"
+                crossOrigin="anonymous"
+              />
+            )}
           </motion.div>
 
           {/* Controls */}
@@ -629,11 +636,13 @@ export default function PreviewPage() {
             {/* Info Card */}
             <Card>
               <CardContent className="p-4">
-                <h3 className="text-xl font-bold">{surah?.name}</h3>
+                <h3 className="text-xl font-bold">
+                  {isIslamicMode ? (islamicCategory === 'hadith' ? 'حديث نبوي' : islamicCategory === 'sermon' ? 'خطبة' : 'حكمة') : surah?.name}
+                </h3>
                 <p className="text-muted-foreground text-sm">
-                  الآيات {startAyah} - {endAyah} | {reciter?.name}
+                  {isIslamicMode ? islamicSource : `الآيات ${startAyah} - ${endAyah} | ${reciter?.name}`}
                 </p>
-                {!useQuranFoundation && (
+                {!isIslamicMode && !useQuranFoundation && (
                   <p className="text-xs text-muted-foreground mt-1">
                     ⚠️ يتم استخدام الملف الصوتي الكامل (التزامن تقديري)
                   </p>
@@ -878,7 +887,7 @@ export default function PreviewPage() {
                 ) : (
                   <Button
                     onClick={handleStartRecording}
-                    disabled={!audioLoaded || audioError}
+                    disabled={!isIslamicMode && (!audioLoaded || audioError)}
                     className="w-full gap-2"
                     size="lg"
                   >
