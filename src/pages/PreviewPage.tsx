@@ -26,6 +26,8 @@ import {
   fetchChapterRecitationAudioById,
   QuranFoundationTimestamp,
 } from '@/lib/quranFoundationApi';
+import { generateIslamicTts } from '@/lib/islamicTts';
+import { validateAudioUrl } from '@/lib/quranYousefApi';
 import { supabase } from '@/integrations/supabase/client';
 import { TextSettings } from '@/components/TextSettingsPanel';
 import {
@@ -167,8 +169,32 @@ export default function PreviewPage() {
     if (isIslamicMode) {
       // For islamic content mode, set the text directly as a single "ayah"
       setAyahs([{ numberInSurah: 1, text: islamicText }]);
-      setAudioLoaded(true); // No audio needed
-      setAudioError(false);
+      
+      // Generate TTS audio for the islamic content
+      const loadTts = async () => {
+        try {
+          setAudioLoaded(false);
+          setAudioError(false);
+          toast.info('جاري توليد الصوت بالذكاء الاصطناعي...');
+          
+          const voiceId = searchParams.get('voiceId') || undefined;
+          const result = await generateIslamicTts(islamicText, voiceId);
+          
+          setAudioUrl(result.audioUrl);
+          setAudioLoaded(true);
+          setAudioError(false);
+          setUseQuranFoundation(false); // Simple playback mode
+          toast.success('تم توليد الصوت بنجاح!');
+        } catch (err) {
+          console.error('TTS generation failed:', err);
+          // Fallback to silent mode
+          setAudioLoaded(true);
+          setAudioError(false);
+          toast.warning('تعذر توليد الصوت - سيتم إنشاء فيديو نصي');
+        }
+      };
+      
+      loadTts();
       return;
     }
 
@@ -253,15 +279,21 @@ export default function PreviewPage() {
       } catch (e) {
         console.warn('Quran Foundation API failed, falling back to mp3quran:', e);
         
-        // Fallback to mp3quran.net with the reciter's specific server
+        // Fallback to mp3quran.net with audio verification
         if (!cancelled && reciter) {
           const fallbackUrl = getAudioUrl(reciter, surahNumber);
           console.log(`Fallback audio URL: ${fallbackUrl}`);
+          
+          // Verify the audio URL is accessible
+          const isValid = await validateAudioUrl(fallbackUrl);
+          if (!isValid) {
+            console.warn('Audio URL validation failed:', fallbackUrl);
+          }
+          
           setAudioUrl(fallbackUrl);
           setAyahTimings([]);
           setRangeMs(null);
           setUseQuranFoundation(false);
-          // Duration will be set when audio loads
         }
       } finally {
         if (!cancelled) setTimingsLoading(false);
@@ -459,15 +491,18 @@ export default function PreviewPage() {
     }
 
     try {
-      if (!isIslamicMode) {
-        await audioEffects.resumeContext();
-      }
+      await audioEffects.resumeContext();
 
       let recordingDuration: number;
       
       if (isIslamicMode) {
-        // Islamic content mode - record for 10 seconds (text display)
-        recordingDuration = 10;
+        // Islamic content mode - use TTS audio duration if available, else 10 seconds
+        if (audio && audioUrl && audio.duration > 0 && !isNaN(audio.duration)) {
+          recordingDuration = audio.duration;
+          audio.currentTime = 0;
+        } else {
+          recordingDuration = 10;
+        }
       } else if (useQuranFoundation && rangeMs) {
         recordingDuration = Math.max((rangeMs.to - rangeMs.from) / 1000, 1);
         if (audio) audio.currentTime = rangeMs.from / 1000;
@@ -478,11 +513,14 @@ export default function PreviewPage() {
 
       toast.info('بدء التسجيل... لا تغلق هذه الصفحة');
 
+      // For Islamic mode with TTS audio, include the audio in recording
+      const hasIslamicAudio = isIslamicMode && audioUrl && audio && !isNaN(audio.duration) && audio.duration > 0;
+      
       const blob = await videoRecorder.startRecording(
         canvas,
-        isIslamicMode ? null : audio,
+        hasIslamicAudio ? audio : (isIslamicMode ? null : audio),
         recordingDuration,
-        isIslamicMode ? undefined : audioEffects.getRecordingStream(),
+        hasIslamicAudio ? audioEffects.getRecordingStream() : (isIslamicMode ? undefined : audioEffects.getRecordingStream()),
         exportSettings.quality
       );
 
@@ -615,15 +653,13 @@ export default function PreviewPage() {
               motionSpeed={exportSettings.motionSpeed}
             />
 
-            {/* Audio Element - only for Quran mode */}
-            {!isIslamicMode && (
-              <audio
-                ref={audioRef}
-                src={audioUrl}
-                preload="auto"
-                crossOrigin="anonymous"
-              />
-            )}
+            {/* Audio Element - for both Quran and Islamic TTS mode */}
+            <audio
+              ref={audioRef}
+              src={audioUrl}
+              preload="auto"
+              crossOrigin="anonymous"
+            />
           </motion.div>
 
           {/* Controls */}
