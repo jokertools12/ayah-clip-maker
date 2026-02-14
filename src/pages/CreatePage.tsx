@@ -10,6 +10,7 @@ import { TextSettingsPanel, TextSettings } from '@/components/TextSettingsPanel'
 import { VideoPreview } from '@/components/VideoPreview';
 import { FamousAyahSelector } from '@/components/FamousAyahSelector';
 import { IslamicContentSelector } from '@/components/IslamicContentSelector';
+import { ARABIC_VOICES } from '@/lib/islamicTts';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -76,6 +77,7 @@ export default function CreatePage() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewAyahIndex, setPreviewAyahIndex] = useState(0);
   const [islamicContentItem, setIslamicContent] = useState<import('@/data/islamicContent').IslamicContentItem | null>(null);
+  const [selectedVoiceId, setSelectedVoiceId] = useState<string>(ARABIC_VOICES[0].id);
 
   const selectedSurahData = surahs.find((s) => s.number === selectedSurah);
   const selectedReciterData = reciters.find((r) => r.id === selectedReciter);
@@ -130,18 +132,25 @@ export default function CreatePage() {
       toast.error('الرجاء اختيار خلفية');
       return;
     }
-    // In islamic mode, skip steps 2 (reciter) and 3 (ayahs)
+    // In islamic mode: step 1 -> step 2 (voice) -> step 4 (background)
     if (isIslamicMode && currentStep === 1) {
-      setCurrentStep(4);
+      setCurrentStep(2); // Go to voice selection
+      return;
+    }
+    if (isIslamicMode && currentStep === 2) {
+      setCurrentStep(4); // Skip ayah selection, go to background
       return;
     }
     setCurrentStep((prev) => Math.min(prev + 1, 5));
   };
 
   const handlePrevStep = () => {
-    // In islamic mode, from step 4 go back to step 1
     if (isIslamicMode && currentStep === 4) {
-      setCurrentStep(1);
+      setCurrentStep(2); // Back to voice selection
+      return;
+    }
+    if (isIslamicMode && currentStep === 2) {
+      setCurrentStep(1); // Back to content selection
       return;
     }
     setCurrentStep((prev) => Math.max(prev - 1, 1));
@@ -173,6 +182,7 @@ export default function CreatePage() {
       params.set('contentText', islamicContentItem.text);
       params.set('contentSource', islamicContentItem.source);
       params.set('contentCategory', islamicContentItem.category);
+      params.set('voiceId', selectedVoiceId);
     } else {
       params.set('surah', selectedSurah!.toString());
       params.set('reciter', selectedReciter!);
@@ -329,10 +339,9 @@ export default function CreatePage() {
                     <IslamicContentSelector
                       onSelect={(item) => {
                         toast.success(`تم اختيار: ${item.source}`);
-                        // Store the islamic content for later use
                         setIslamicContent(item);
-                        // Skip to background selection (step 4) - no reciter or ayah selection needed
-                        setCurrentStep(4);
+                        // Go to voice selection (step 2)
+                        setCurrentStep(2);
                       }}
                     />
                   </TabsContent>
@@ -345,77 +354,123 @@ export default function CreatePage() {
           {currentStep === 2 && (
             <Card>
               <CardHeader>
-                <CardTitle>اختر القارئ</CardTitle>
+                <CardTitle>{isIslamicMode ? 'اختر الصوت (AI)' : 'اختر القارئ'}</CardTitle>
               </CardHeader>
               <CardContent>
-                <Tabs defaultValue="all" className="w-full">
-                  <TabsList className="w-full grid grid-cols-4 mb-4">
-                    <TabsTrigger value="all">الكل</TabsTrigger>
-                    <TabsTrigger value="مرتل">مرتل</TabsTrigger>
-                    <TabsTrigger value="مجود">مجود</TabsTrigger>
-                    <TabsTrigger value="ترتيل">ترتيل</TabsTrigger>
-                  </TabsList>
-                  
-                  <TabsContent value="all">
-                    <ScrollArea className="h-[50vh]">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-1">
-                        {reciters.map((reciter) => (
-                          <ReciterCard
-                            key={reciter.id}
-                            reciter={reciter}
-                            isSelected={selectedReciter === reciter.id}
-                            onClick={() => setSelectedReciter(reciter.id)}
-                          />
-                        ))}
+                {isIslamicMode ? (
+                  /* AI Voice Selection for Islamic Content */
+                  <div className="space-y-4">
+                    <p className="text-sm text-muted-foreground mb-4">
+                      اختر صوتاً بالذكاء الاصطناعي لقراءة النص. سيتم توليد الصوت تلقائياً عند المعاينة.
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {ARABIC_VOICES.map((voice) => (
+                        <motion.div
+                          key={voice.id}
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => setSelectedVoiceId(voice.id)}
+                          className={`cursor-pointer rounded-xl border p-4 transition-all duration-300 bg-card hover:shadow-lg hover:shadow-primary/10 ${
+                            selectedVoiceId === voice.id ? 'ring-2 ring-primary border-primary bg-primary/5' : ''
+                          }`}
+                        >
+                          <div className="flex items-center gap-4">
+                            <div className="flex h-12 w-12 items-center justify-center rounded-full gradient-gold text-accent-foreground font-bold text-lg">
+                              🎙️
+                            </div>
+                            <div className="flex-1">
+                              <h3 className="font-bold text-lg">{voice.name}</h3>
+                              <p className="text-sm text-muted-foreground">{voice.description}</p>
+                            </div>
+                            {selectedVoiceId === voice.id && (
+                              <Sparkles className="h-5 w-5 text-primary" />
+                            )}
+                          </div>
+                        </motion.div>
+                      ))}
+                    </div>
+                    
+                    {islamicContentItem && (
+                      <div className="mt-4 p-3 rounded-lg bg-muted/50">
+                        <p className="text-xs text-muted-foreground mb-1">النص المختار:</p>
+                        <p className="text-sm font-semibold leading-relaxed" style={{ fontFamily: '"Amiri", serif' }}>
+                          {islamicContentItem.text.slice(0, 100)}{islamicContentItem.text.length > 100 ? '...' : ''}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">{islamicContentItem.source}</p>
                       </div>
-                    </ScrollArea>
-                  </TabsContent>
-                  
-                  <TabsContent value="مرتل">
-                    <ScrollArea className="h-[50vh]">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-1">
-                        {getRecitersByStyle('مرتل').map((reciter) => (
-                          <ReciterCard
-                            key={reciter.id}
-                            reciter={reciter}
-                            isSelected={selectedReciter === reciter.id}
-                            onClick={() => setSelectedReciter(reciter.id)}
-                          />
-                        ))}
-                      </div>
-                    </ScrollArea>
-                  </TabsContent>
-                  
-                  <TabsContent value="مجود">
-                    <ScrollArea className="h-[50vh]">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-1">
-                        {getRecitersByStyle('مجود').map((reciter) => (
-                          <ReciterCard
-                            key={reciter.id}
-                            reciter={reciter}
-                            isSelected={selectedReciter === reciter.id}
-                            onClick={() => setSelectedReciter(reciter.id)}
-                          />
-                        ))}
-                      </div>
-                    </ScrollArea>
-                  </TabsContent>
-                  
-                  <TabsContent value="ترتيل">
-                    <ScrollArea className="h-[50vh]">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-1">
-                        {getRecitersByStyle('ترتيل').map((reciter) => (
-                          <ReciterCard
-                            key={reciter.id}
-                            reciter={reciter}
-                            isSelected={selectedReciter === reciter.id}
-                            onClick={() => setSelectedReciter(reciter.id)}
-                          />
-                        ))}
-                      </div>
-                    </ScrollArea>
-                  </TabsContent>
-                </Tabs>
+                    )}
+                  </div>
+                ) : (
+                  /* Quran Reciter Selection */
+                  <Tabs defaultValue="all" className="w-full">
+                    <TabsList className="w-full grid grid-cols-4 mb-4">
+                      <TabsTrigger value="all">الكل</TabsTrigger>
+                      <TabsTrigger value="مرتل">مرتل</TabsTrigger>
+                      <TabsTrigger value="مجود">مجود</TabsTrigger>
+                      <TabsTrigger value="ترتيل">ترتيل</TabsTrigger>
+                    </TabsList>
+                    
+                    <TabsContent value="all">
+                      <ScrollArea className="h-[50vh]">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-1">
+                          {reciters.map((reciter) => (
+                            <ReciterCard
+                              key={reciter.id}
+                              reciter={reciter}
+                              isSelected={selectedReciter === reciter.id}
+                              onClick={() => setSelectedReciter(reciter.id)}
+                            />
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    </TabsContent>
+                    
+                    <TabsContent value="مرتل">
+                      <ScrollArea className="h-[50vh]">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-1">
+                          {getRecitersByStyle('مرتل').map((reciter) => (
+                            <ReciterCard
+                              key={reciter.id}
+                              reciter={reciter}
+                              isSelected={selectedReciter === reciter.id}
+                              onClick={() => setSelectedReciter(reciter.id)}
+                            />
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    </TabsContent>
+                    
+                    <TabsContent value="مجود">
+                      <ScrollArea className="h-[50vh]">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-1">
+                          {getRecitersByStyle('مجود').map((reciter) => (
+                            <ReciterCard
+                              key={reciter.id}
+                              reciter={reciter}
+                              isSelected={selectedReciter === reciter.id}
+                              onClick={() => setSelectedReciter(reciter.id)}
+                            />
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    </TabsContent>
+                    
+                    <TabsContent value="ترتيل">
+                      <ScrollArea className="h-[50vh]">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-1">
+                          {getRecitersByStyle('ترتيل').map((reciter) => (
+                            <ReciterCard
+                              key={reciter.id}
+                              reciter={reciter}
+                              isSelected={selectedReciter === reciter.id}
+                              onClick={() => setSelectedReciter(reciter.id)}
+                            />
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    </TabsContent>
+                  </Tabs>
+                )}
               </CardContent>
             </Card>
           )}
