@@ -12,17 +12,14 @@ export interface Reciter {
   description?: string;
   server: string;
   subfolder?: string;
-  // Quran Foundation API recitation ID for precise timing
   quranFoundationId?: number;
-  // EveryAyah.com subfolder for copyright-free audio
   everyAyahSubfolder?: string;
-  // Indicates if audio is freely usable without copyright issues
   isOpenLicense?: boolean;
-  // Moshaf ID from MP3Quran API v3
   moshafId?: number;
+  // Preview surah for audio sampling (defaults to 1 - Al-Fatiha)
+  previewSurah?: number;
 }
 
-// Recitation styles available
 export const recitationStyles: ReciterStyle[] = [
   { id: 'murattal', name: 'Murattal', arabicName: 'مرتل' },
   { id: 'mujawwad', name: 'Mujawwad', arabicName: 'مجود' },
@@ -32,11 +29,9 @@ export const recitationStyles: ReciterStyle[] = [
   { id: 'qaloon', name: 'Qaloon', arabicName: 'قالون' },
 ];
 
-// Comprehensive reciters list with verified sources from MP3Quran API v3
-// All audio is freely available for Islamic use
 export const reciters: Reciter[] = [
   // =====================
-  // مرتل - Murattal Style (Most Common)
+  // مرتل - Murattal Style
   // =====================
   {
     id: "mishary_alafasy",
@@ -49,6 +44,16 @@ export const reciters: Reciter[] = [
     everyAyahSubfolder: "Alafasy_128kbps",
     isOpenLicense: true,
     moshafId: 1,
+  },
+  {
+    id: "mishary_alafasy_2",
+    name: "مشاري العفاسي - تلاوة هادئة",
+    englishName: "Mishary Alafasy - Calm",
+    style: "مرتل",
+    description: "نسخة هادئة مميزة",
+    server: "https://server16.mp3quran.net/afs",
+    isOpenLicense: true,
+    moshafId: 100,
   },
   {
     id: "abdul_basit_murattal",
@@ -72,6 +77,16 @@ export const reciters: Reciter[] = [
     quranFoundationId: 9,
     isOpenLicense: true,
     moshafId: 6,
+  },
+  {
+    id: "maher_muaiqly_2",
+    name: "ماهر المعيقلي - تلاوة 1427",
+    englishName: "Maher Al Muaiqly - 1427",
+    style: "مرتل",
+    description: "تلاوة مميزة من عام 1427",
+    server: "https://server12.mp3quran.net/maher2",
+    isOpenLicense: true,
+    moshafId: 101,
   },
   {
     id: "saud_shuraim",
@@ -142,6 +157,16 @@ export const reciters: Reciter[] = [
     quranFoundationId: 12,
     isOpenLicense: true,
     moshafId: 12,
+  },
+  {
+    id: "fares_abbad_2",
+    name: "فارس عباد - تلاوة خاشعة",
+    englishName: "Fares Abbad - Khushoo",
+    style: "مرتل",
+    description: "تلاوة خاشعة جداً",
+    server: "https://server6.mp3quran.net/frs_a",
+    isOpenLicense: true,
+    moshafId: 102,
   },
   {
     id: "yasser_dosari",
@@ -297,9 +322,49 @@ export const reciters: Reciter[] = [
     isOpenLicense: true,
     moshafId: 27,
   },
-  
+  {
+    id: "mansour_salimi",
+    name: "منصور السالمي",
+    englishName: "Mansour Al-Salimi",
+    style: "مرتل",
+    description: "تلاوة مؤثرة جداً",
+    server: "https://server10.mp3quran.net/salmi",
+    isOpenLicense: true,
+    moshafId: 103,
+  },
+  {
+    id: "abdulaziz_zahrani",
+    name: "عبد العزيز الزهراني",
+    englishName: "Abdulaziz Al-Zahrani",
+    style: "مرتل",
+    description: "تلاوة مميزة خاشعة",
+    server: "https://server11.mp3quran.net/zahrani",
+    isOpenLicense: true,
+    moshafId: 104,
+  },
+  {
+    id: "wadee_yamani",
+    name: "وديع اليمني",
+    englishName: "Wadee Al-Yamani",
+    style: "مرتل",
+    description: "تلاوة يمنية مميزة",
+    server: "https://server6.mp3quran.net/yamani",
+    isOpenLicense: true,
+    moshafId: 105,
+  },
+  {
+    id: "ahmed_hawashi",
+    name: "أحمد الحواشي",
+    englishName: "Ahmad Al-Hawashi",
+    style: "مرتل",
+    description: "تلاوة جميلة ومتقنة",
+    server: "https://server10.mp3quran.net/hawashi",
+    isOpenLicense: true,
+    moshafId: 106,
+  },
+
   // =====================
-  // مجود - Mujawwad Style (Tajweed - Melodic)
+  // مجود - Mujawwad Style
   // =====================
   {
     id: "abdul_basit_mujawwad",
@@ -386,9 +451,9 @@ export const reciters: Reciter[] = [
     isOpenLicense: true,
     moshafId: 35,
   },
-  
+
   // =====================
-  // ترتيل - Tarteel Style (Learning/Slow)
+  // ترتيل - Tarteel Style
   // =====================
   {
     id: "mahmoud_husary_tarteel",
@@ -461,9 +526,9 @@ export const reciters: Reciter[] = [
     isOpenLicense: true,
     moshafId: 42,
   },
-  
+
   // =====================
-  // ورش - Warsh Recitation
+  // ورش - Warsh
   // =====================
   {
     id: "yassin_jazaery_warsh",
@@ -495,9 +560,9 @@ export const reciters: Reciter[] = [
     isOpenLicense: true,
     moshafId: 45,
   },
-  
+
   // =====================
-  // قالون - Qaloon Recitation
+  // قالون - Qaloon
   // =====================
   {
     id: "mahmoud_husary_qaloon",
@@ -538,16 +603,19 @@ export function getOpenLicenseReciters(): Reciter[] {
   return reciters.filter(r => r.isOpenLicense);
 }
 
-// Get all available styles from reciters
 export function getAvailableStyles(): Reciter['style'][] {
   const styles = new Set(reciters.map(r => r.style));
   return Array.from(styles);
 }
 
-// EveryAyah.com URL generator (Copyright-free source)
+// Get preview audio URL for a reciter (Al-Fatiha by default)
+export function getPreviewAudioUrl(reciter: Reciter): string {
+  const surah = reciter.previewSurah || 1;
+  return getAudioUrl(reciter, surah);
+}
+
 export function getEveryAyahUrl(reciter: Reciter, surahNumber: number, ayahNumber: number): string {
   if (!reciter.everyAyahSubfolder) {
-    // Fallback to mp3quran
     return getAudioUrl(reciter, surahNumber);
   }
   const paddedSurah = surahNumber.toString().padStart(3, '0');

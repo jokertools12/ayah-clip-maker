@@ -9,8 +9,6 @@ import { BackgroundSelector } from '@/components/BackgroundSelector';
 import { TextSettingsPanel, TextSettings } from '@/components/TextSettingsPanel';
 import { VideoPreview } from '@/components/VideoPreview';
 import { FamousAyahSelector } from '@/components/FamousAyahSelector';
-import { IslamicContentSelector } from '@/components/IslamicContentSelector';
-import { ARABIC_VOICES } from '@/lib/islamicTts';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -53,11 +51,9 @@ export default function CreatePage() {
   const navigate = useNavigate();
   const { fetchAyahs, loading: apiLoading } = useQuranApi();
 
-  // Step state
   const [currentStep, setCurrentStep] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Selection state
   const [selectedSurah, setSelectedSurah] = useState<number | null>(
     searchParams.get('surah') ? parseInt(searchParams.get('surah')!) : null
   );
@@ -72,17 +68,13 @@ export default function CreatePage() {
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('9:16');
   const [textSettings, setTextSettings] = useState<TextSettings>(defaultTextSettings);
 
-  // Preview state
   const [ayahs, setAyahs] = useState<{ number: number; numberInSurah: number; text: string }[]>([]);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewAyahIndex, setPreviewAyahIndex] = useState(0);
-  const [islamicContentItem, setIslamicContent] = useState<import('@/data/islamicContent').IslamicContentItem | null>(null);
-  const [selectedVoiceId, setSelectedVoiceId] = useState<string>(ARABIC_VOICES[0].id);
 
   const selectedSurahData = surahs.find((s) => s.number === selectedSurah);
   const selectedReciterData = reciters.find((r) => r.id === selectedReciter);
 
-  // Filter surahs
   const filteredSurahs = surahs.filter(
     (surah) =>
       surah.name.includes(searchQuery) ||
@@ -90,14 +82,12 @@ export default function CreatePage() {
       surah.number.toString().includes(searchQuery)
   );
 
-  // Fetch ayahs when selection changes
   useEffect(() => {
     if (selectedSurah && startAyah && endAyah) {
       loadAyahs();
     }
   }, [selectedSurah, startAyah, endAyah]);
 
-  // Preview animation
   useEffect(() => {
     if (currentStep === 5 && ayahs.length > 0) {
       const interval = setInterval(() => {
@@ -117,14 +107,12 @@ export default function CreatePage() {
     setPreviewLoading(false);
   };
 
-  const isIslamicMode = !!islamicContentItem;
-
   const handleNextStep = () => {
-    if (currentStep === 1 && !selectedSurah && !isIslamicMode) {
-      toast.error('الرجاء اختيار سورة أو محتوى');
+    if (currentStep === 1 && !selectedSurah) {
+      toast.error('الرجاء اختيار سورة');
       return;
     }
-    if (currentStep === 2 && !selectedReciter && !isIslamicMode) {
+    if (currentStep === 2 && !selectedReciter) {
       toast.error('الرجاء اختيار قارئ');
       return;
     }
@@ -132,32 +120,15 @@ export default function CreatePage() {
       toast.error('الرجاء اختيار خلفية');
       return;
     }
-    // In islamic mode: step 1 -> step 2 (voice) -> step 4 (background)
-    if (isIslamicMode && currentStep === 1) {
-      setCurrentStep(2); // Go to voice selection
-      return;
-    }
-    if (isIslamicMode && currentStep === 2) {
-      setCurrentStep(4); // Skip ayah selection, go to background
-      return;
-    }
     setCurrentStep((prev) => Math.min(prev + 1, 5));
   };
 
   const handlePrevStep = () => {
-    if (isIslamicMode && currentStep === 4) {
-      setCurrentStep(2); // Back to voice selection
-      return;
-    }
-    if (isIslamicMode && currentStep === 2) {
-      setCurrentStep(1); // Back to content selection
-      return;
-    }
     setCurrentStep((prev) => Math.max(prev - 1, 1));
   };
 
   const handleCreateVideo = () => {
-    if (!isIslamicMode && (!selectedSurah || !selectedReciter)) {
+    if (!selectedSurah || !selectedReciter) {
       toast.error('الرجاء إكمال جميع الخطوات');
       return;
     }
@@ -167,6 +138,10 @@ export default function CreatePage() {
     }
 
     const params = new URLSearchParams({
+      surah: selectedSurah.toString(),
+      reciter: selectedReciter,
+      start: startAyah.toString(),
+      end: endAyah.toString(),
       background: selectedBackground.id,
       backgroundType: selectedBackground.type,
       ratio: aspectRatio,
@@ -177,23 +152,21 @@ export default function CreatePage() {
       overlayOpacity: textSettings.overlayOpacity.toString(),
     });
 
-    if (isIslamicMode && islamicContentItem) {
-      params.set('contentMode', 'islamic');
-      params.set('contentText', islamicContentItem.text);
-      params.set('contentSource', islamicContentItem.source);
-      params.set('contentCategory', islamicContentItem.category);
-      params.set('voiceId', selectedVoiceId);
-    } else {
-      params.set('surah', selectedSurah!.toString());
-      params.set('reciter', selectedReciter!);
-      params.set('start', startAyah.toString());
-      params.set('end', endAyah.toString());
-    }
-
     navigate(`/preview?${params.toString()}`);
   };
 
   const stepLabels = ['اختر السورة', 'اختر القارئ', 'حدد الآيات', 'اختر الخلفية', 'المعاينة'];
+
+  // Filter reciters by search
+  const [reciterSearch, setReciterSearch] = useState('');
+  const filterReciters = (list: typeof reciters) => {
+    if (!reciterSearch) return list;
+    return list.filter(r =>
+      r.name.includes(reciterSearch) ||
+      r.englishName.toLowerCase().includes(reciterSearch.toLowerCase()) ||
+      r.description?.includes(reciterSearch)
+    );
+  };
 
   return (
     <Layout>
@@ -282,7 +255,7 @@ export default function CreatePage() {
               </CardHeader>
               <CardContent className="pt-0">
                 <Tabs defaultValue="surahs" className="w-full">
-                  <TabsList className="w-full grid grid-cols-3 mb-4">
+                  <TabsList className="w-full grid grid-cols-2 mb-4">
                     <TabsTrigger value="surahs" className="gap-1">
                       <BookOpen className="h-4 w-4" />
                       السور
@@ -291,14 +264,9 @@ export default function CreatePage() {
                       <Bookmark className="h-4 w-4" />
                       آيات مشهورة
                     </TabsTrigger>
-                    <TabsTrigger value="islamic" className="gap-1">
-                      <Sparkles className="h-4 w-4" />
-                      أحاديث وخطب
-                    </TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="surahs">
-                    {/* Search */}
                     <div className="relative mb-4">
                       <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input
@@ -334,17 +302,6 @@ export default function CreatePage() {
                       }}
                     />
                   </TabsContent>
-
-                  <TabsContent value="islamic">
-                    <IslamicContentSelector
-                      onSelect={(item) => {
-                        toast.success(`تم اختيار: ${item.source}`);
-                        setIslamicContent(item);
-                        // Go to voice selection (step 2)
-                        setCurrentStep(2);
-                      }}
-                    />
-                  </TabsContent>
                 </Tabs>
               </CardContent>
             </Card>
@@ -354,66 +311,50 @@ export default function CreatePage() {
           {currentStep === 2 && (
             <Card>
               <CardHeader>
-                <CardTitle>{isIslamicMode ? 'اختر الصوت (AI)' : 'اختر القارئ'}</CardTitle>
+                <CardTitle>اختر القارئ</CardTitle>
               </CardHeader>
               <CardContent>
-                {isIslamicMode ? (
-                  /* AI Voice Selection for Islamic Content */
-                  <div className="space-y-4">
-                    <p className="text-sm text-muted-foreground mb-4">
-                      اختر صوتاً بالذكاء الاصطناعي لقراءة النص. سيتم توليد الصوت تلقائياً عند المعاينة.
-                    </p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {ARABIC_VOICES.map((voice) => (
-                        <motion.div
-                          key={voice.id}
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-                          onClick={() => setSelectedVoiceId(voice.id)}
-                          className={`cursor-pointer rounded-xl border p-4 transition-all duration-300 bg-card hover:shadow-lg hover:shadow-primary/10 ${
-                            selectedVoiceId === voice.id ? 'ring-2 ring-primary border-primary bg-primary/5' : ''
-                          }`}
-                        >
-                          <div className="flex items-center gap-4">
-                            <div className="flex h-12 w-12 items-center justify-center rounded-full gradient-gold text-accent-foreground font-bold text-lg">
-                              🎙️
-                            </div>
-                            <div className="flex-1">
-                              <h3 className="font-bold text-lg">{voice.name}</h3>
-                              <p className="text-sm text-muted-foreground">{voice.description}</p>
-                            </div>
-                            {selectedVoiceId === voice.id && (
-                              <Sparkles className="h-5 w-5 text-primary" />
-                            )}
-                          </div>
-                        </motion.div>
-                      ))}
-                    </div>
-                    
-                    {islamicContentItem && (
-                      <div className="mt-4 p-3 rounded-lg bg-muted/50">
-                        <p className="text-xs text-muted-foreground mb-1">النص المختار:</p>
-                        <p className="text-sm font-semibold leading-relaxed" style={{ fontFamily: '"Amiri", serif' }}>
-                          {islamicContentItem.text.slice(0, 100)}{islamicContentItem.text.length > 100 ? '...' : ''}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-1">{islamicContentItem.source}</p>
+                {/* Search reciters */}
+                <div className="relative mb-4">
+                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="ابحث عن قارئ..."
+                    value={reciterSearch}
+                    onChange={(e) => setReciterSearch(e.target.value)}
+                    className="pr-10"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">
+                  🔊 اضغط على أيقونة السماعة لمعاينة صوت القارئ قبل الاختيار
+                </p>
+                <Tabs defaultValue="all" className="w-full">
+                  <TabsList className="w-full grid grid-cols-4 mb-4">
+                    <TabsTrigger value="all">الكل ({filterReciters(reciters).length})</TabsTrigger>
+                    <TabsTrigger value="مرتل">مرتل</TabsTrigger>
+                    <TabsTrigger value="مجود">مجود</TabsTrigger>
+                    <TabsTrigger value="ترتيل">ترتيل</TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="all">
+                    <ScrollArea className="h-[50vh]">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-1">
+                        {filterReciters(reciters).map((reciter) => (
+                          <ReciterCard
+                            key={reciter.id}
+                            reciter={reciter}
+                            isSelected={selectedReciter === reciter.id}
+                            onClick={() => setSelectedReciter(reciter.id)}
+                          />
+                        ))}
                       </div>
-                    )}
-                  </div>
-                ) : (
-                  /* Quran Reciter Selection */
-                  <Tabs defaultValue="all" className="w-full">
-                    <TabsList className="w-full grid grid-cols-4 mb-4">
-                      <TabsTrigger value="all">الكل</TabsTrigger>
-                      <TabsTrigger value="مرتل">مرتل</TabsTrigger>
-                      <TabsTrigger value="مجود">مجود</TabsTrigger>
-                      <TabsTrigger value="ترتيل">ترتيل</TabsTrigger>
-                    </TabsList>
-                    
-                    <TabsContent value="all">
+                    </ScrollArea>
+                  </TabsContent>
+                  
+                  {(['مرتل', 'مجود', 'ترتيل'] as const).map(style => (
+                    <TabsContent key={style} value={style}>
                       <ScrollArea className="h-[50vh]">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-1">
-                          {reciters.map((reciter) => (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-1">
+                          {filterReciters(getRecitersByStyle(style)).map((reciter) => (
                             <ReciterCard
                               key={reciter.id}
                               reciter={reciter}
@@ -424,53 +365,8 @@ export default function CreatePage() {
                         </div>
                       </ScrollArea>
                     </TabsContent>
-                    
-                    <TabsContent value="مرتل">
-                      <ScrollArea className="h-[50vh]">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-1">
-                          {getRecitersByStyle('مرتل').map((reciter) => (
-                            <ReciterCard
-                              key={reciter.id}
-                              reciter={reciter}
-                              isSelected={selectedReciter === reciter.id}
-                              onClick={() => setSelectedReciter(reciter.id)}
-                            />
-                          ))}
-                        </div>
-                      </ScrollArea>
-                    </TabsContent>
-                    
-                    <TabsContent value="مجود">
-                      <ScrollArea className="h-[50vh]">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-1">
-                          {getRecitersByStyle('مجود').map((reciter) => (
-                            <ReciterCard
-                              key={reciter.id}
-                              reciter={reciter}
-                              isSelected={selectedReciter === reciter.id}
-                              onClick={() => setSelectedReciter(reciter.id)}
-                            />
-                          ))}
-                        </div>
-                      </ScrollArea>
-                    </TabsContent>
-                    
-                    <TabsContent value="ترتيل">
-                      <ScrollArea className="h-[50vh]">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-1">
-                          {getRecitersByStyle('ترتيل').map((reciter) => (
-                            <ReciterCard
-                              key={reciter.id}
-                              reciter={reciter}
-                              isSelected={selectedReciter === reciter.id}
-                              onClick={() => setSelectedReciter(reciter.id)}
-                            />
-                          ))}
-                        </div>
-                      </ScrollArea>
-                    </TabsContent>
-                  </Tabs>
-                )}
+                  ))}
+                </Tabs>
               </CardContent>
             </Card>
           )}
@@ -499,9 +395,7 @@ export default function CreatePage() {
                         type="text"
                         inputMode="numeric"
                         value={startAyahInput}
-                        onChange={(e) => {
-                          setStartAyahInput(e.target.value);
-                        }}
+                        onChange={(e) => setStartAyahInput(e.target.value)}
                         onBlur={() => {
                           const max = selectedSurahData?.numberOfAyahs || 1;
                           const val = parseInt(startAyahInput) || 1;
@@ -523,9 +417,7 @@ export default function CreatePage() {
                         type="text"
                         inputMode="numeric"
                         value={endAyahInput}
-                        onChange={(e) => {
-                          setEndAyahInput(e.target.value);
-                        }}
+                        onChange={(e) => setEndAyahInput(e.target.value)}
                         onBlur={() => {
                           const max = selectedSurahData?.numberOfAyahs || 1;
                           const val = parseInt(endAyahInput) || startAyah;
@@ -544,7 +436,6 @@ export default function CreatePage() {
                     </p>
                   </div>
 
-                  {/* Preview Ayahs */}
                   <div>
                     <Label className="mb-3 block">معاينة الآيات</Label>
                     {previewLoading || apiLoading ? (
@@ -567,7 +458,6 @@ export default function CreatePage() {
                   </div>
                 </CardContent>
               </Card>
-
             </div>
           )}
 
@@ -587,7 +477,6 @@ export default function CreatePage() {
               </Card>
 
               <div className="space-y-6">
-                {/* Aspect Ratio */}
                 <Card>
                   <CardHeader className="pb-3">
                     <CardTitle className="text-lg flex items-center gap-2">
@@ -627,7 +516,6 @@ export default function CreatePage() {
                   </CardContent>
                 </Card>
 
-                {/* Text Settings */}
                 <TextSettingsPanel settings={textSettings} onChange={setTextSettings} />
               </div>
             </div>
@@ -636,57 +524,38 @@ export default function CreatePage() {
           {/* Step 5: Preview & Summary */}
           {currentStep === 5 && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-              {/* Live Preview */}
               <div className="flex justify-center">
                 <VideoPreview
                   background={selectedBackground}
-                  surahName={isIslamicMode ? (islamicContentItem?.category === 'hadith' ? 'حديث نبوي' : islamicContentItem?.category === 'sermon' ? 'خطبة' : 'حكمة') : (selectedSurahData?.name || '')}
-                  reciterName={isIslamicMode ? (islamicContentItem?.source || '') : (selectedReciterData?.name || '')}
-                  currentAyah={isIslamicMode && islamicContentItem ? { numberInSurah: 1, text: islamicContentItem.text } : (ayahs[previewAyahIndex] || null)}
+                  surahName={selectedSurahData?.name || ''}
+                  reciterName={selectedReciterData?.name || ''}
+                  currentAyah={ayahs[previewAyahIndex] || null}
                   aspectRatio={aspectRatio}
                   textSettings={textSettings}
                   isPlaying={true}
                 />
               </div>
 
-              {/* Summary */}
               <Card>
                 <CardHeader>
                   <CardTitle>ملخص الفيديو</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-3">
-                    {isIslamicMode ? (
-                      <>
-                        <div className="flex justify-between py-3 border-b border-border/50">
-                          <span className="text-muted-foreground">النوع</span>
-                          <span className="font-medium">
-                            {islamicContentItem?.category === 'hadith' ? 'حديث نبوي' : islamicContentItem?.category === 'sermon' ? 'خطبة' : 'حكمة'}
-                          </span>
-                        </div>
-                        <div className="flex justify-between py-3 border-b border-border/50">
-                          <span className="text-muted-foreground">المصدر</span>
-                          <span className="font-medium">{islamicContentItem?.source}</span>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div className="flex justify-between py-3 border-b border-border/50">
-                          <span className="text-muted-foreground">السورة</span>
-                          <span className="font-medium">{selectedSurahData?.name}</span>
-                        </div>
-                        <div className="flex justify-between py-3 border-b border-border/50">
-                          <span className="text-muted-foreground">القارئ</span>
-                          <span className="font-medium">{selectedReciterData?.name}</span>
-                        </div>
-                        <div className="flex justify-between py-3 border-b border-border/50">
-                          <span className="text-muted-foreground">الآيات</span>
-                          <span className="font-medium">
-                            من {startAyah} إلى {endAyah} ({endAyah - startAyah + 1} آية)
-                          </span>
-                        </div>
-                      </>
-                    )}
+                    <div className="flex justify-between py-3 border-b border-border/50">
+                      <span className="text-muted-foreground">السورة</span>
+                      <span className="font-medium">{selectedSurahData?.name}</span>
+                    </div>
+                    <div className="flex justify-between py-3 border-b border-border/50">
+                      <span className="text-muted-foreground">القارئ</span>
+                      <span className="font-medium">{selectedReciterData?.name}</span>
+                    </div>
+                    <div className="flex justify-between py-3 border-b border-border/50">
+                      <span className="text-muted-foreground">الآيات</span>
+                      <span className="font-medium">
+                        من {startAyah} إلى {endAyah} ({endAyah - startAyah + 1} آية)
+                      </span>
+                    </div>
                     <div className="flex justify-between py-3 border-b border-border/50">
                       <span className="text-muted-foreground">الخلفية</span>
                       <span className="font-medium">{selectedBackground?.name}</span>
@@ -751,7 +620,6 @@ function FamousAyahsGrid({ onSelect }: { onSelect: (ayah: FamousAyah) => void })
 
   return (
     <div className="space-y-4">
-      {/* Category Filter */}
       <div className="w-full overflow-x-auto pb-2" style={{ WebkitOverflowScrolling: 'touch' }}>
         <div className="flex gap-2 min-w-max">
           {ayahCategories.map((cat) => (
@@ -767,7 +635,6 @@ function FamousAyahsGrid({ onSelect }: { onSelect: (ayah: FamousAyah) => void })
           ))}
         </div>
       </div>
-      {/* Ayahs Grid */}
       <ScrollArea className="h-[45vh]">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-1">
           {filteredAyahs.map((ayah) => (

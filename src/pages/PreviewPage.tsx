@@ -26,7 +26,6 @@ import {
   fetchChapterRecitationAudioById,
   QuranFoundationTimestamp,
 } from '@/lib/quranFoundationApi';
-import { generateIslamicTts } from '@/lib/islamicTts';
 import { validateAudioUrl } from '@/lib/quranYousefApi';
 import { supabase } from '@/integrations/supabase/client';
 import { TextSettings } from '@/components/TextSettingsPanel';
