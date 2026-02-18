@@ -85,12 +85,6 @@ export default function PreviewPage() {
   // Note: download uses a fresh ObjectURL at click time for maximum reliability across browsers/iframes.
 
   // Get params
-  const contentMode = searchParams.get('contentMode') || 'quran';
-  const isIslamicMode = contentMode === 'islamic';
-  const islamicText = searchParams.get('contentText') || '';
-  const islamicSource = searchParams.get('contentSource') || '';
-  const islamicCategory = searchParams.get('contentCategory') || 'hadith';
-
   const surahNumber = parseInt(searchParams.get('surah') || '1');
   const reciterId = searchParams.get('reciter') || 'mishary_alafasy';
   const startAyah = parseInt(searchParams.get('start') || '1');
@@ -163,40 +157,8 @@ export default function PreviewPage() {
   const videoPreviewRef = useRef<VideoPreviewRef>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
 
-  // Load ayahs or islamic content
+  // Load ayahs
   useEffect(() => {
-    if (isIslamicMode) {
-      // For islamic content mode, set the text directly as a single "ayah"
-      setAyahs([{ numberInSurah: 1, text: islamicText }]);
-      
-      // Generate TTS audio for the islamic content
-      const loadTts = async () => {
-        try {
-          setAudioLoaded(false);
-          setAudioError(false);
-          toast.info('جاري توليد الصوت بالذكاء الاصطناعي...');
-          
-          const voiceId = searchParams.get('voiceId') || undefined;
-          const result = await generateIslamicTts(islamicText, voiceId);
-          
-          setAudioUrl(result.audioUrl);
-          setAudioLoaded(true);
-          setAudioError(false);
-          setUseQuranFoundation(false); // Simple playback mode
-          toast.success('تم توليد الصوت بنجاح!');
-        } catch (err) {
-          console.error('TTS generation failed:', err);
-          // Fallback to silent mode
-          setAudioLoaded(true);
-          setAudioError(false);
-          toast.warning('تعذر توليد الصوت - سيتم إنشاء فيديو نصي');
-        }
-      };
-      
-      loadTts();
-      return;
-    }
-
     const loadData = async () => {
       const data = await fetchAyahs(surahNumber, startAyah, endAyah);
       if (data) {
@@ -220,6 +182,7 @@ export default function PreviewPage() {
     loadData();
   }, [surahNumber, startAyah, endAyah, fetchAyahs]);
 
+
   const currentAyahWords = useMemo(() => {
     const text = ayahs[currentAyahIndex]?.text ?? '';
     return text.split(' ').filter(Boolean);
@@ -230,66 +193,64 @@ export default function PreviewPage() {
     let cancelled = false;
 
     const loadTimings = async () => {
-      if (isIslamicMode || !reciter) return;
+      if (!reciter) return;
       setTimingsLoading(true);
       setAudioError(false);
       setAudioLoaded(false);
       setHighlightWordIndex(null);
 
+      // Always use mp3quran as primary audio source (matches preview)
+      const primaryUrl = getAudioUrl(reciter, surahNumber);
+      console.log(`Primary audio URL (mp3quran): ${primaryUrl}`);
+
       try {
-        // Use the reciter's known Quran Foundation ID if available
+        // Try to get timestamps from Quran Foundation for word highlighting
         const recitationId = reciter.quranFoundationId;
         
-        if (!recitationId) {
-          throw new Error('Reciter not found in Quran Foundation');
-        }
+        if (recitationId) {
+          const audioFile = await fetchChapterRecitationAudioById(recitationId, surahNumber, true);
+          const all = audioFile.timestamps ?? [];
 
-        console.log(`Loading audio for reciter: ${reciter.englishName}, recitationId: ${recitationId}`);
-        
-        const audioFile = await fetchChapterRecitationAudioById(recitationId, surahNumber, true);
-        const all = audioFile.timestamps ?? [];
+          const byIndex: (QuranFoundationTimestamp | null)[] = Array.from(
+            { length: endAyah - startAyah + 1 },
+            (_, i) => {
+              const ayahNo = startAyah + i;
+              const key = `${surahNumber}:${ayahNo}`;
+              return all.find((t) => t.verse_key === key) ?? null;
+            }
+          );
 
-        // Build stable array by index so it matches [startAyah..endAyah]
-        const byIndex: (QuranFoundationTimestamp | null)[] = Array.from(
-          { length: endAyah - startAyah + 1 },
-          (_, i) => {
-            const ayahNo = startAyah + i;
-            const key = `${surahNumber}:${ayahNo}`;
-            return all.find((t) => t.verse_key === key) ?? null;
+          const existing = byIndex.filter(Boolean) as QuranFoundationTimestamp[];
+          
+          if (existing.length > 0) {
+            const from = existing[0].timestamp_from;
+            const to = existing[existing.length - 1].timestamp_to;
+
+            if (!cancelled) {
+              // Use mp3quran URL but with Quran Foundation timestamps
+              setAudioUrl(primaryUrl);
+              setAyahTimings(byIndex);
+              setRangeMs({ from, to });
+              setDuration(Math.max((to - from) / 1000, 0));
+              setUseQuranFoundation(true);
+              console.log(`Using mp3quran audio with QF timestamps`);
+            }
+            return;
           }
-        );
-
-        const existing = byIndex.filter(Boolean) as QuranFoundationTimestamp[];
-        if (!audioFile.audio_url || existing.length === 0) {
-          throw new Error('No timestamps available');
         }
-
-        const from = existing[0].timestamp_from;
-        const to = existing[existing.length - 1].timestamp_to;
-
-        if (!cancelled) {
-          setAudioUrl(audioFile.audio_url);
-          setAyahTimings(byIndex);
-          setRangeMs({ from, to });
-          setDuration(Math.max((to - from) / 1000, 0));
-          setUseQuranFoundation(true);
-          console.log(`Loaded audio: ${audioFile.audio_url}`);
-        }
+        
+        throw new Error('No timestamps available');
       } catch (e) {
-        console.warn('Quran Foundation API failed, falling back to mp3quran:', e);
+        console.warn('Quran Foundation timestamps unavailable, using simple mode:', e);
         
-        // Fallback to mp3quran.net with audio verification
-        if (!cancelled && reciter) {
-          const fallbackUrl = getAudioUrl(reciter, surahNumber);
-          console.log(`Fallback audio URL: ${fallbackUrl}`);
-          
-          // Verify the audio URL is accessible
-          const isValid = await validateAudioUrl(fallbackUrl);
+        if (!cancelled) {
+          // Verify audio URL works
+          const isValid = await validateAudioUrl(primaryUrl);
           if (!isValid) {
-            console.warn('Audio URL validation failed:', fallbackUrl);
+            console.warn('Audio URL validation failed:', primaryUrl);
           }
           
-          setAudioUrl(fallbackUrl);
+          setAudioUrl(primaryUrl);
           setAyahTimings([]);
           setRangeMs(null);
           setUseQuranFoundation(false);
@@ -494,15 +455,7 @@ export default function PreviewPage() {
 
       let recordingDuration: number;
       
-      if (isIslamicMode) {
-        // Islamic content mode - use TTS audio duration if available, else 10 seconds
-        if (audio && audioUrl && audio.duration > 0 && !isNaN(audio.duration)) {
-          recordingDuration = audio.duration;
-          audio.currentTime = 0;
-        } else {
-          recordingDuration = 10;
-        }
-      } else if (useQuranFoundation && rangeMs) {
+      if (useQuranFoundation && rangeMs) {
         recordingDuration = Math.max((rangeMs.to - rangeMs.from) / 1000, 1);
         if (audio) audio.currentTime = rangeMs.from / 1000;
       } else {
@@ -512,14 +465,11 @@ export default function PreviewPage() {
 
       toast.info('بدء التسجيل... لا تغلق هذه الصفحة');
 
-      // For Islamic mode with TTS audio, include the audio in recording
-      const hasIslamicAudio = isIslamicMode && audioUrl && audio && !isNaN(audio.duration) && audio.duration > 0;
-      
       const blob = await videoRecorder.startRecording(
         canvas,
-        hasIslamicAudio ? audio : (isIslamicMode ? null : audio),
+        audio,
         recordingDuration,
-        hasIslamicAudio ? audioEffects.getRecordingStream() : (isIslamicMode ? undefined : audioEffects.getRecordingStream()),
+        audioEffects.getRecordingStream(),
         exportSettings.quality
       );
 
@@ -640,15 +590,15 @@ export default function PreviewPage() {
               ref={videoPreviewRef}
               background={background}
               customBackground={customBackground}
-              surahName={isIslamicMode ? (islamicCategory === 'hadith' ? 'حديث نبوي' : islamicCategory === 'sermon' ? 'خطبة' : 'حكمة') : (surah?.name || '')}
-              reciterName={isIslamicMode ? islamicSource : (reciter?.name || '')}
+              surahName={surah?.name || ''}
+              reciterName={reciter?.name || ''}
               currentAyah={ayahs[currentAyahIndex] || null}
               currentAyahWords={currentAyahWords}
               highlightedWordIndex={highlightWordIndex}
               aspectRatio={aspectRatio}
               textSettings={textSettings}
               displaySettings={displaySettings}
-              isPlaying={isPlaying || isIslamicMode}
+              isPlaying={isPlaying}
               motionSpeed={exportSettings.motionSpeed}
             />
 
@@ -672,12 +622,12 @@ export default function PreviewPage() {
             <Card>
               <CardContent className="p-4">
                 <h3 className="text-xl font-bold">
-                  {isIslamicMode ? (islamicCategory === 'hadith' ? 'حديث نبوي' : islamicCategory === 'sermon' ? 'خطبة' : 'حكمة') : surah?.name}
+                  {surah?.name}
                 </h3>
                 <p className="text-muted-foreground text-sm">
-                  {isIslamicMode ? islamicSource : `الآيات ${startAyah} - ${endAyah} | ${reciter?.name}`}
+                  {`الآيات ${startAyah} - ${endAyah} | ${reciter?.name}`}
                 </p>
-                {!isIslamicMode && !useQuranFoundation && (
+                {!useQuranFoundation && (
                   <p className="text-xs text-muted-foreground mt-1">
                     ⚠️ يتم استخدام الملف الصوتي الكامل (التزامن تقديري)
                   </p>
@@ -922,7 +872,7 @@ export default function PreviewPage() {
                 ) : (
                   <Button
                     onClick={handleStartRecording}
-                    disabled={!isIslamicMode && (!audioLoaded || audioError)}
+                    disabled={!audioLoaded || audioError}
                     className="w-full gap-2"
                     size="lg"
                   >
