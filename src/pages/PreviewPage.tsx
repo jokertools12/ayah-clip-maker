@@ -199,12 +199,10 @@ export default function PreviewPage() {
       setAudioLoaded(false);
       setHighlightWordIndex(null);
 
-      // Always use mp3quran as primary audio source (matches preview)
-      const primaryUrl = getAudioUrl(reciter, surahNumber);
-      console.log(`Primary audio URL (mp3quran): ${primaryUrl}`);
+      const mp3quranUrl = getAudioUrl(reciter, surahNumber);
 
       try {
-        // Try to get timestamps from Quran Foundation for word highlighting
+        // Try Quran Foundation for accurate timestamps AND matching audio
         const recitationId = reciter.quranFoundationId;
         
         if (recitationId) {
@@ -222,18 +220,18 @@ export default function PreviewPage() {
 
           const existing = byIndex.filter(Boolean) as QuranFoundationTimestamp[];
           
-          if (existing.length > 0) {
+          if (existing.length > 0 && audioFile.audio_url) {
             const from = existing[0].timestamp_from;
             const to = existing[existing.length - 1].timestamp_to;
 
             if (!cancelled) {
-              // Use mp3quran URL but with Quran Foundation timestamps
-              setAudioUrl(primaryUrl);
+              // CRITICAL: Use QF audio URL so timestamps match the audio perfectly
+              setAudioUrl(audioFile.audio_url);
               setAyahTimings(byIndex);
               setRangeMs({ from, to });
               setDuration(Math.max((to - from) / 1000, 0));
               setUseQuranFoundation(true);
-              console.log(`Using mp3quran audio with QF timestamps`);
+              console.log(`Using QF audio + timestamps for perfect sync`);
             }
             return;
           }
@@ -241,16 +239,15 @@ export default function PreviewPage() {
         
         throw new Error('No timestamps available');
       } catch (e) {
-        console.warn('Quran Foundation timestamps unavailable, using simple mode:', e);
+        console.warn('QF unavailable, falling back to mp3quran (no word sync):', e);
         
         if (!cancelled) {
-          // Verify audio URL works
-          const isValid = await validateAudioUrl(primaryUrl);
+          const isValid = await validateAudioUrl(mp3quranUrl);
           if (!isValid) {
-            console.warn('Audio URL validation failed:', primaryUrl);
+            console.warn('mp3quran URL also failed:', mp3quranUrl);
           }
           
-          setAudioUrl(primaryUrl);
+          setAudioUrl(mp3quranUrl);
           setAyahTimings([]);
           setRangeMs(null);
           setUseQuranFoundation(false);
