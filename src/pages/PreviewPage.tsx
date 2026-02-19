@@ -188,6 +188,9 @@ export default function PreviewPage() {
     return text.split(' ').filter(Boolean);
   }, [ayahs, currentAyahIndex]);
 
+  // Total ayahs in this surah (for proportional estimation)
+  const totalAyahsInSurah = surah?.numberOfAyahs ?? endAyah;
+
   // Load accurate audio + timestamps for recitation (so we can play only selected ayahs)
   useEffect(() => {
     let cancelled = false;
@@ -199,26 +202,14 @@ export default function PreviewPage() {
       setAudioLoaded(false);
       setHighlightWordIndex(null);
 
-      // ALWAYS use mp3quran as audio source (same as preview) for consistency
-      const primaryUrl = getAudioUrl(reciter, surahNumber);
+      const recitationId = reciter.quranFoundationId;
 
-      // Validate the audio URL first
-      const isValid = await validateAudioUrl(primaryUrl);
-      if (!isValid && !cancelled) {
-        console.warn('Audio URL failed:', primaryUrl);
-        setAudioError(true);
-      }
+      // STRATEGY:
+      // 1. If QF ID exists → use QF audio + QF timestamps (perfect sync & clipping)
+      // 2. If no QF ID → use mp3quran audio + proportional estimation for clipping
 
-      // Always set mp3quran as the audio source
-      if (!cancelled) {
-        setAudioUrl(primaryUrl);
-      }
-
-      try {
-        // Try to get QF timestamps for verse-level tracking (but keep mp3quran audio)
-        const recitationId = reciter.quranFoundationId;
-        
-        if (recitationId) {
+      if (recitationId) {
+        try {
           const audioFile = await fetchChapterRecitationAudioById(recitationId, surahNumber, true);
           const all = audioFile.timestamps ?? [];
 
@@ -232,35 +223,45 @@ export default function PreviewPage() {
           );
 
           const existing = byIndex.filter(Boolean) as QuranFoundationTimestamp[];
-          
-          if (existing.length > 0) {
+
+          if (existing.length > 0 && !cancelled) {
             const from = existing[0].timestamp_from;
             const to = existing[existing.length - 1].timestamp_to;
 
-            if (!cancelled) {
-              // Keep mp3quran audio but use QF timestamps for verse tracking
-              setAyahTimings(byIndex);
-              setRangeMs({ from, to });
-              setDuration(Math.max((to - from) / 1000, 0));
-              setUseQuranFoundation(true);
-              console.log(`Using mp3quran audio + QF timestamps for verse sync`);
-            }
+            // Use QF audio URL so timestamps match perfectly
+            setAudioUrl(audioFile.audio_url);
+            setAyahTimings(byIndex);
+            setRangeMs({ from, to });
+            setDuration(Math.max((to - from) / 1000, 0));
+            setUseQuranFoundation(true);
+            console.log(`✅ Using QF audio + timestamps (perfect sync), range ${from}-${to}ms`);
+            setTimingsLoading(false);
             return;
           }
+        } catch (e) {
+          console.warn('QF audio failed, falling back to mp3quran:', e);
         }
-        
-        throw new Error('No timestamps available');
-      } catch (e) {
-        console.warn('QF timestamps unavailable, using simple mode:', e);
-        
+      }
+
+      // Fallback: mp3quran audio with proportional verse estimation
+      if (!cancelled) {
+        const primaryUrl = getAudioUrl(reciter, surahNumber);
+        const isValid = await validateAudioUrl(primaryUrl);
+        if (!isValid && !cancelled) {
+          console.warn('Audio URL failed:', primaryUrl);
+          setAudioError(true);
+        }
         if (!cancelled) {
+          setAudioUrl(primaryUrl);
           setAyahTimings([]);
+          // We'll set rangeMs after audio loads (proportional estimation)
           setRangeMs(null);
           setUseQuranFoundation(false);
+          console.log(`⚠️ Using mp3quran audio (proportional estimation for verse clipping)`);
         }
-      } finally {
-        if (!cancelled) setTimingsLoading(false);
       }
+
+      if (!cancelled) setTimingsLoading(false);
     };
 
     loadTimings();
@@ -288,8 +289,8 @@ export default function PreviewPage() {
     if (isPlaying) {
       audioRef.current.pause();
     } else {
-      // If using Quran Foundation, ensure we start inside the selected range
-      if (useQuranFoundation && rangeMs) {
+      // Always ensure we start inside the selected range (works for both QF and estimated)
+      if (rangeMs) {
         if (audioRef.current.currentTime < rangeStartSec || audioRef.current.currentTime >= rangeEndSec) {
           audioRef.current.currentTime = rangeStartSec;
         }
@@ -300,7 +301,7 @@ export default function PreviewPage() {
       });
     }
     setIsPlaying(!isPlaying);
-  }, [isPlaying, audioEffects, rangeMs, rangeStartSec, rangeEndSec, useQuranFoundation]);
+  }, [isPlaying, audioEffects, rangeMs, rangeStartSec, rangeEndSec]);
 
   // Handle mute
   const toggleMute = useCallback(() => {
@@ -336,7 +337,20 @@ export default function PreviewPage() {
       if (useQuranFoundation && rangeMs) {
         setDuration(Math.max((rangeMs.to - rangeMs.from) / 1000, 0));
       } else {
-        setDuration(audio.duration);
+        // Proportional estimation for reciters without QF timestamps
+        // Estimate which portion of the full surah corresponds to selected ayahs
+        const totalDur = audio.duration;
+        const totalAyahs = totalAyahsInSurah;
+        if (totalAyahs > 0 && totalDur > 0) {
+          const estFrom = ((startAyah - 1) / totalAyahs) * totalDur;
+          const estTo = (endAyah / totalAyahs) * totalDur;
+          const estimatedRange = { from: estFrom * 1000, to: estTo * 1000 };
+          setRangeMs(estimatedRange);
+          setDuration(Math.max(estTo - estFrom, 1));
+          console.log(`📐 Proportional estimate: ${estFrom.toFixed(1)}s - ${estTo.toFixed(1)}s of ${totalDur.toFixed(1)}s`);
+        } else {
+          setDuration(totalDur);
+        }
       }
       setAudioLoaded(true);
       setAudioError(false);
@@ -381,19 +395,40 @@ export default function PreviewPage() {
             break;
           }
         }
-      } else {
-        // Fallback mode - simple progress tracking
-        setCurrentTime(nowSec);
-        setProgress(audio.duration > 0 ? (nowSec / audio.duration) * 100 : 0);
-        
-        // Simple ayah estimation based on equal distribution
-        if (ayahs.length > 0 && audio.duration > 0) {
-          const ayahDuration = audio.duration / ayahs.length;
-          const estimatedIndex = Math.min(Math.floor(nowSec / ayahDuration), ayahs.length - 1);
+      } else if (rangeMs) {
+        // Fallback mode with proportional clipping
+        const estStartSec = rangeMs.from / 1000;
+        const estEndSec = rangeMs.to / 1000;
+        const totalSec = Math.max(estEndSec - estStartSec, 0.001);
+
+        // Stop at estimated end
+        if (nowSec >= estEndSec) {
+          audio.pause();
+          audio.currentTime = estStartSec;
+          setIsPlaying(false);
+          setCurrentAyahIndex(0);
+          setHighlightWordIndex(null);
+          setCurrentTime(0);
+          setProgress(0);
+          return;
+        }
+
+        const relativeSec = Math.max(nowSec - estStartSec, 0);
+        setCurrentTime(relativeSec);
+        setProgress(Math.min((relativeSec / totalSec) * 100, 100));
+
+        // Proportional ayah estimation within the clipped range
+        if (ayahs.length > 0) {
+          const ayahDuration = totalSec / ayahs.length;
+          const estimatedIndex = Math.min(Math.floor(relativeSec / ayahDuration), ayahs.length - 1);
           if (estimatedIndex !== currentAyahIndex) {
             setCurrentAyahIndex(estimatedIndex);
           }
         }
+      } else {
+        // No range at all - full audio
+        setCurrentTime(nowSec);
+        setProgress(audio.duration > 0 ? (nowSec / audio.duration) * 100 : 0);
       }
     };
 
@@ -409,8 +444,8 @@ export default function PreviewPage() {
       setHighlightWordIndex(null);
       setCurrentTime(0);
       setProgress(0);
-      if (useQuranFoundation && rangeMs) {
-        audio.currentTime = rangeStartSec;
+      if (rangeMs) {
+        audio.currentTime = rangeMs.from / 1000;
       } else {
         audio.currentTime = 0;
       }
@@ -434,7 +469,7 @@ export default function PreviewPage() {
       audio.removeEventListener('play', handlePlay);
       audio.removeEventListener('pause', handlePause);
     };
-  }, [rangeMs, ayahTimings, currentAyahIndex, rangeStartSec, rangeEndSec, useQuranFoundation, ayahs.length]);
+  }, [rangeMs, ayahTimings, currentAyahIndex, rangeStartSec, rangeEndSec, useQuranFoundation, ayahs.length, totalAyahsInSurah, startAyah, endAyah]);
 
   // Format time
   const formatTime = (seconds: number) => {
@@ -458,7 +493,7 @@ export default function PreviewPage() {
 
       let recordingDuration: number;
       
-      if (useQuranFoundation && rangeMs) {
+      if (rangeMs) {
         recordingDuration = Math.max((rangeMs.to - rangeMs.from) / 1000, 1);
         if (audio) audio.currentTime = rangeMs.from / 1000;
       } else {
