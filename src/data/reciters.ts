@@ -16,7 +16,6 @@ export interface Reciter {
   everyAyahSubfolder?: string;
   isOpenLicense?: boolean;
   moshafId?: number;
-  // Preview surah for audio sampling (defaults to 1 - Al-Fatiha)
   previewSurah?: number;
 }
 
@@ -28,6 +27,22 @@ export const recitationStyles: ReciterStyle[] = [
   { id: 'warsh', name: 'Warsh', arabicName: 'ورش' },
   { id: 'qaloon', name: 'Qaloon', arabicName: 'قالون' },
 ];
+
+// ===========================================================================================
+// VERIFIED Quran Foundation chapter_recitations IDs:
+//   1 = AbdulBaset AbdulSamad (Mujawwad)
+//   2 = AbdulBaset AbdulSamad (Murattal)
+//   3 = Abdur-Rahman as-Sudais
+//   4 = Abu Bakr al-Shatri
+//   5 = Hani ar-Rifai
+//   6 = Mahmoud Khalil Al-Husary
+//   7 = Mishari Rashid al-Afasy
+//   8 = Mohamed Siddiq al-Minshawi (Mujawwad)
+//   9 = Mohamed Siddiq al-Minshawi (Murattal)
+//  10 = Sa'ud ash-Shuraym
+//  11 = Mohamed al-Tablawi
+//  12 = Mahmoud Khalil Al-Husary (Muallim)
+// ===========================================================================================
 
 export const reciters: Reciter[] = [
   // =====================
@@ -44,16 +59,6 @@ export const reciters: Reciter[] = [
     everyAyahSubfolder: "Alafasy_128kbps",
     isOpenLicense: true,
     moshafId: 1,
-  },
-  {
-    id: "mishary_alafasy_2",
-    name: "مشاري العفاسي - تلاوة هادئة",
-    englishName: "Mishary Alafasy - Calm",
-    style: "مرتل",
-    description: "نسخة هادئة مميزة",
-    server: "https://server16.mp3quran.net/afs",
-    isOpenLicense: true,
-    moshafId: 100,
   },
   {
     id: "abdul_basit_murattal",
@@ -74,19 +79,9 @@ export const reciters: Reciter[] = [
     style: "مرتل",
     description: "إمام الحرم المكي",
     server: "https://server12.mp3quran.net/maher",
-    quranFoundationId: 9,
+    // NO QF ID - Maher is not available in Quran Foundation chapter_recitations
     isOpenLicense: true,
     moshafId: 6,
-  },
-  {
-    id: "maher_muaiqly_2",
-    name: "ماهر المعيقلي - تلاوة 1427",
-    englishName: "Maher Al Muaiqly - 1427",
-    style: "مرتل",
-    description: "تلاوة مميزة من عام 1427",
-    server: "https://server12.mp3quran.net/maher2",
-    isOpenLicense: true,
-    moshafId: 101,
   },
   {
     id: "saud_shuraim",
@@ -107,7 +102,7 @@ export const reciters: Reciter[] = [
     style: "مرتل",
     description: "إمام الحرم المكي",
     server: "https://server11.mp3quran.net/sds",
-    quranFoundationId: 4,
+    quranFoundationId: 3, // FIXED: was 4 (Abu Bakr al-Shatri)
     everyAyahSubfolder: "Abdurrahmaan_As-Sudais_192kbps",
     isOpenLicense: true,
     moshafId: 8,
@@ -119,7 +114,7 @@ export const reciters: Reciter[] = [
     style: "مرتل",
     description: "تلاوة هادئة مميزة",
     server: "https://server7.mp3quran.net/s_gmd",
-    quranFoundationId: 6,
+    // NO QF ID - not available in QF
     everyAyahSubfolder: "Ghamadi_40kbps",
     isOpenLicense: true,
     moshafId: 9,
@@ -154,19 +149,9 @@ export const reciters: Reciter[] = [
     style: "مرتل",
     description: "تلاوة هادئة مؤثرة",
     server: "https://server8.mp3quran.net/frs_a",
-    quranFoundationId: 12,
+    // NO QF ID - not available in QF
     isOpenLicense: true,
     moshafId: 12,
-  },
-  {
-    id: "fares_abbad_2",
-    name: "فارس عباد - تلاوة خاشعة",
-    englishName: "Fares Abbad - Khushoo",
-    style: "مرتل",
-    description: "تلاوة خاشعة جداً",
-    server: "https://server6.mp3quran.net/frs_a",
-    isOpenLicense: true,
-    moshafId: 102,
   },
   {
     id: "yasser_dosari",
@@ -175,7 +160,7 @@ export const reciters: Reciter[] = [
     style: "مرتل",
     description: "تلاوة خاشعة جميلة",
     server: "https://server11.mp3quran.net/yasser",
-    quranFoundationId: 11,
+    // NO QF ID - was 11 (Tablawi) - WRONG
     isOpenLicense: true,
     moshafId: 13,
   },
@@ -186,7 +171,7 @@ export const reciters: Reciter[] = [
     style: "مرتل",
     description: "تلاوة مؤثرة للقلوب",
     server: "https://server6.mp3quran.net/qtm",
-    quranFoundationId: 128,
+    // NO QF ID - 128 was Ali Hajjaj al-Souasi - WRONG
     isOpenLicense: true,
     moshafId: 14,
   },
@@ -197,7 +182,7 @@ export const reciters: Reciter[] = [
     style: "مرتل",
     description: "إمام الحرم المكي",
     server: "https://server8.mp3quran.net/balilah",
-    quranFoundationId: 168,
+    // NO QF ID - 168 was Minshawi Kids - WRONG
     isOpenLicense: true,
     moshafId: 15,
   },
@@ -208,7 +193,7 @@ export const reciters: Reciter[] = [
     style: "مرتل",
     description: "تلاوة مرتلة جميلة",
     server: "https://server11.mp3quran.net/mtrod",
-    quranFoundationId: 161,
+    // NO QF ID - 161 was Khalifah Taniji - WRONG
     isOpenLicense: true,
     moshafId: 16,
   },
@@ -273,16 +258,6 @@ export const reciters: Reciter[] = [
     moshafId: 22,
   },
   {
-    id: "saleh_sahoud",
-    name: "صالح آل طالب",
-    englishName: "Saleh Al Taleb",
-    style: "مرتل",
-    description: "إمام الحرم المكي",
-    server: "https://server12.mp3quran.net/saleh",
-    isOpenLicense: true,
-    moshafId: 23,
-  },
-  {
     id: "idris_abkar",
     name: "إدريس أبكر",
     englishName: "Idris Abkar",
@@ -332,36 +307,6 @@ export const reciters: Reciter[] = [
     isOpenLicense: true,
     moshafId: 103,
   },
-  {
-    id: "abdulaziz_zahrani",
-    name: "عبد العزيز الزهراني",
-    englishName: "Abdulaziz Al-Zahrani",
-    style: "مرتل",
-    description: "تلاوة مميزة خاشعة",
-    server: "https://server11.mp3quran.net/zahrani",
-    isOpenLicense: true,
-    moshafId: 104,
-  },
-  {
-    id: "wadee_yamani",
-    name: "وديع اليمني",
-    englishName: "Wadee Al-Yamani",
-    style: "مرتل",
-    description: "تلاوة يمنية مميزة",
-    server: "https://server6.mp3quran.net/yamani",
-    isOpenLicense: true,
-    moshafId: 105,
-  },
-  {
-    id: "ahmed_hawashi",
-    name: "أحمد الحواشي",
-    englishName: "Ahmad Al-Hawashi",
-    style: "مرتل",
-    description: "تلاوة جميلة ومتقنة",
-    server: "https://server10.mp3quran.net/hawashi",
-    isOpenLicense: true,
-    moshafId: 106,
-  },
 
   // =====================
   // مجود - Mujawwad Style
@@ -385,7 +330,7 @@ export const reciters: Reciter[] = [
     style: "مجود",
     description: "شيخ المقرئين - تجويد كامل",
     server: "https://server13.mp3quran.net/husr",
-    quranFoundationId: 3,
+    quranFoundationId: 6, // FIXED: was 3 (Sudais)
     everyAyahSubfolder: "Husary_128kbps_Mujawwad",
     isOpenLicense: true,
     moshafId: 29,
@@ -397,6 +342,7 @@ export const reciters: Reciter[] = [
     style: "مجود",
     description: "الصوت الذهبي - تجويد مميز",
     server: "https://server10.mp3quran.net/minsh",
+    quranFoundationId: 8, // Added: Minshawi Mujawwad
     everyAyahSubfolder: "Minshawy_Mujawwad_128kbps",
     isOpenLicense: true,
     moshafId: 30,
@@ -408,48 +354,9 @@ export const reciters: Reciter[] = [
     style: "مجود",
     description: "تلاوة مجودة مميزة",
     server: "https://server12.mp3quran.net/tblawi",
+    quranFoundationId: 11, // Added: Tablawi
     isOpenLicense: true,
     moshafId: 31,
-  },
-  {
-    id: "mustafa_ismail_mujawwad",
-    name: "مصطفى إسماعيل - مجود",
-    englishName: "Mustafa Ismail - Mujawwad",
-    style: "مجود",
-    description: "أسطورة التجويد المصرية",
-    server: "https://server8.mp3quran.net/mustafa",
-    isOpenLicense: true,
-    moshafId: 32,
-  },
-  {
-    id: "abdulwadood_haneef",
-    name: "عبد الودود حنيف - مجود",
-    englishName: "Abdul Wadood Haneef - Mujawwad",
-    style: "مجود",
-    description: "تجويد بأسلوب مميز",
-    server: "https://server8.mp3quran.net/wadod",
-    isOpenLicense: true,
-    moshafId: 33,
-  },
-  {
-    id: "ahmad_nuaina",
-    name: "أحمد نعينع - مجود",
-    englishName: "Ahmad Nuaina - Mujawwad",
-    style: "مجود",
-    description: "تلاوة مجودة مصرية",
-    server: "https://server8.mp3quran.net/naina",
-    isOpenLicense: true,
-    moshafId: 34,
-  },
-  {
-    id: "abdullah_khayat",
-    name: "عبد الله خياط - مجود",
-    englishName: "Abdullah Khayat - Mujawwad",
-    style: "مجود",
-    description: "إمام الحرم المكي السابق",
-    server: "https://server6.mp3quran.net/khyat",
-    isOpenLicense: true,
-    moshafId: 35,
   },
 
   // =====================
@@ -462,7 +369,7 @@ export const reciters: Reciter[] = [
     style: "ترتيل",
     description: "ترتيل للتعلم والحفظ",
     server: "https://server13.mp3quran.net/husr",
-    quranFoundationId: 3,
+    quranFoundationId: 6, // FIXED: was 3 (Sudais)
     isOpenLicense: true,
     moshafId: 36,
   },
@@ -477,26 +384,6 @@ export const reciters: Reciter[] = [
     moshafId: 37,
   },
   {
-    id: "ibrahim_akhdar",
-    name: "إبراهيم الأخضر",
-    englishName: "Ibrahim Al-Akhdar",
-    style: "ترتيل",
-    description: "ترتيل هادئ للحفظ",
-    server: "https://server8.mp3quran.net/a_hzfy",
-    isOpenLicense: true,
-    moshafId: 38,
-  },
-  {
-    id: "abdulmohsen_qasim",
-    name: "عبد المحسن القاسم",
-    englishName: "Abdul Mohsen Al-Qasim",
-    style: "ترتيل",
-    description: "إمام الحرم النبوي",
-    server: "https://server6.mp3quran.net/qasm",
-    isOpenLicense: true,
-    moshafId: 39,
-  },
-  {
     id: "ali_hudhaify",
     name: "علي الحذيفي",
     englishName: "Ali Al-Hudhaify",
@@ -507,24 +394,14 @@ export const reciters: Reciter[] = [
     moshafId: 40,
   },
   {
-    id: "akram_alaalakmi",
-    name: "أكرم العلاقمي",
-    englishName: "Akram Al-Alaqmi",
+    id: "abdulmohsen_qasim",
+    name: "عبد المحسن القاسم",
+    englishName: "Abdul Mohsen Al-Qasim",
     style: "ترتيل",
-    description: "ترتيل واضح للتعلم",
-    server: "https://server8.mp3quran.net/akrm",
+    description: "إمام الحرم النبوي",
+    server: "https://server6.mp3quran.net/qasm",
     isOpenLicense: true,
-    moshafId: 41,
-  },
-  {
-    id: "abdullah_khayyat_tarteel",
-    name: "عبد الله خياط - ترتيل",
-    englishName: "Abdullah Khayyat - Tarteel",
-    style: "ترتيل",
-    description: "ترتيل بصوت جميل",
-    server: "https://server8.mp3quran.net/khyat",
-    isOpenLicense: true,
-    moshafId: 42,
+    moshafId: 39,
   },
 
   // =====================
@@ -540,26 +417,6 @@ export const reciters: Reciter[] = [
     isOpenLicense: true,
     moshafId: 43,
   },
-  {
-    id: "ahmad_neana_warsh",
-    name: "أحمد نعينع - ورش",
-    englishName: "Ahmad Neana - Warsh",
-    style: "ورش",
-    description: "رواية ورش عن نافع",
-    server: "https://server8.mp3quran.net/naina_warsh",
-    isOpenLicense: true,
-    moshafId: 44,
-  },
-  {
-    id: "abdulrahman_aloosi_warsh",
-    name: "عبد الرشيد صوفي - ورش",
-    englishName: "Abdul Rashid Sufi - Warsh",
-    style: "ورش",
-    description: "رواية ورش - تلاوة مميزة",
-    server: "https://server6.mp3quran.net/sufi_warsh",
-    isOpenLicense: true,
-    moshafId: 45,
-  },
 
   // =====================
   // قالون - Qaloon
@@ -573,16 +430,6 @@ export const reciters: Reciter[] = [
     server: "https://server13.mp3quran.net/husr_qalon",
     isOpenLicense: true,
     moshafId: 46,
-  },
-  {
-    id: "abdulrashid_sufi_qaloon",
-    name: "عبد الرشيد صوفي - قالون",
-    englishName: "Abdul Rashid Sufi - Qaloon",
-    style: "قالون",
-    description: "رواية قالون عن نافع",
-    server: "https://server6.mp3quran.net/sufi_qalon",
-    isOpenLicense: true,
-    moshafId: 47,
   },
 ];
 

@@ -199,10 +199,23 @@ export default function PreviewPage() {
       setAudioLoaded(false);
       setHighlightWordIndex(null);
 
-      const mp3quranUrl = getAudioUrl(reciter, surahNumber);
+      // ALWAYS use mp3quran as audio source (same as preview) for consistency
+      const primaryUrl = getAudioUrl(reciter, surahNumber);
+
+      // Validate the audio URL first
+      const isValid = await validateAudioUrl(primaryUrl);
+      if (!isValid && !cancelled) {
+        console.warn('Audio URL failed:', primaryUrl);
+        setAudioError(true);
+      }
+
+      // Always set mp3quran as the audio source
+      if (!cancelled) {
+        setAudioUrl(primaryUrl);
+      }
 
       try {
-        // Try Quran Foundation for accurate timestamps AND matching audio
+        // Try to get QF timestamps for verse-level tracking (but keep mp3quran audio)
         const recitationId = reciter.quranFoundationId;
         
         if (recitationId) {
@@ -220,18 +233,17 @@ export default function PreviewPage() {
 
           const existing = byIndex.filter(Boolean) as QuranFoundationTimestamp[];
           
-          if (existing.length > 0 && audioFile.audio_url) {
+          if (existing.length > 0) {
             const from = existing[0].timestamp_from;
             const to = existing[existing.length - 1].timestamp_to;
 
             if (!cancelled) {
-              // CRITICAL: Use QF audio URL so timestamps match the audio perfectly
-              setAudioUrl(audioFile.audio_url);
+              // Keep mp3quran audio but use QF timestamps for verse tracking
               setAyahTimings(byIndex);
               setRangeMs({ from, to });
               setDuration(Math.max((to - from) / 1000, 0));
               setUseQuranFoundation(true);
-              console.log(`Using QF audio + timestamps for perfect sync`);
+              console.log(`Using mp3quran audio + QF timestamps for verse sync`);
             }
             return;
           }
@@ -239,15 +251,9 @@ export default function PreviewPage() {
         
         throw new Error('No timestamps available');
       } catch (e) {
-        console.warn('QF unavailable, falling back to mp3quran (no word sync):', e);
+        console.warn('QF timestamps unavailable, using simple mode:', e);
         
         if (!cancelled) {
-          const isValid = await validateAudioUrl(mp3quranUrl);
-          if (!isValid) {
-            console.warn('mp3quran URL also failed:', mp3quranUrl);
-          }
-          
-          setAudioUrl(mp3quranUrl);
           setAyahTimings([]);
           setRangeMs(null);
           setUseQuranFoundation(false);
