@@ -79,7 +79,7 @@ export const reciters: Reciter[] = [
     style: "مرتل",
     description: "إمام الحرم المكي",
     server: "https://server12.mp3quran.net/maher",
-    // NO QF ID - Maher is not available in Quran Foundation chapter_recitations
+    everyAyahSubfolder: "MaherAlMuaiqly128kbps",
     isOpenLicense: true,
     moshafId: 6,
   },
@@ -114,7 +114,6 @@ export const reciters: Reciter[] = [
     style: "مرتل",
     description: "تلاوة هادئة مميزة",
     server: "https://server7.mp3quran.net/s_gmd",
-    // NO QF ID - not available in QF
     everyAyahSubfolder: "Ghamadi_40kbps",
     isOpenLicense: true,
     moshafId: 9,
@@ -149,7 +148,7 @@ export const reciters: Reciter[] = [
     style: "مرتل",
     description: "تلاوة هادئة مؤثرة",
     server: "https://server8.mp3quran.net/frs_a",
-    // NO QF ID - not available in QF
+    everyAyahSubfolder: "Fares_Abbad_64kbps",
     isOpenLicense: true,
     moshafId: 12,
   },
@@ -160,7 +159,7 @@ export const reciters: Reciter[] = [
     style: "مرتل",
     description: "تلاوة خاشعة جميلة",
     server: "https://server11.mp3quran.net/yasser",
-    // NO QF ID - was 11 (Tablawi) - WRONG
+    everyAyahSubfolder: "Yasser_Ad-Dussary_128kbps",
     isOpenLicense: true,
     moshafId: 13,
   },
@@ -171,7 +170,7 @@ export const reciters: Reciter[] = [
     style: "مرتل",
     description: "تلاوة مؤثرة للقلوب",
     server: "https://server6.mp3quran.net/qtm",
-    // NO QF ID - 128 was Ali Hajjaj al-Souasi - WRONG
+    everyAyahSubfolder: "Nasser_Alqatami_128kbps",
     isOpenLicense: true,
     moshafId: 14,
   },
@@ -182,7 +181,6 @@ export const reciters: Reciter[] = [
     style: "مرتل",
     description: "إمام الحرم المكي",
     server: "https://server8.mp3quran.net/balilah",
-    // NO QF ID - 168 was Minshawi Kids - WRONG
     isOpenLicense: true,
     moshafId: 15,
   },
@@ -193,7 +191,7 @@ export const reciters: Reciter[] = [
     style: "مرتل",
     description: "تلاوة مرتلة جميلة",
     server: "https://server11.mp3quran.net/mtrod",
-    // NO QF ID - 161 was Khalifah Taniji - WRONG
+    everyAyahSubfolder: "Abdullah_Matroud_128kbps",
     isOpenLicense: true,
     moshafId: 16,
   },
@@ -224,6 +222,7 @@ export const reciters: Reciter[] = [
     style: "مرتل",
     description: "تلاوة عذبة مميزة",
     server: "https://server11.mp3quran.net/a_jbr",
+    everyAyahSubfolder: "Ali_Jaber_64kbps",
     isOpenLicense: true,
     moshafId: 19,
   },
@@ -234,6 +233,7 @@ export const reciters: Reciter[] = [
     style: "مرتل",
     description: "إمام الحرم المكي",
     server: "https://server10.mp3quran.net/jhn",
+    everyAyahSubfolder: "Abdullaah_3awwaad_Al-Juhaynee_128kbps",
     isOpenLicense: true,
     moshafId: 20,
   },
@@ -254,6 +254,7 @@ export const reciters: Reciter[] = [
     style: "مرتل",
     description: "إمام الحرم النبوي",
     server: "https://server7.mp3quran.net/s_bud",
+    everyAyahSubfolder: "Salah_Al_Budair_128kbps",
     isOpenLicense: true,
     moshafId: 22,
   },
@@ -294,6 +295,7 @@ export const reciters: Reciter[] = [
     style: "مرتل",
     description: "تلاوة واضحة للحفظ",
     server: "https://server10.mp3quran.net/bsfr",
+    everyAyahSubfolder: "Abdullah_Basfar_192kbps",
     isOpenLicense: true,
     moshafId: 27,
   },

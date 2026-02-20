@@ -16,7 +16,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { surahs } from '@/data/surahs';
-import { reciters, getAudioUrl } from '@/data/reciters';
+import { reciters, getAudioUrl, getEveryAyahUrl } from '@/data/reciters';
 import { backgroundVideos, backgroundImages, slideshowBackgrounds, BackgroundItem } from '@/data/backgrounds';
 import { useQuranApi } from '@/hooks/useQuranApi';
 import { useAuth } from '@/hooks/useAuth';
@@ -26,7 +26,6 @@ import {
   fetchChapterRecitationAudioById,
   QuranFoundationTimestamp,
 } from '@/lib/quranFoundationApi';
-import { validateAudioUrl } from '@/lib/quranYousefApi';
 import { supabase } from '@/integrations/supabase/client';
 import { TextSettings } from '@/components/TextSettingsPanel';
 import {
@@ -53,6 +52,16 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** How we play the ayahs */
+type PlaybackMode =
+  | 'qf'          // Quran Foundation single-file + word timestamps (best)
+  | 'everyayah'   // EveryAyah.com – one MP3 per ayah (perfect verse clipping, no word highlight)
+  | 'fallback';   // Full-surah mp3quran file with proportional estimation (last resort)
+
 const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
   showSurahName: true,
   showReciterName: true,
@@ -74,6 +83,10 @@ const DEFAULT_EXPORT_SETTINGS: ExportSettings = {
   motionSpeed: 3,
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Component
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function PreviewPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -82,9 +95,7 @@ export default function PreviewPage() {
   const audioEffects = useAudioEffects();
   const videoRecorder = useVideoRecorder();
 
-  // Note: download uses a fresh ObjectURL at click time for maximum reliability across browsers/iframes.
-
-  // Get params
+  // ── URL params ──────────────────────────────────────────────────────────────
   const surahNumber = parseInt(searchParams.get('surah') || '1');
   const reciterId = searchParams.get('reciter') || 'mishary_alafasy';
   const startAyah = parseInt(searchParams.get('start') || '1');
@@ -93,7 +104,6 @@ export default function PreviewPage() {
   const backgroundType = searchParams.get('backgroundType') || 'video';
   const aspectRatio = (searchParams.get('ratio') || '9:16') as '9:16' | '16:9';
 
-  // Text settings from params
   const textSettings: TextSettings = {
     fontSize: parseInt(searchParams.get('fontSize') || '28'),
     fontFamily: searchParams.get('fontFamily') || '"Noto Naskh Arabic", serif',
@@ -102,39 +112,33 @@ export default function PreviewPage() {
     overlayOpacity: parseFloat(searchParams.get('overlayOpacity') || '0.4'),
   };
 
-  // Display settings state
-  const [displaySettings, setDisplaySettings] = useState<DisplaySettings>(DEFAULT_DISPLAY_SETTINGS);
-  
-  // Custom background and export settings
-  const [customBackground, setCustomBackground] = useState<string | null>(null);
-  const [exportSettings, setExportSettings] = useState<ExportSettings>(DEFAULT_EXPORT_SETTINGS);
-  const [selectedPresetId, setSelectedPresetId] = useState<string | undefined>(undefined);
-
-  // Handler to apply a preset
-  const applyPreset = useCallback((preset: VideoPreset) => {
-    setSelectedPresetId(preset.id);
-    setDisplaySettings((prev) => ({
-      ...prev,
-      ...preset.displaySettings,
-    }));
-    setExportSettings((prev) => ({
-      ...prev,
-      quality: preset.exportQuality,
-    }));
-    toast.success(`تم تطبيق قالب "${preset.name}"`);
-  }, []);
-
-  // Data
+  // ── Static derived data ─────────────────────────────────────────────────────
   const surah = surahs.find((s) => s.number === surahNumber);
   const reciter = reciters.find((r) => r.id === reciterId);
   const background: BackgroundItem | null =
     [...backgroundVideos, ...backgroundImages, ...slideshowBackgrounds].find((bg) => bg.id === backgroundId) ||
     backgroundImages[0];
+  const totalAyahsInSurah = surah?.numberOfAyahs ?? endAyah;
 
-  // State
+  // ── Settings state ──────────────────────────────────────────────────────────
+  const [displaySettings, setDisplaySettings] = useState<DisplaySettings>(DEFAULT_DISPLAY_SETTINGS);
+  const [customBackground, setCustomBackground] = useState<string | null>(null);
+  const [exportSettings, setExportSettings] = useState<ExportSettings>(DEFAULT_EXPORT_SETTINGS);
+  const [selectedPresetId, setSelectedPresetId] = useState<string | undefined>(undefined);
+
+  const applyPreset = useCallback((preset: VideoPreset) => {
+    setSelectedPresetId(preset.id);
+    setDisplaySettings((prev) => ({ ...prev, ...preset.displaySettings }));
+    setExportSettings((prev) => ({ ...prev, quality: preset.exportQuality }));
+    toast.success(`تم تطبيق قالب "${preset.name}"`);
+  }, []);
+
+  // ── Ayah data ───────────────────────────────────────────────────────────────
   const [ayahs, setAyahs] = useState<{ numberInSurah: number; text: string }[]>([]);
   const [currentAyahIndex, setCurrentAyahIndex] = useState(0);
   const [highlightWordIndex, setHighlightWordIndex] = useState<number | null>(null);
+
+  // ── Playback state ──────────────────────────────────────────────────────────
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -145,34 +149,38 @@ export default function PreviewPage() {
   const [audioError, setAudioError] = useState(false);
   const [activeTab, setActiveTab] = useState('controls');
 
-  // Accurate timings (ms) for the selected range
+  // ── Audio / timing data ─────────────────────────────────────────────────────
+  const [playbackMode, setPlaybackMode] = useState<PlaybackMode>('fallback');
+
+  // QF mode
   const [ayahTimings, setAyahTimings] = useState<(QuranFoundationTimestamp | null)[]>([]);
   const [audioUrl, setAudioUrl] = useState('');
   const [rangeMs, setRangeMs] = useState<{ from: number; to: number } | null>(null);
-  const [timingsLoading, setTimingsLoading] = useState(false);
-  const [useQuranFoundation, setUseQuranFoundation] = useState(true);
 
-  // Refs
+  // EveryAyah mode – list of per-ayah URLs in order
+  const [everyAyahUrls, setEveryAyahUrls] = useState<string[]>([]);
+  const [everyAyahDurations, setEveryAyahDurations] = useState<number[]>([]);
+  const everyAyahIndexRef = useRef(0); // which ayah is currently playing (mutable, no re-render)
+
+  const [timingsLoading, setTimingsLoading] = useState(false);
+
+  // ── Refs ────────────────────────────────────────────────────────────────────
   const audioRef = useRef<HTMLAudioElement>(null);
   const videoPreviewRef = useRef<VideoPreviewRef>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
 
-  // Load ayahs
+  // ── Load ayah texts ─────────────────────────────────────────────────────────
   useEffect(() => {
     const loadData = async () => {
       const data = await fetchAyahs(surahNumber, startAyah, endAyah);
       if (data) {
+        const bismillah = 'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ';
+        const bismillahAlt = 'بسم الله الرحمن الرحيم';
         const processedAyahs = data.map((ayah, index) => {
           let text = ayah.text;
-          const bismillah = 'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ';
-          const bismillahAlt = 'بسم الله الرحمن الرحيم';
-          
           if (index === 0 && startAyah === 1 && surahNumber !== 1 && surahNumber !== 9) {
-            if (text.startsWith(bismillah)) {
-              text = text.replace(bismillah, '').trim();
-            } else if (text.startsWith(bismillahAlt)) {
-              text = text.replace(bismillahAlt, '').trim();
-            }
+            if (text.startsWith(bismillah)) text = text.replace(bismillah, '').trim();
+            else if (text.startsWith(bismillahAlt)) text = text.replace(bismillahAlt, '').trim();
           }
           return { ...ayah, text };
         });
@@ -182,42 +190,40 @@ export default function PreviewPage() {
     loadData();
   }, [surahNumber, startAyah, endAyah, fetchAyahs]);
 
-
   const currentAyahWords = useMemo(() => {
     const text = ayahs[currentAyahIndex]?.text ?? '';
     return text.split(' ').filter(Boolean);
   }, [ayahs, currentAyahIndex]);
 
-  // Total ayahs in this surah (for proportional estimation)
-  const totalAyahsInSurah = surah?.numberOfAyahs ?? endAyah;
-
-  // Load accurate audio + timestamps for recitation (so we can play only selected ayahs)
+  // ── Load audio strategy ─────────────────────────────────────────────────────
   useEffect(() => {
+    if (!reciter) return;
     let cancelled = false;
 
-    const loadTimings = async () => {
-      if (!reciter) return;
+    const load = async () => {
       setTimingsLoading(true);
       setAudioError(false);
       setAudioLoaded(false);
+      setIsPlaying(false);
+      setCurrentAyahIndex(0);
       setHighlightWordIndex(null);
+      setProgress(0);
+      setCurrentTime(0);
+      setDuration(0);
+      setEveryAyahUrls([]);
+      setEveryAyahDurations([]);
+      everyAyahIndexRef.current = 0;
 
-      const recitationId = reciter.quranFoundationId;
-
-      // STRATEGY:
-      // 1. If QF ID exists → use QF audio + QF timestamps (perfect sync & clipping)
-      // 2. If no QF ID → use mp3quran audio + proportional estimation for clipping
-
-      if (recitationId) {
+      // ── Strategy 1: Quran Foundation (word-level sync) ──────────────────────
+      if (reciter.quranFoundationId) {
         try {
-          const audioFile = await fetchChapterRecitationAudioById(recitationId, surahNumber, true);
+          const audioFile = await fetchChapterRecitationAudioById(reciter.quranFoundationId, surahNumber, true);
           const all = audioFile.timestamps ?? [];
 
           const byIndex: (QuranFoundationTimestamp | null)[] = Array.from(
             { length: endAyah - startAyah + 1 },
             (_, i) => {
-              const ayahNo = startAyah + i;
-              const key = `${surahNumber}:${ayahNo}`;
+              const key = `${surahNumber}:${startAyah + i}`;
               return all.find((t) => t.verse_key === key) ?? null;
             }
           );
@@ -227,143 +233,126 @@ export default function PreviewPage() {
           if (existing.length > 0 && !cancelled) {
             const from = existing[0].timestamp_from;
             const to = existing[existing.length - 1].timestamp_to;
-
-            // Use QF audio URL so timestamps match perfectly
             setAudioUrl(audioFile.audio_url);
             setAyahTimings(byIndex);
             setRangeMs({ from, to });
             setDuration(Math.max((to - from) / 1000, 0));
-            setUseQuranFoundation(true);
-            console.log(`✅ Using QF audio + timestamps (perfect sync), range ${from}-${to}ms`);
+            setPlaybackMode('qf');
+            console.log(`✅ QF mode – word-level sync, range ${from}–${to}ms`);
             setTimingsLoading(false);
             return;
           }
         } catch (e) {
-          console.warn('QF audio failed, falling back to mp3quran:', e);
+          console.warn('QF failed, trying EveryAyah…', e);
         }
       }
 
-      // Fallback: mp3quran audio with proportional verse estimation
+      // ── Strategy 2: EveryAyah – one mp3 per ayah (perfect verse clipping) ──
+      if (reciter.everyAyahSubfolder && !cancelled) {
+        const urls: string[] = [];
+        for (let n = startAyah; n <= endAyah; n++) {
+          urls.push(getEveryAyahUrl(reciter, surahNumber, n));
+        }
+        // Quick HEAD check on first ayah to verify availability
+        try {
+          const probe = await fetch(urls[0], { method: 'HEAD' });
+          if (probe.ok && !cancelled) {
+            setEveryAyahUrls(urls);
+            setEveryAyahDurations(new Array(urls.length).fill(0));
+            setAudioUrl(urls[0]);
+            setPlaybackMode('everyayah');
+            everyAyahIndexRef.current = 0;
+            console.log(`✅ EveryAyah mode – ${urls.length} separate ayah files`);
+            setTimingsLoading(false);
+            return;
+          }
+        } catch (e) {
+          console.warn('EveryAyah probe failed, falling back…', e);
+        }
+      }
+
+      // ── Strategy 3: Full-surah mp3 with proportional estimate ───────────────
       if (!cancelled) {
-        const primaryUrl = getAudioUrl(reciter, surahNumber);
-        const isValid = await validateAudioUrl(primaryUrl);
-        if (!isValid && !cancelled) {
-          console.warn('Audio URL failed:', primaryUrl);
-          setAudioError(true);
-        }
-        if (!cancelled) {
-          setAudioUrl(primaryUrl);
-          setAyahTimings([]);
-          // We'll set rangeMs after audio loads (proportional estimation)
-          setRangeMs(null);
-          setUseQuranFoundation(false);
-          console.log(`⚠️ Using mp3quran audio (proportional estimation for verse clipping)`);
-        }
+        const url = getAudioUrl(reciter, surahNumber);
+        setAudioUrl(url);
+        setAyahTimings([]);
+        setRangeMs(null);
+        setPlaybackMode('fallback');
+        console.log(`⚠️ Fallback mode – full surah mp3 with proportional estimation`);
       }
 
       if (!cancelled) setTimingsLoading(false);
     };
 
-    loadTimings();
-    return () => {
-      cancelled = true;
-    };
-  }, [reciter?.id, reciter?.quranFoundationId, surahNumber, startAyah, endAyah]);
+    load();
+    return () => { cancelled = true; };
+  }, [reciter?.id, reciter?.quranFoundationId, reciter?.everyAyahSubfolder, surahNumber, startAyah, endAyah]);
 
-  // Initialize audio effects when audio is loaded
+  // ── Audio effects init ──────────────────────────────────────────────────────
   useEffect(() => {
     if (audioRef.current && audioLoaded && !audioError) {
       audioEffects.initializeAudio(audioRef.current);
     }
   }, [audioLoaded, audioError]);
 
+  // ── Derived range helpers (QF / fallback only) ──────────────────────────────
   const rangeStartSec = rangeMs ? rangeMs.from / 1000 : 0;
   const rangeEndSec = rangeMs ? rangeMs.to / 1000 : 0;
 
-  // Handle play/pause
-  const togglePlay = useCallback(async () => {
-    if (!audioRef.current) return;
-
-    await audioEffects.resumeContext();
-
-    if (isPlaying) {
-      audioRef.current.pause();
-    } else {
-      // Always ensure we start inside the selected range (works for both QF and estimated)
-      if (rangeMs) {
-        if (audioRef.current.currentTime < rangeStartSec || audioRef.current.currentTime >= rangeEndSec) {
-          audioRef.current.currentTime = rangeStartSec;
-        }
-      }
-      audioRef.current.play().catch((err) => {
-        console.error('Audio play error:', err);
-        toast.error('حدث خطأ في تشغيل الصوت');
-      });
-    }
-    setIsPlaying(!isPlaying);
-  }, [isPlaying, audioEffects, rangeMs, rangeStartSec, rangeEndSec]);
-
-  // Handle mute
-  const toggleMute = useCallback(() => {
-    if (audioRef.current) {
-      audioRef.current.muted = !isMuted;
-      setIsMuted(!isMuted);
-    }
-  }, [isMuted]);
-
-  // Skip forward/backward
-  const skipAyah = (direction: 'forward' | 'backward') => {
-    if (!audioRef.current || ayahTimings.length === 0) return;
-
-    const newIndex =
-      direction === 'forward'
-        ? Math.min(currentAyahIndex + 1, ayahs.length - 1)
-        : Math.max(currentAyahIndex - 1, 0);
-
-    const timing = ayahTimings[newIndex];
-    if (timing && rangeMs) {
-      audioRef.current.currentTime = timing.timestamp_from / 1000;
-      setCurrentAyahIndex(newIndex);
-      setHighlightWordIndex(null);
-    }
-  };
-
-  // Audio event handlers
+  // ── Audio event handlers ────────────────────────────────────────────────────
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
 
+    // ── loadedmetadata ──────────────────────────────────────────────────────
     const handleLoadedMetadata = () => {
-      if (useQuranFoundation && rangeMs) {
+      if (playbackMode === 'qf' && rangeMs) {
         setDuration(Math.max((rangeMs.to - rangeMs.from) / 1000, 0));
+        setAudioLoaded(true);
+        setAudioError(false);
+        return;
+      }
+
+      if (playbackMode === 'everyayah') {
+        // Record this ayah's duration, then sum all known durations
+        const idx = everyAyahIndexRef.current;
+        setEveryAyahDurations((prev) => {
+          const updated = [...prev];
+          updated[idx] = audio.duration || 0;
+          // Compute total so far (remaining unknowns stay 0 – updated later)
+          const total = updated.reduce((s, d) => s + d, 0);
+          setDuration(total);
+          return updated;
+        });
+        setAudioLoaded(true);
+        setAudioError(false);
+        return;
+      }
+
+      // Fallback: proportional estimation
+      const totalDur = audio.duration;
+      if (totalAyahsInSurah > 0 && totalDur > 0) {
+        const estFrom = ((startAyah - 1) / totalAyahsInSurah) * totalDur;
+        const estTo = (endAyah / totalAyahsInSurah) * totalDur;
+        setRangeMs({ from: estFrom * 1000, to: estTo * 1000 });
+        setDuration(Math.max(estTo - estFrom, 1));
+        console.log(`📐 Fallback estimate: ${estFrom.toFixed(1)}s–${estTo.toFixed(1)}s of ${totalDur.toFixed(1)}s`);
       } else {
-        // Proportional estimation for reciters without QF timestamps
-        // Estimate which portion of the full surah corresponds to selected ayahs
-        const totalDur = audio.duration;
-        const totalAyahs = totalAyahsInSurah;
-        if (totalAyahs > 0 && totalDur > 0) {
-          const estFrom = ((startAyah - 1) / totalAyahs) * totalDur;
-          const estTo = (endAyah / totalAyahs) * totalDur;
-          const estimatedRange = { from: estFrom * 1000, to: estTo * 1000 };
-          setRangeMs(estimatedRange);
-          setDuration(Math.max(estTo - estFrom, 1));
-          console.log(`📐 Proportional estimate: ${estFrom.toFixed(1)}s - ${estTo.toFixed(1)}s of ${totalDur.toFixed(1)}s`);
-        } else {
-          setDuration(totalDur);
-        }
+        setDuration(totalDur);
       }
       setAudioLoaded(true);
       setAudioError(false);
     };
 
+    // ── timeupdate ───────────────────────────────────────────────────────────
     const handleTimeUpdate = () => {
       const nowSec = audio.currentTime;
       const nowMs = nowSec * 1000;
 
-      if (useQuranFoundation && rangeMs) {
+      // ── QF mode ─────────────────────────────────────────────────────────
+      if (playbackMode === 'qf' && rangeMs) {
         const totalSec = Math.max((rangeMs.to - rangeMs.from) / 1000, 0.001);
 
-        // Stop at the end of the selected range
         if (nowSec >= rangeEndSec) {
           audio.pause();
           audio.currentTime = rangeStartSec;
@@ -379,13 +368,12 @@ export default function PreviewPage() {
         setCurrentTime(relativeSec);
         setProgress(Math.min((relativeSec / totalSec) * 100, 100));
 
-        // Find current verse by timestamps
+        // Find current verse
         for (let i = ayahTimings.length - 1; i >= 0; i--) {
           const t = ayahTimings[i];
           if (!t) continue;
           if (nowMs >= t.timestamp_from && nowMs < t.timestamp_to) {
             if (i !== currentAyahIndex) setCurrentAyahIndex(i);
-
             if (t.segments && t.segments.length > 0) {
               const seg = t.segments.find((s) => nowMs >= s[1] && nowMs < s[2]);
               setHighlightWordIndex(seg ? seg[0] - 1 : null);
@@ -395,13 +383,30 @@ export default function PreviewPage() {
             break;
           }
         }
-      } else if (rangeMs) {
-        // Fallback mode with proportional clipping
+        return;
+      }
+
+      // ── EveryAyah mode ───────────────────────────────────────────────────
+      if (playbackMode === 'everyayah') {
+        const idx = everyAyahIndexRef.current;
+        // Elapsed = sum of completed ayahs + current position
+        setEveryAyahDurations((prev) => {
+          const completedSec = prev.slice(0, idx).reduce((s, d) => s + d, 0);
+          const totalKnown = prev.reduce((s, d) => s + d, 0);
+          const elapsed = completedSec + nowSec;
+          setCurrentTime(elapsed);
+          setProgress(totalKnown > 0 ? Math.min((elapsed / totalKnown) * 100, 100) : (nowSec / (audio.duration || 1)) * 100);
+          return prev; // no change
+        });
+        return;
+      }
+
+      // ── Fallback mode ────────────────────────────────────────────────────
+      if (rangeMs) {
         const estStartSec = rangeMs.from / 1000;
         const estEndSec = rangeMs.to / 1000;
         const totalSec = Math.max(estEndSec - estStartSec, 0.001);
 
-        // Stop at estimated end
         if (nowSec >= estEndSec) {
           audio.pause();
           audio.currentTime = estStartSec;
@@ -417,38 +422,55 @@ export default function PreviewPage() {
         setCurrentTime(relativeSec);
         setProgress(Math.min((relativeSec / totalSec) * 100, 100));
 
-        // Proportional ayah estimation within the clipped range
         if (ayahs.length > 0) {
           const ayahDuration = totalSec / ayahs.length;
           const estimatedIndex = Math.min(Math.floor(relativeSec / ayahDuration), ayahs.length - 1);
-          if (estimatedIndex !== currentAyahIndex) {
-            setCurrentAyahIndex(estimatedIndex);
-          }
+          if (estimatedIndex !== currentAyahIndex) setCurrentAyahIndex(estimatedIndex);
         }
       } else {
-        // No range at all - full audio
         setCurrentTime(nowSec);
         setProgress(audio.duration > 0 ? (nowSec / audio.duration) * 100 : 0);
       }
     };
 
-    const handleError = () => {
-      console.error('Audio load error');
-      setAudioError(true);
-      setAudioLoaded(true);
-    };
-
+    // ── ended ────────────────────────────────────────────────────────────────
     const handleEnded = () => {
+      if (playbackMode === 'everyayah') {
+        const nextIdx = everyAyahIndexRef.current + 1;
+        if (nextIdx < everyAyahUrls.length) {
+          // Advance to next ayah
+          everyAyahIndexRef.current = nextIdx;
+          setCurrentAyahIndex(nextIdx);
+          audio.src = everyAyahUrls[nextIdx];
+          audio.load();
+          audio.play().catch(console.error);
+        } else {
+          // All ayahs done
+          everyAyahIndexRef.current = 0;
+          setCurrentAyahIndex(0);
+          audio.src = everyAyahUrls[0];
+          audio.load();
+          setIsPlaying(false);
+          setCurrentTime(0);
+          setProgress(0);
+        }
+        return;
+      }
+
+      // QF / fallback
       setIsPlaying(false);
       setCurrentAyahIndex(0);
       setHighlightWordIndex(null);
       setCurrentTime(0);
       setProgress(0);
-      if (rangeMs) {
-        audio.currentTime = rangeMs.from / 1000;
-      } else {
-        audio.currentTime = 0;
-      }
+      if (rangeMs) audio.currentTime = rangeMs.from / 1000;
+      else audio.currentTime = 0;
+    };
+
+    const handleError = () => {
+      console.error('Audio error for', audio.src);
+      setAudioError(true);
+      setAudioLoaded(true);
     };
 
     const handlePlay = () => setIsPlaying(true);
@@ -469,20 +491,99 @@ export default function PreviewPage() {
       audio.removeEventListener('play', handlePlay);
       audio.removeEventListener('pause', handlePause);
     };
-  }, [rangeMs, ayahTimings, currentAyahIndex, rangeStartSec, rangeEndSec, useQuranFoundation, ayahs.length, totalAyahsInSurah, startAyah, endAyah]);
+  }, [
+    playbackMode, rangeMs, ayahTimings, currentAyahIndex,
+    rangeStartSec, rangeEndSec, ayahs.length,
+    totalAyahsInSurah, startAyah, endAyah,
+    everyAyahUrls,
+  ]);
 
-  // Format time
+  // Format time helper
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Start video recording
-  const handleStartRecording = async () => {
-    const canvas = videoPreviewRef.current?.getCanvas();
+  // ── Play / Pause ────────────────────────────────────────────────────────────
+  const togglePlay = useCallback(async () => {
+    if (!audioRef.current) return;
+    await audioEffects.resumeContext();
+
     const audio = audioRef.current;
 
+    if (isPlaying) {
+      audio.pause();
+      return;
+    }
+
+    if (playbackMode === 'everyayah') {
+      // Ensure we're on the correct ayah file
+      const idx = everyAyahIndexRef.current;
+      if (audio.src !== everyAyahUrls[idx]) {
+        audio.src = everyAyahUrls[idx];
+        audio.load();
+      }
+      audio.play().catch((err) => {
+        console.error('EveryAyah play error:', err);
+        toast.error('حدث خطأ في تشغيل الصوت');
+      });
+      return;
+    }
+
+    // QF / fallback – seek to range start if needed
+    if (rangeMs) {
+      if (audio.currentTime < rangeStartSec || audio.currentTime >= rangeEndSec) {
+        audio.currentTime = rangeStartSec;
+      }
+    }
+    audio.play().catch((err) => {
+      console.error('Audio play error:', err);
+      toast.error('حدث خطأ في تشغيل الصوت');
+    });
+  }, [isPlaying, audioEffects, playbackMode, everyAyahUrls, rangeMs, rangeStartSec, rangeEndSec]);
+
+  // ── Mute ───────────────────────────────────────────────────────────────────
+  const toggleMute = useCallback(() => {
+    if (audioRef.current) {
+      audioRef.current.muted = !isMuted;
+      setIsMuted(!isMuted);
+    }
+  }, [isMuted]);
+
+  // ── Skip ayah (QF + EveryAyah) ─────────────────────────────────────────────
+  const skipAyah = (direction: 'forward' | 'backward') => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    if (playbackMode === 'everyayah') {
+      const nextIdx = direction === 'forward'
+        ? Math.min(everyAyahIndexRef.current + 1, everyAyahUrls.length - 1)
+        : Math.max(everyAyahIndexRef.current - 1, 0);
+      everyAyahIndexRef.current = nextIdx;
+      setCurrentAyahIndex(nextIdx);
+      audio.src = everyAyahUrls[nextIdx];
+      audio.load();
+      if (isPlaying) audio.play().catch(console.error);
+      return;
+    }
+
+    if (playbackMode === 'qf' && ayahTimings.length > 0) {
+      const newIndex = direction === 'forward'
+        ? Math.min(currentAyahIndex + 1, ayahs.length - 1)
+        : Math.max(currentAyahIndex - 1, 0);
+      const timing = ayahTimings[newIndex];
+      if (timing) {
+        audio.currentTime = timing.timestamp_from / 1000;
+        setCurrentAyahIndex(newIndex);
+        setHighlightWordIndex(null);
+      }
+    }
+  };
+
+  // ── Video recording ─────────────────────────────────────────────────────────
+  const handleStartRecording = async () => {
+    const canvas = videoPreviewRef.current?.getCanvas();
     if (!canvas) {
       toast.error('حدث خطأ في تجهيز التسجيل');
       return;
@@ -491,8 +592,16 @@ export default function PreviewPage() {
     try {
       await audioEffects.resumeContext();
 
+      if (playbackMode === 'everyayah') {
+        // EveryAyah recording: record all ayahs sequentially
+        await recordEveryAyahMode(canvas);
+        return;
+      }
+
+      // QF / fallback single-file recording
+      const audio = audioRef.current;
       let recordingDuration: number;
-      
+
       if (rangeMs) {
         recordingDuration = Math.max((rangeMs.to - rangeMs.from) / 1000, 1);
         if (audio) audio.currentTime = rangeMs.from / 1000;
@@ -511,15 +620,72 @@ export default function PreviewPage() {
         exportSettings.quality
       );
 
-      if (blob) {
-        toast.success('تم إنشاء الفيديو بنجاح!');
-      }
+      if (blob) toast.success('تم إنشاء الفيديو بنجاح!');
     } catch (error) {
       console.error('Recording error:', error);
       toast.error('حدث خطأ في التسجيل');
     }
   };
 
+  /**
+   * EveryAyah recording: concatenate all ayah audio files into a single video.
+   * We play each ayah to completion, advance to the next, then stop recording.
+   */
+  const recordEveryAyahMode = async (canvas: HTMLCanvasElement) => {
+    const audio = audioRef.current;
+    if (!audio || everyAyahUrls.length === 0) return;
+
+    toast.info('بدء التسجيل... لا تغلق هذه الصفحة');
+
+    // Compute total duration (use measured durations if available, else fetch)
+    const measuredDurations = [...everyAyahDurations];
+    const totalKnown = measuredDurations.reduce((s, d) => s + d, 0);
+
+    // If we don't have good duration data, load each file to measure
+    if (totalKnown < 1) {
+      toast.info('جاري قياس مدة الآيات...');
+      for (let i = 0; i < everyAyahUrls.length; i++) {
+        await new Promise<void>((resolve) => {
+          const tmp = new Audio();
+          tmp.src = everyAyahUrls[i];
+          tmp.crossOrigin = 'anonymous';
+          tmp.addEventListener('loadedmetadata', () => {
+            measuredDurations[i] = tmp.duration || 5;
+            resolve();
+          });
+          tmp.addEventListener('error', () => {
+            measuredDurations[i] = 5; // default 5s
+            resolve();
+          });
+        });
+      }
+    }
+
+    const totalDuration = measuredDurations.reduce((s, d) => s + d, 0);
+    setEveryAyahDurations(measuredDurations);
+    setDuration(totalDuration);
+
+    // Reset state
+    everyAyahIndexRef.current = 0;
+    setCurrentAyahIndex(0);
+
+    // Set first ayah audio
+    audio.src = everyAyahUrls[0];
+    audio.load();
+
+    // Start recording
+    const blob = await videoRecorder.startRecording(
+      canvas,
+      audio,
+      totalDuration,
+      audioEffects.getRecordingStream(),
+      exportSettings.quality
+    );
+
+    if (blob) toast.success('تم إنشاء الفيديو بنجاح!');
+  };
+
+  // ── Filename helpers ────────────────────────────────────────────────────────
   const toSafeFilename = useCallback((input: string) => {
     const s = input
       .normalize('NFKD')
@@ -535,45 +701,34 @@ export default function PreviewPage() {
     return `${toSafeFilename(base)}.mp4`;
   }, [surah?.englishName, surah?.name, reciter?.id, toSafeFilename]);
 
-  // MP4 conversion removed - using WebM directly
-
-  // Handle export based on format
+  // ── Export ──────────────────────────────────────────────────────────────────
   const handleExport = useCallback((format: ExportFormat) => {
     const baseFilename = toSafeFilename(
       `${surah?.englishName || surah?.name || 'quran'}-${reciter?.id || 'reciter'}`
     );
-
     switch (format) {
       case 'mp4':
-        if (videoRecorder.mp4Blob) {
-          videoRecorder.downloadMp4(`${baseFilename}.mp4`);
-        } else {
-          toast.error('ملف MP4 غير جاهز بعد');
-        }
+        if (videoRecorder.mp4Blob) videoRecorder.downloadMp4(`${baseFilename}.mp4`);
+        else toast.error('ملف MP4 غير جاهز بعد');
         break;
       case 'webm':
-        if (videoRecorder.videoBlob) {
-          videoRecorder.downloadWebm(`${baseFilename}.webm`);
-        } else {
-          toast.error('لا يوجد فيديو للتحميل');
-        }
+        if (videoRecorder.videoBlob) videoRecorder.downloadWebm(`${baseFilename}.webm`);
+        else toast.error('لا يوجد فيديو للتحميل');
         break;
       case 'gif':
-        toast.info('تحميل GIF غير متاح حالياً - جاري العمل عليه');
+        toast.info('تحميل GIF غير متاح حالياً');
         break;
     }
   }, [surah, reciter, toSafeFilename, videoRecorder]);
 
-  // Save to library
+  // ── Save to library ─────────────────────────────────────────────────────────
   const handleSave = async () => {
     if (!isAuthenticated || !user) {
       toast.error('الرجاء تسجيل الدخول لحفظ الفيديو');
       navigate('/auth');
       return;
     }
-
     setIsSaving(true);
-
     try {
       const { error } = await supabase.from('saved_videos').insert({
         user_id: user.id,
@@ -586,9 +741,7 @@ export default function PreviewPage() {
         background_type: backgroundType,
         aspect_ratio: aspectRatio,
       });
-
       if (error) throw error;
-
       toast.success('تم حفظ الفيديو في مكتبتك!');
     } catch (err) {
       console.error('Error saving video:', err);
@@ -598,8 +751,16 @@ export default function PreviewPage() {
     }
   };
 
-  // Share functionality is now handled by SocialShareButtons component
+  // ── Mode label ──────────────────────────────────────────────────────────────
+  const modeLabel = (() => {
+    if (playbackMode === 'qf') return null; // perfect – no warning
+    if (playbackMode === 'everyayah') return '✅ تزامن دقيق (آية بآية)';
+    return '⚠️ يتم استخدام الملف الصوتي الكامل (التزامن تقديري)';
+  })();
 
+  const canSkip = playbackMode === 'qf' || playbackMode === 'everyayah';
+
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <Layout>
       <div className="container mx-auto px-4 py-8">
@@ -609,9 +770,7 @@ export default function PreviewPage() {
           animate={{ opacity: 1, y: 0 }}
           className="flex items-center gap-2 text-sm text-muted-foreground mb-6"
         >
-          <Link to="/create" className="hover:text-primary transition-colors">
-            إنشاء فيديو
-          </Link>
+          <Link to="/create" className="hover:text-primary transition-colors">إنشاء فيديو</Link>
           <ChevronRight className="h-4 w-4" />
           <span>المعاينة</span>
         </motion.div>
@@ -640,13 +799,7 @@ export default function PreviewPage() {
               motionSpeed={exportSettings.motionSpeed}
             />
 
-            {/* Audio Element - for both Quran and Islamic TTS mode */}
-            <audio
-              ref={audioRef}
-              src={audioUrl}
-              preload="auto"
-              crossOrigin="anonymous"
-            />
+            <audio ref={audioRef} src={audioUrl} preload="auto" crossOrigin="anonymous" />
           </motion.div>
 
           {/* Controls */}
@@ -659,15 +812,13 @@ export default function PreviewPage() {
             {/* Info Card */}
             <Card>
               <CardContent className="p-4">
-                <h3 className="text-xl font-bold">
-                  {surah?.name}
-                </h3>
+                <h3 className="text-xl font-bold">{surah?.name}</h3>
                 <p className="text-muted-foreground text-sm">
                   {`الآيات ${startAyah} - ${endAyah} | ${reciter?.name}`}
                 </p>
-                {!useQuranFoundation && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    ⚠️ يتم استخدام الملف الصوتي الكامل (التزامن تقديري)
+                {modeLabel && (
+                  <p className={`text-xs mt-1 ${playbackMode === 'everyayah' ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>
+                    {modeLabel}
                   </p>
                 )}
               </CardContent>
@@ -702,38 +853,30 @@ export default function PreviewPage() {
                 </TabsTrigger>
               </TabsList>
 
-              {/* Presets Tab */}
               <TabsContent value="presets" className="mt-4">
-                <PresetSelector
-                  selectedPresetId={selectedPresetId}
-                  onSelectPreset={applyPreset}
-                />
+                <PresetSelector selectedPresetId={selectedPresetId} onSelectPreset={applyPreset} />
               </TabsContent>
 
               <TabsContent value="controls" className="mt-4">
                 <Card>
                   <CardContent className="p-4 space-y-4">
-                    {/* Audio Error Message */}
                     {audioError && (
                       <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 flex items-start gap-2">
                         <AlertCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
                         <div>
                           <p className="text-sm font-medium text-destructive">تعذر تحميل الصوت</p>
-                          <p className="text-xs text-muted-foreground">
-                            قد يكون الملف غير متوفر لهذه السورة
-                          </p>
+                          <p className="text-xs text-muted-foreground">قد يكون الملف غير متوفر لهذه السورة</p>
                         </div>
                       </div>
                     )}
 
-                    {/* Playback Controls */}
                     <div className="space-y-4">
                       <div className="flex items-center justify-center gap-3">
                         <Button
                           variant="ghost"
                           size="icon"
                           onClick={() => skipAyah('backward')}
-                          disabled={currentAyahIndex === 0 || audioError || !useQuranFoundation}
+                          disabled={currentAyahIndex === 0 || audioError || !canSkip}
                         >
                           <SkipForward className="h-5 w-5" />
                         </Button>
@@ -758,7 +901,7 @@ export default function PreviewPage() {
                           variant="ghost"
                           size="icon"
                           onClick={() => skipAyah('forward')}
-                          disabled={currentAyahIndex === ayahs.length - 1 || audioError || !useQuranFoundation}
+                          disabled={currentAyahIndex === ayahs.length - 1 || audioError || !canSkip}
                         >
                           <SkipBack className="h-5 w-5" />
                         </Button>
@@ -768,7 +911,6 @@ export default function PreviewPage() {
                         </Button>
                       </div>
 
-                      {/* Progress bar */}
                       <div className="space-y-2">
                         <Progress value={progress} className="h-2" />
                         <div className="flex justify-between text-xs text-muted-foreground">
@@ -777,11 +919,9 @@ export default function PreviewPage() {
                         </div>
                       </div>
 
-                      {/* Ayah Progress */}
                       <div className="text-center p-2 rounded-lg bg-muted/50">
                         <p className="text-sm text-muted-foreground">
-                          الآية <span className="font-bold text-foreground">{ayahs[currentAyahIndex]?.numberInSurah || startAyah}</span> من{' '}
-                          {ayahs.length}
+                          الآية <span className="font-bold text-foreground">{ayahs[currentAyahIndex]?.numberInSurah || startAyah}</span> من {ayahs.length}
                         </p>
                       </div>
                     </div>
@@ -790,10 +930,7 @@ export default function PreviewPage() {
               </TabsContent>
 
               <TabsContent value="display" className="mt-4">
-                <DisplaySettingsPanel
-                  settings={displaySettings}
-                  onChange={setDisplaySettings}
-                />
+                <DisplaySettingsPanel settings={displaySettings} onChange={setDisplaySettings} />
               </TabsContent>
 
               <TabsContent value="effects" className="mt-4">
@@ -862,7 +999,6 @@ export default function PreviewPage() {
                           <span className="font-medium">تم إنشاء الفيديو بنجاح!</span>
                         </div>
 
-                        {/* Primary download - WebM (always works) */}
                         <Button
                           onClick={() => {
                             const baseFilename = toSafeFilename(
@@ -877,8 +1013,6 @@ export default function PreviewPage() {
                           تحميل الفيديو (WebM)
                         </Button>
 
-
-                        {/* Social Share Buttons */}
                         <SocialShareButtons
                           videoBlob={videoRecorder.videoBlob}
                           title={`${surah?.name} - قرآن ريلز`}
@@ -892,11 +1026,7 @@ export default function PreviewPage() {
                           variant="secondary"
                           className="w-full gap-2"
                         >
-                          {isSaving ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Save className="h-4 w-4" />
-                          )}
+                          {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                           حفظ في المكتبة
                         </Button>
 
@@ -910,22 +1040,25 @@ export default function PreviewPage() {
                 ) : (
                   <Button
                     onClick={handleStartRecording}
-                    disabled={!audioLoaded || audioError}
+                    disabled={!audioLoaded || audioError || timingsLoading}
                     className="w-full gap-2"
                     size="lg"
                   >
-                    <Video className="h-5 w-5" />
-                    تسجيل وإنشاء الفيديو
+                    {timingsLoading ? (
+                      <>
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        جاري تحميل بيانات الصوت...
+                      </>
+                    ) : (
+                      <>
+                        <Video className="h-5 w-5" />
+                        إنشاء الفيديو
+                      </>
+                    )}
                   </Button>
                 )}
               </CardContent>
             </Card>
-
-            {/* Back Button */}
-            <Button variant="ghost" onClick={() => navigate('/create')} className="w-full gap-2">
-              <RotateCcw className="h-4 w-4" />
-              العودة للإعدادات
-            </Button>
           </motion.div>
         </div>
       </div>
