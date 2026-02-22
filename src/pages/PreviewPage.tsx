@@ -180,9 +180,10 @@ export default function PreviewPage() {
         const bismillahAlt = 'بسم الله الرحمن الرحيم';
         const processedAyahs = data.map((ayah, index) => {
           let text = ayah.text;
-          // Only strip bismillah when NOT starting from the beginning of the surah
-          // When startAyah === 1, keep bismillah so it matches what the reciter reads
-          if (index === 0 && startAyah > 1 && surahNumber !== 1 && surahNumber !== 9) {
+          // Always strip bismillah from ayah 1 text (surahs other than Al-Fatiha & At-Tawbah)
+          // because reciters' audio files for ayah 1 don't include bismillah –
+          // it's either a separate segment or not read at all
+          if (index === 0 && surahNumber !== 1 && surahNumber !== 9) {
             if (text.startsWith(bismillah)) text = text.replace(bismillah, '').trim();
             else if (text.startsWith(bismillahAlt)) text = text.replace(bismillahAlt, '').trim();
           }
