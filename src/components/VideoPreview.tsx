@@ -41,7 +41,7 @@ interface VideoPreviewProps {
     showReciterName: boolean;
     showAyahText: boolean;
     showAyahNumber: boolean;
-    highlightStyle: 'solid' | 'glow' | 'underline' | 'shadow';
+    highlightStyle: 'none' | 'solid' | 'glow' | 'underline' | 'shadow';
     frameStyle: 'none' | 'simple' | 'ornate' | 'golden' | 'geometric' | 'modern' | 'minimal';
     ayahNumberStyle: 'circle' | 'star' | 'diamond' | 'octagon' | 'flower' | 'square' | 'hexagon';
     surahNamePosition?: 'top' | 'bottom' | 'topLeft' | 'topRight';
@@ -1025,8 +1025,13 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       // Different highlight styles
       let highlightBg: string;
       let highlightText: string;
+      const highlightEnabled = displaySettings.highlightStyle !== 'none';
       
       switch (displaySettings.highlightStyle) {
+        case 'none':
+          highlightBg = 'transparent';
+          highlightText = textSettings.textColor;
+          break;
         case 'glow':
           highlightBg = 'transparent';
           highlightText = '#FFD700';
@@ -1050,7 +1055,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
 
         wordsInLine.forEach((w) => {
           const wWidth = ctx.measureText(w).width;
-          const isWordHighlighted = highlightedWordIndex != null && globalIndex === highlightedWordIndex;
+          const isWordHighlighted = highlightEnabled && highlightedWordIndex != null && globalIndex === highlightedWordIndex;
 
           if (isWordHighlighted) {
             ctx.save();

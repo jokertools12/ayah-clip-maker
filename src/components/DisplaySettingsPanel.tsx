@@ -9,7 +9,7 @@ export interface DisplaySettings {
   showReciterName: boolean;
   showAyahText: boolean;
   showAyahNumber: boolean;
-  highlightStyle: 'solid' | 'glow' | 'underline' | 'shadow';
+  highlightStyle: 'none' | 'solid' | 'glow' | 'underline' | 'shadow';
   frameStyle: 'none' | 'simple' | 'ornate' | 'golden' | 'geometric' | 'modern' | 'minimal';
   ayahNumberStyle: 'circle' | 'star' | 'diamond' | 'octagon' | 'flower' | 'square' | 'hexagon';
   surahNamePosition: 'top' | 'bottom' | 'topLeft' | 'topRight';
@@ -25,6 +25,7 @@ interface DisplaySettingsPanelProps {
 }
 
 const highlightOptions = [
+  { value: 'none', label: 'بدون تمييز', description: 'لا يتم تمييز الكلمات' },
   { value: 'solid', label: 'تظليل مملوء', description: 'خلفية ملونة للكلمة' },
   { value: 'glow', label: 'توهج ذهبي', description: 'إضاءة حول الكلمة' },
   { value: 'underline', label: 'خط سفلي', description: 'خط تحت الكلمة' },
