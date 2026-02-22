@@ -26,6 +26,7 @@ import {
   fetchChapterRecitationAudioById,
   QuranFoundationTimestamp,
 } from '@/lib/quranFoundationApi';
+import { concatenateAudioUrls } from '@/lib/audioConcat';
 import { supabase } from '@/integrations/supabase/client';
 import { TextSettings } from '@/components/TextSettingsPanel';
 import {
@@ -157,11 +158,10 @@ export default function PreviewPage() {
   const [audioUrl, setAudioUrl] = useState('');
   const [rangeMs, setRangeMs] = useState<{ from: number; to: number } | null>(null);
 
-  // EveryAyah mode – measured durations used to build timestamps on the full mp3quran file
+  // EveryAyah mode – exact timestamps from concatenated audio
   const [everyAyahUrls, setEveryAyahUrls] = useState<string[]>([]);
-  const [everyAyahDurations, setEveryAyahDurations] = useState<number[]>([]);
   const everyAyahIndexRef = useRef(0);
-  // Cumulative timestamps built from everyayah durations, applied to mp3quran full-surah file
+  // Exact timestamps from concatenated audio buffer
   const [everyAyahTimestamps, setEveryAyahTimestamps] = useState<{from: number; to: number}[]>([]);
 
   const [timingsLoading, setTimingsLoading] = useState(false);
@@ -213,7 +213,7 @@ export default function PreviewPage() {
       setCurrentTime(0);
       setDuration(0);
       setEveryAyahUrls([]);
-      setEveryAyahDurations([]);
+      setEveryAyahTimestamps([]);
       everyAyahIndexRef.current = 0;
 
       // ── Strategy 1: Quran Foundation (word-level sync) ──────────────────────
@@ -249,56 +249,35 @@ export default function PreviewPage() {
         }
       }
 
-      // ── Strategy 2: EveryAyah – measure per-ayah durations, play full mp3quran file ──
+      // ── Strategy 2: EveryAyah – concatenate individual files into one seamless audio ──
       if (reciter.everyAyahSubfolder && !cancelled) {
         const urls: string[] = [];
         for (let n = startAyah; n <= endAyah; n++) {
           urls.push(getEveryAyahUrl(reciter, surahNumber, n));
         }
         try {
-          // Probe first ayah
+          // Probe first ayah to check availability
           const probe = await fetch(urls[0], { method: 'HEAD' });
           if (probe.ok && !cancelled) {
-            console.log(`⏳ Measuring ${urls.length} ayah durations from EveryAyah…`);
-            // Measure each ayah's duration in parallel
-            const durations = await Promise.all(
-              urls.map(
-                (url) =>
-                  new Promise<number>((resolve) => {
-                    const tmp = new Audio();
-                    tmp.preload = 'metadata';
-                    tmp.src = url;
-                    tmp.addEventListener('loadedmetadata', () => resolve(tmp.duration || 3));
-                    tmp.addEventListener('error', () => resolve(3)); // fallback 3s
-                  })
-              )
-            );
+            console.log(`⏳ Concatenating ${urls.length} ayah files into seamless audio…`);
+            const result = await concatenateAudioUrls(urls, (loaded, total) => {
+              console.log(`  📥 Downloaded ${loaded}/${total} ayah files`);
+            });
             if (cancelled) return;
 
-            // Build cumulative timestamps (these map to the full mp3quran file proportionally)
-            const totalMeasured = durations.reduce((s, d) => s + d, 0);
-            const timestamps: {from: number; to: number}[] = [];
-            let cumulative = 0;
-            for (const d of durations) {
-              timestamps.push({ from: cumulative, to: cumulative + d });
-              cumulative += d;
-            }
-
-            // Use full mp3quran surah file for smooth continuous playback
-            const fullUrl = getAudioUrl(reciter, surahNumber);
             setEveryAyahUrls(urls);
-            setEveryAyahDurations(durations);
-            setEveryAyahTimestamps(timestamps);
-            setAudioUrl(fullUrl);
-            setDuration(totalMeasured);
+            setEveryAyahTimestamps(result.timestamps);
+            setAudioUrl(result.blobUrl);
+            setRangeMs(null); // No range needed – the blob IS the exact range
+            setDuration(result.totalDuration);
             setPlaybackMode('everyayah');
             everyAyahIndexRef.current = 0;
-            console.log(`✅ EveryAyah mode – smooth playback via mp3quran, ${urls.length} ayahs, total ${totalMeasured.toFixed(1)}s`);
+            console.log(`✅ EveryAyah mode – seamless concatenated audio, ${urls.length} ayahs, total ${result.totalDuration.toFixed(1)}s`);
             setTimingsLoading(false);
             return;
           }
         } catch (e) {
-          console.warn('EveryAyah probe failed, falling back…', e);
+          console.warn('EveryAyah concatenation failed, falling back…', e);
         }
       }
 
@@ -345,37 +324,8 @@ export default function PreviewPage() {
       }
 
       if (playbackMode === 'everyayah') {
-        // Full mp3quran file loaded – use measured durations to compute range
-        const totalDur = audio.duration;
-        const totalMeasured = everyAyahDurations.reduce((s, d) => s + d, 0);
-        if (totalMeasured > 0 && totalDur > 0) {
-          // Scale measured timestamps proportionally to the full file duration
-          const scale = totalDur / totalMeasured;
-          // The range starts at proportional position of startAyah in the full surah
-          const ayahsBefore = startAyah - 1;
-          const estStartRatio = ayahsBefore / totalAyahsInSurah;
-          const rangeStart = estStartRatio * totalDur;
-          const rangeDuration = totalMeasured * scale * (everyAyahDurations.length / (endAyah - startAyah + 1));
-          // More precise: use the measured total as the range duration scaled
-          const rangeEnd = rangeStart + totalMeasured * scale;
-          
-          // Build per-ayah timestamps within the full file
-          const timestamps: {from: number; to: number}[] = [];
-          let cum = 0;
-          for (const d of everyAyahDurations) {
-            const scaledFrom = rangeStart + cum * scale;
-            const scaledTo = rangeStart + (cum + d) * scale;
-            timestamps.push({ from: scaledFrom, to: scaledTo });
-            cum += d;
-          }
-          setEveryAyahTimestamps(timestamps);
-          setRangeMs({ from: rangeStart * 1000, to: rangeEnd * 1000 });
-          setDuration(Math.max(rangeEnd - rangeStart, 1));
-          console.log(`✅ EveryAyah timestamps mapped: ${rangeStart.toFixed(1)}s–${rangeEnd.toFixed(1)}s of ${totalDur.toFixed(1)}s`);
-        } else {
-          // Fallback if no measured durations
-          setDuration(totalDur);
-        }
+        // Concatenated audio – duration is exact, no mapping needed
+        setDuration(audio.duration);
         setAudioLoaded(true);
         setAudioError(false);
         return;
@@ -438,30 +388,41 @@ export default function PreviewPage() {
         return;
       }
 
-      // ── EveryAyah mode (now uses full mp3quran file with range) ────────────
-      if (playbackMode === 'everyayah' && rangeMs && everyAyahTimestamps.length > 0) {
-        const rangeStartS = rangeMs.from / 1000;
-        const rangeEndS = rangeMs.to / 1000;
-        const totalSec = Math.max(rangeEndS - rangeStartS, 0.001);
+      // ── EveryAyah mode (concatenated seamless audio) ──────────────────────
+      if (playbackMode === 'everyayah' && everyAyahTimestamps.length > 0) {
+        const totalSec = Math.max(audio.duration, 0.001);
 
-        if (nowSec >= rangeEndS) {
+        if (nowSec >= totalSec - 0.05) {
           audio.pause();
-          audio.currentTime = rangeStartS;
+          audio.currentTime = 0;
           setIsPlaying(false);
           setCurrentAyahIndex(0);
+          setHighlightWordIndex(null);
           setCurrentTime(0);
           setProgress(0);
           return;
         }
 
-        const relativeSec = Math.max(nowSec - rangeStartS, 0);
-        setCurrentTime(relativeSec);
-        setProgress(Math.min((relativeSec / totalSec) * 100, 100));
+        setCurrentTime(nowSec);
+        setProgress(Math.min((nowSec / totalSec) * 100, 100));
 
-        // Find current ayah based on mapped timestamps
+        // Find current ayah based on exact timestamps
         for (let i = everyAyahTimestamps.length - 1; i >= 0; i--) {
           if (nowSec >= everyAyahTimestamps[i].from) {
-            if (i !== currentAyahIndex) setCurrentAyahIndex(i);
+            if (i !== currentAyahIndex) {
+              setCurrentAyahIndex(i);
+            }
+            // Proportional word highlighting within this ayah
+            const ts = everyAyahTimestamps[i];
+            const ayahDur = ts.to - ts.from;
+            const posInAyah = nowSec - ts.from;
+            const wordCount = (ayahs[i]?.text ?? '').split(' ').filter(Boolean).length;
+            if (wordCount > 0 && ayahDur > 0) {
+              const wordIdx = Math.min(Math.floor((posInAyah / ayahDur) * wordCount), wordCount - 1);
+              setHighlightWordIndex(wordIdx);
+            } else {
+              setHighlightWordIndex(null);
+            }
             break;
           }
         }
@@ -563,8 +524,13 @@ export default function PreviewPage() {
       return;
     }
 
-    // All modes now use single-file with range – unified logic
-    if (rangeMs) {
+    // EveryAyah: concatenated blob, play from start (no range)
+    if (playbackMode === 'everyayah') {
+      // If at end, restart
+      if (audio.currentTime >= audio.duration - 0.1) {
+        audio.currentTime = 0;
+      }
+    } else if (rangeMs) {
       if (audio.currentTime < rangeStartSec || audio.currentTime >= rangeEndSec) {
         audio.currentTime = rangeStartSec;
       }
@@ -573,7 +539,7 @@ export default function PreviewPage() {
       console.error('Audio play error:', err);
       toast.error('حدث خطأ في تشغيل الصوت');
     });
-  }, [isPlaying, audioEffects, rangeMs, rangeStartSec, rangeEndSec]);
+  }, [isPlaying, audioEffects, rangeMs, rangeStartSec, rangeEndSec, playbackMode]);
 
   // ── Mute ───────────────────────────────────────────────────────────────────
   const toggleMute = useCallback(() => {
@@ -624,13 +590,15 @@ export default function PreviewPage() {
     try {
       await audioEffects.resumeContext();
 
-      // All modes now use single-file with range
-
-      // QF / fallback single-file recording
+      // Determine recording duration based on mode
       const audio = audioRef.current;
       let recordingDuration: number;
 
-      if (rangeMs) {
+      if (playbackMode === 'everyayah') {
+        // Concatenated blob – play from start, duration is exact
+        recordingDuration = audio && audio.duration > 0 ? audio.duration : 60;
+        if (audio) audio.currentTime = 0;
+      } else if (rangeMs) {
         recordingDuration = Math.max((rangeMs.to - rangeMs.from) / 1000, 1);
         if (audio) audio.currentTime = rangeMs.from / 1000;
       } else {
