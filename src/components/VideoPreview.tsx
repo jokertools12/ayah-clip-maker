@@ -66,7 +66,7 @@ const DEFAULT_DISPLAY_SETTINGS = {
   showReciterName: true,
   showAyahText: true,
   showAyahNumber: true,
-  highlightStyle: 'glow' as const,
+  highlightStyle: 'none' as const,
   frameStyle: 'none' as const,
   ayahNumberStyle: 'circle' as const,
   surahNamePosition: 'top' as const,

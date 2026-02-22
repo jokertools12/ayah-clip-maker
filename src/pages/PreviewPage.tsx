@@ -68,7 +68,7 @@ const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
   showReciterName: true,
   showAyahText: true,
   showAyahNumber: true,
-  highlightStyle: 'glow',
+  highlightStyle: 'none',
   frameStyle: 'none',
   ayahNumberStyle: 'circle',
   surahNamePosition: 'top',
@@ -176,16 +176,25 @@ export default function PreviewPage() {
     const loadData = async () => {
       const data = await fetchAyahs(surahNumber, startAyah, endAyah);
       if (data) {
-        const bismillah = 'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ';
-        const bismillahAlt = 'بسم الله الرحمن الرحيم';
         const processedAyahs = data.map((ayah, index) => {
           let text = ayah.text;
-          // Always strip bismillah from ayah 1 text (surahs other than Al-Fatiha & At-Tawbah)
-          // because reciters' audio files for ayah 1 don't include bismillah –
-          // it's either a separate segment or not read at all
-          if (index === 0 && surahNumber !== 1 && surahNumber !== 9) {
-            if (text.startsWith(bismillah)) text = text.replace(bismillah, '').trim();
-            else if (text.startsWith(bismillahAlt)) text = text.replace(bismillahAlt, '').trim();
+          // Always strip bismillah from ayah 1 for all surahs except Al-Fatiha (1) & At-Tawbah (9)
+          // Reciters don't include bismillah in individual ayah audio files
+          if (index === 0 && startAyah <= 1 && surahNumber !== 1 && surahNumber !== 9) {
+            // Strip bismillah using regex that handles all Unicode/tashkeel variants
+            text = text.replace(/^بِ?سْ?مِ?\s*(ٱ|ا)للَّ?هِ?\s*(ٱ|ا)لرَّ?حْ?مَ?[ـٰ]?نِ?\s*(ٱ|ا)لرَّ?حِ?يمِ?\s*/, '').trim();
+            // Fallback: check common exact strings
+            const bismillahPatterns = [
+              'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ',
+              'بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ',
+              'بسم الله الرحمن الرحيم',
+            ];
+            for (const bp of bismillahPatterns) {
+              if (text.startsWith(bp)) {
+                text = text.slice(bp.length).trim();
+                break;
+              }
+            }
           }
           return { ...ayah, text };
         });
@@ -421,8 +430,8 @@ export default function PreviewPage() {
             const posInAyah = nowSec - ts.from;
             const wordCount = (ayahs[i]?.text ?? '').split(' ').filter(Boolean).length;
             if (wordCount > 0 && ayahDur > 0) {
-              // Add a small look-ahead (150ms) so highlighting feels more in sync with speech
-              const lookAhead = 0.15;
+              // Larger look-ahead (300ms) for better perceived sync with speech
+              const lookAhead = 0.30;
               const adjustedPos = Math.min(posInAyah + lookAhead, ayahDur);
               const wordIdx = Math.min(Math.floor((adjustedPos / ayahDur) * wordCount), wordCount - 1);
               setHighlightWordIndex(wordIdx);
