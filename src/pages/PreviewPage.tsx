@@ -180,7 +180,9 @@ export default function PreviewPage() {
         const bismillahAlt = 'بسم الله الرحمن الرحيم';
         const processedAyahs = data.map((ayah, index) => {
           let text = ayah.text;
-          if (index === 0 && startAyah === 1 && surahNumber !== 1 && surahNumber !== 9) {
+          // Only strip bismillah when NOT starting from the beginning of the surah
+          // When startAyah === 1, keep bismillah so it matches what the reciter reads
+          if (index === 0 && startAyah > 1 && surahNumber !== 1 && surahNumber !== 9) {
             if (text.startsWith(bismillah)) text = text.replace(bismillah, '').trim();
             else if (text.startsWith(bismillahAlt)) text = text.replace(bismillahAlt, '').trim();
           }
@@ -412,13 +414,16 @@ export default function PreviewPage() {
             if (i !== currentAyahIndex) {
               setCurrentAyahIndex(i);
             }
-            // Proportional word highlighting within this ayah
+            // Proportional word highlighting within this ayah (with look-ahead for better sync)
             const ts = everyAyahTimestamps[i];
             const ayahDur = ts.to - ts.from;
             const posInAyah = nowSec - ts.from;
             const wordCount = (ayahs[i]?.text ?? '').split(' ').filter(Boolean).length;
             if (wordCount > 0 && ayahDur > 0) {
-              const wordIdx = Math.min(Math.floor((posInAyah / ayahDur) * wordCount), wordCount - 1);
+              // Add a small look-ahead (150ms) so highlighting feels more in sync with speech
+              const lookAhead = 0.15;
+              const adjustedPos = Math.min(posInAyah + lookAhead, ayahDur);
+              const wordIdx = Math.min(Math.floor((adjustedPos / ayahDur) * wordCount), wordCount - 1);
               setHighlightWordIndex(wordIdx);
             } else {
               setHighlightWordIndex(null);
