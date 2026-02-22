@@ -74,14 +74,14 @@ const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
   surahNamePosition: 'top',
   surahNameStyle: 'classic',
   textShadowStyle: 'soft',
-  decorationStyle: 'separator',
+  decorationStyle: 'none',
   ayahTransition: 'fade',
 };
 
 const DEFAULT_EXPORT_SETTINGS: ExportSettings = {
   format: 'mp4',
   quality: 'high',
-  motionSpeed: 3,
+  motionSpeed: 1.5,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -426,16 +426,19 @@ export default function PreviewPage() {
             if (i !== currentAyahIndex) {
               setCurrentAyahIndex(i);
             }
-            // Proportional word highlighting within this ayah (with look-ahead for better sync)
+            // Word highlighting with non-linear distribution for better speech sync
             const ts = everyAyahTimestamps[i];
             const ayahDur = ts.to - ts.from;
             const posInAyah = nowSec - ts.from;
             const wordCount = (ayahs[i]?.text ?? '').split(' ').filter(Boolean).length;
             if (wordCount > 0 && ayahDur > 0) {
-              // Larger look-ahead (300ms) for better perceived sync with speech
-              const lookAhead = 0.30;
+              // Look-ahead (450ms) + slight curve: first words get more time (reciters pause at start)
+              const lookAhead = 0.45;
               const adjustedPos = Math.min(posInAyah + lookAhead, ayahDur);
-              const wordIdx = Math.min(Math.floor((adjustedPos / ayahDur) * wordCount), wordCount - 1);
+              const ratio = adjustedPos / ayahDur;
+              // Apply slight power curve so early words linger a bit longer (matches recitation cadence)
+              const curved = Math.pow(ratio, 0.85);
+              const wordIdx = Math.min(Math.floor(curved * wordCount), wordCount - 1);
               setHighlightWordIndex(wordIdx);
             } else {
               setHighlightWordIndex(null);
