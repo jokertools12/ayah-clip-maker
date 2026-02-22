@@ -181,18 +181,20 @@ export default function PreviewPage() {
           // Always strip bismillah from ayah 1 for all surahs except Al-Fatiha (1) & At-Tawbah (9)
           // Reciters don't include bismillah in individual ayah audio files
           if (index === 0 && startAyah <= 1 && surahNumber !== 1 && surahNumber !== 9) {
-            // Strip bismillah using regex that handles all Unicode/tashkeel variants
-            text = text.replace(/^بِ?سْ?مِ?\s*(ٱ|ا)للَّ?هِ?\s*(ٱ|ا)لرَّ?حْ?مَ?[ـٰ]?نِ?\s*(ٱ|ا)لرَّ?حِ?يمِ?\s*/, '').trim();
-            // Fallback: check common exact strings
-            const bismillahPatterns = [
-              'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ',
-              'بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ',
-              'بسم الله الرحمن الرحيم',
-            ];
-            for (const bp of bismillahPatterns) {
-              if (text.startsWith(bp)) {
-                text = text.slice(bp.length).trim();
-                break;
+            // Strip by removing characters up to and including الرحيم (with any diacritics)
+            // This is the most reliable approach regardless of Unicode variant
+            const stripped = text.replace(/^[^\u0620-\u065F]*بسم[^ا-ي]*الله[^ا-ي]*الرحم[^ا-ي]*ن[^ا-ي]*الرحيم[ِ]?\s*/u, '').trim();
+            if (stripped !== text && stripped.length > 0) {
+              text = stripped;
+            } else {
+              // Fallback: strip all diacritics and check
+              const noDiac = text.replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, '');
+              if (noDiac.startsWith('بسم الله الرحمن الرحيم')) {
+                // Find where الرحيم ends in original text
+                const rhymMatch = text.match(/الرحيم[ِ]?\s*/u);
+                if (rhymMatch && rhymMatch.index !== undefined) {
+                  text = text.slice(rhymMatch.index + rhymMatch[0].length).trim();
+                }
               }
             }
           }
