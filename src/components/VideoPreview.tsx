@@ -17,8 +17,10 @@ const FONT_MAP: Record<string, string> = {
 };
 
 // Slideshow configuration
-const SLIDESHOW_TRANSITION_DURATION = 2500; // 2.5 seconds for ultra-smooth crossfade
+const SLIDESHOW_TRANSITION_DURATION = 2000; // 2s smooth crossfade
 const SLIDESHOW_DISPLAY_DURATION = 5000; // 5 seconds per image
+const TARGET_FPS = 30; // Cap animation at 30fps to reduce CPU load
+const FRAME_INTERVAL = 1000 / TARGET_FPS;
 
 interface VideoPreviewProps {
   background: BackgroundItem | null;
@@ -163,39 +165,28 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         };
       });
     } else if (bgType === 'video') {
-      const isCustomVideo =
-        !!customBackground && /\.(mp4|webm|mov)(\?|#|$)/i.test(bgUrl);
+      // Try loading the actual video so it renders in both preview AND recording.
+      const video = document.createElement('video');
+      video.crossOrigin = 'anonymous';
+      video.muted = true;
+      video.loop = true;
+      video.playsInline = true;
+      video.preload = 'auto';
+      video.src = bgUrl;
 
-      // NOTE: External "video backgrounds" often fail with CORS when drawing to a canvas.
-      // For reliability we render built-in video backgrounds as a static thumbnail.
-      if (!isCustomVideo) {
+      video.onloadeddata = () => {
+        videoRef.current = video;
+        setVideoReady(true);
+        video.play().catch(console.error);
+      };
+
+      video.onerror = () => {
+        console.error('Failed to load video, falling back to thumbnail:', bgUrl);
+        videoRef.current = null;
+        // CORS failure → use static thumbnail as fallback
         const fallbackImage = background?.thumbnail || bgUrl;
         loadImage(fallbackImage);
-      } else {
-        // Load custom video background
-        const video = document.createElement('video');
-        video.crossOrigin = 'anonymous';
-        video.muted = true;
-        video.loop = true;
-        video.playsInline = true;
-        video.preload = 'auto';
-        video.playbackRate = 5; // speed x5 as requested
-        video.src = bgUrl;
-
-        video.onloadeddata = () => {
-          videoRef.current = video;
-          setVideoReady(true);
-          video.play().catch(console.error);
-        };
-
-        video.onerror = () => {
-          console.error('Failed to load video:', bgUrl);
-          videoRef.current = null;
-          // Fallback to image
-          const fallbackImage = background?.thumbnail || bgUrl;
-          loadImage(fallbackImage);
-        };
-      }
+      };
     } else {
       loadImage(bgUrl);
     }
@@ -548,8 +539,11 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     if (!canvas || !ctx) return;
 
     const { width, height } = dimensions;
-    canvas.width = width * 2; // 2x for retina
-    canvas.height = height * 2;
+    // Use 1x resolution — retina 2x is unnecessary and doubles GPU/CPU cost
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+    }
 
     // Clear canvas
     ctx.fillStyle = '#000000';
@@ -557,9 +551,9 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
 
     // Draw background with Ken Burns effect - use prop motionSpeed
     const t = (Date.now() / 1000) * motionSpeed;
-    const scale = 1.12 + Math.sin(t * 0.25) * 0.08;
-    const offsetX = Math.sin(t * 0.15) * 40;
-    const offsetY = Math.cos(t * 0.12) * 35;
+    const scale = 1.06 + Math.sin(t * 0.2) * 0.04; // gentler motion
+    const offsetX = Math.sin(t * 0.12) * 20;
+    const offsetY = Math.cos(t * 0.1) * 16;
     
     // Handle slideshow backgrounds
     if (slideshowReady && slideshowImagesRef.current.length > 1) {
@@ -590,7 +584,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       }
       ctx.restore();
       
-      // Crossfade + slide transition with easing
+      // Pure smooth crossfade (no jarring slide)
       if (positionInCycle > SLIDESHOW_DISPLAY_DURATION) {
         const rawProgress = (positionInCycle - SLIDESHOW_DISPLAY_DURATION) / SLIDESHOW_TRANSITION_DURATION;
         const fadeProgress = easeInOut(Math.min(rawProgress, 1));
@@ -598,17 +592,15 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         ctx.save();
         ctx.globalAlpha = fadeProgress;
         
-        // Different Ken Burns for next image
-        const nextScale = 1.08 + Math.sin(t * 0.2 + 2) * 0.06;
-        const nextOffsetX = Math.cos(t * 0.18) * 25;
-        const nextOffsetY = Math.sin(t * 0.14) * 20;
-        
-        // Slide effect - next image slides in from right
-        const slideOffset = (1 - fadeProgress) * canvas.width * 0.15;
+        // Gentle independent Ken Burns for next image
+        const nextT = t + 3; // offset so it looks different
+        const nextScale = 1.06 + Math.sin(nextT * 0.18) * 0.04;
+        const nextOffsetX = Math.cos(nextT * 0.14) * 18;
+        const nextOffsetY = Math.sin(nextT * 0.11) * 14;
         
         ctx.translate(canvas.width / 2, canvas.height / 2);
         ctx.scale(nextScale, nextScale);
-        ctx.translate(-canvas.width / 2 + nextOffsetX + slideOffset, -canvas.height / 2 + nextOffsetY);
+        ctx.translate(-canvas.width / 2 + nextOffsetX, -canvas.height / 2 + nextOffsetY);
         
         const nextImg = images[nextIndex];
         if (nextImg) {
@@ -1110,14 +1102,16 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     }
   }, [background, customBackground, imageLoaded, videoReady, slideshowReady, surahName, reciterName, currentAyah, currentAyahWords, highlightedWordIndex, textSettings, displaySettings, dimensions, getTokenHsl, drawAyahBadge, getCanvasFontFamily, drawIslamicFrame, motionSpeed]);
 
-  // Animation loop for canvas
+  // Animation loop for canvas — throttled to TARGET_FPS
   useEffect(() => {
-    const animate = () => {
-      drawFrame();
+    let lastFrameTime = 0;
+    const animate = (now: number) => {
       animationFrameRef.current = requestAnimationFrame(animate);
+      if (now - lastFrameTime < FRAME_INTERVAL) return;
+      lastFrameTime = now;
+      drawFrame();
     };
-    
-    animate();
+    animationFrameRef.current = requestAnimationFrame(animate);
     
     return () => {
       if (animationFrameRef.current) {

@@ -72,8 +72,8 @@ export function useVideoRecorder() {
         chunksRef.current = [];
       conversionInProgressRef.current = false;
 
-        // Get canvas stream at 30fps
-        const canvasStream = canvas.captureStream(30);
+        // Capture at 24fps — matches typical cinematic framerate and reduces CPU load
+        const canvasStream = canvas.captureStream(24);
 
         // Combine video + audio tracks.
         const tracks = [...canvasStream.getVideoTracks()];
@@ -152,9 +152,9 @@ export function useVideoRecorder() {
           reject(new Error('Recording failed'));
         };
 
-        // Start recording
+        // Start recording — use larger timeslice to reduce overhead
         setState((prev) => ({ ...prev, stage: 'جاري بدء التسجيل...' }));
-        mediaRecorder.start(100);
+        mediaRecorder.start(500);
 
         // Reset and play audio (if available)
         if (audioElement) {
