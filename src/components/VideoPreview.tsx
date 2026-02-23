@@ -165,28 +165,36 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         };
       });
     } else if (bgType === 'video') {
-      // Try loading the actual video so it renders in both preview AND recording.
-      const video = document.createElement('video');
-      video.crossOrigin = 'anonymous';
-      video.muted = true;
-      video.loop = true;
-      video.playsInline = true;
-      video.preload = 'auto';
-      video.src = bgUrl;
+      // Fetch as blob URL to avoid CORS tainting the canvas (which breaks captureStream)
+      (async () => {
+        try {
+          const resp = await fetch(bgUrl);
+          const blob = await resp.blob();
+          const blobUrl = URL.createObjectURL(blob);
 
-      video.onloadeddata = () => {
-        videoRef.current = video;
-        setVideoReady(true);
-        video.play().catch(console.error);
-      };
+          const video = document.createElement('video');
+          video.muted = true;
+          video.loop = true;
+          video.playsInline = true;
+          video.preload = 'auto';
+          video.src = blobUrl;
 
-      video.onerror = () => {
-        console.error('Failed to load video, falling back to thumbnail:', bgUrl);
-        videoRef.current = null;
-        // CORS failure → use static thumbnail as fallback
-        const fallbackImage = background?.thumbnail || bgUrl;
-        loadImage(fallbackImage);
-      };
+          video.onloadeddata = () => {
+            videoRef.current = video;
+            setVideoReady(true);
+            video.play().catch(console.error);
+          };
+
+          video.onerror = () => {
+            URL.revokeObjectURL(blobUrl);
+            videoRef.current = null;
+            loadImage(background?.thumbnail || bgUrl);
+          };
+        } catch {
+          videoRef.current = null;
+          loadImage(background?.thumbnail || bgUrl);
+        }
+      })();
     } else {
       loadImage(bgUrl);
     }
@@ -663,6 +671,10 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     ctx.shadowOffsetX = 2;
     ctx.shadowOffsetY = 2;
 
+    // Scale factor: all hardcoded sizes were designed for ~1080px width canvas.
+    // Scale them relative to actual canvas width so they look right at 360px too.
+    const S = canvas.width / 1080;
+
     // Draw surah name badge (if enabled) based on surahNameStyle
     if (displaySettings.showSurahName) {
       const badgeY = canvas.height * 0.11;
@@ -672,8 +684,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
 
       switch (nameStyle) {
         case 'banner': {
-          // Wide gradient banner
-          const bw = 500, bh = 90;
+          const bw = 500 * S, bh = 90 * S;
           const grad = ctx.createLinearGradient(canvas.width / 2 - bw / 2, badgeY, canvas.width / 2 + bw / 2, badgeY);
           grad.addColorStop(0, 'rgba(212, 175, 55, 0)');
           grad.addColorStop(0.2, 'rgba(212, 175, 55, 0.25)');
@@ -682,49 +693,46 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
           grad.addColorStop(1, 'rgba(212, 175, 55, 0)');
           ctx.fillStyle = grad;
           ctx.fillRect(canvas.width / 2 - bw / 2, badgeY - bh / 2, bw, bh);
-          // Top/bottom lines
           ctx.strokeStyle = 'rgba(212, 175, 55, 0.5)';
-          ctx.lineWidth = 1.5;
+          ctx.lineWidth = 1.5 * S;
           ctx.beginPath();
-          ctx.moveTo(canvas.width / 2 - bw / 2 + 40, badgeY - bh / 2);
-          ctx.lineTo(canvas.width / 2 + bw / 2 - 40, badgeY - bh / 2);
-          ctx.moveTo(canvas.width / 2 - bw / 2 + 40, badgeY + bh / 2);
-          ctx.lineTo(canvas.width / 2 + bw / 2 - 40, badgeY + bh / 2);
+          ctx.moveTo(canvas.width / 2 - bw / 2 + 40 * S, badgeY - bh / 2);
+          ctx.lineTo(canvas.width / 2 + bw / 2 - 40 * S, badgeY - bh / 2);
+          ctx.moveTo(canvas.width / 2 - bw / 2 + 40 * S, badgeY + bh / 2);
+          ctx.lineTo(canvas.width / 2 + bw / 2 - 40 * S, badgeY + bh / 2);
           ctx.stroke();
           break;
         }
         case 'calligraphy': {
-          // No background, just decorative dots around
           ctx.fillStyle = 'rgba(212, 175, 55, 0.5)';
           [-100, -60, 60, 100].forEach(dx => {
             ctx.beginPath();
-            ctx.arc(canvas.width / 2 + dx, badgeY - 35, 3, 0, Math.PI * 2);
+            ctx.arc(canvas.width / 2 + dx * S, badgeY - 35 * S, 3 * S, 0, Math.PI * 2);
             ctx.fill();
             ctx.beginPath();
-            ctx.arc(canvas.width / 2 + dx, badgeY + 35, 3, 0, Math.PI * 2);
+            ctx.arc(canvas.width / 2 + dx * S, badgeY + 35 * S, 3 * S, 0, Math.PI * 2);
             ctx.fill();
           });
           break;
         }
         case 'circle': {
-          const radius = 75;
+          const radius = 75 * S;
           ctx.beginPath();
           ctx.arc(canvas.width / 2, badgeY, radius, 0, Math.PI * 2);
           ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
           ctx.fill();
           ctx.strokeStyle = 'rgba(212, 175, 55, 0.6)';
-          ctx.lineWidth = 3;
+          ctx.lineWidth = 3 * S;
           ctx.stroke();
-          // Inner circle
           ctx.beginPath();
-          ctx.arc(canvas.width / 2, badgeY, radius - 8, 0, Math.PI * 2);
+          ctx.arc(canvas.width / 2, badgeY, radius - 8 * S, 0, Math.PI * 2);
           ctx.strokeStyle = 'rgba(212, 175, 55, 0.3)';
-          ctx.lineWidth = 1;
+          ctx.lineWidth = 1 * S;
           ctx.stroke();
           break;
         }
         case 'diamond': {
-          const s = 80;
+          const s = 80 * S;
           ctx.beginPath();
           ctx.moveTo(canvas.width / 2, badgeY - s);
           ctx.lineTo(canvas.width / 2 + s * 1.8, badgeY);
@@ -734,65 +742,63 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
           ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
           ctx.fill();
           ctx.strokeStyle = 'rgba(212, 175, 55, 0.6)';
-          ctx.lineWidth = 2.5;
+          ctx.lineWidth = 2.5 * S;
           ctx.stroke();
           break;
         }
         case 'ribbon': {
-          const rw = 420, rh = 70;
+          const rw = 420 * S, rh = 70 * S;
           const rx = canvas.width / 2 - rw / 2;
-          // Ribbon shape with folded ends
           ctx.beginPath();
-          ctx.moveTo(rx + 20, badgeY - rh / 2);
-          ctx.lineTo(rx + rw - 20, badgeY - rh / 2);
+          ctx.moveTo(rx + 20 * S, badgeY - rh / 2);
+          ctx.lineTo(rx + rw - 20 * S, badgeY - rh / 2);
           ctx.lineTo(rx + rw, badgeY);
-          ctx.lineTo(rx + rw - 20, badgeY + rh / 2);
-          ctx.lineTo(rx + 20, badgeY + rh / 2);
+          ctx.lineTo(rx + rw - 20 * S, badgeY + rh / 2);
+          ctx.lineTo(rx + 20 * S, badgeY + rh / 2);
           ctx.lineTo(rx, badgeY);
           ctx.closePath();
           ctx.fillStyle = 'rgba(212, 175, 55, 0.2)';
           ctx.fill();
           ctx.strokeStyle = 'rgba(212, 175, 55, 0.6)';
-          ctx.lineWidth = 2;
+          ctx.lineWidth = 2 * S;
           ctx.stroke();
           break;
         }
         default: {
-          // Classic pill badge
-          const badgeWidth = 360;
-          const badgeHeight = 100;
+          const badgeWidth = 360 * S;
+          const badgeHeight = 100 * S;
           ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
           ctx.beginPath();
-          ctx.roundRect(canvas.width / 2 - badgeWidth / 2, badgeY - badgeHeight / 2, badgeWidth, badgeHeight, 50);
+          ctx.roundRect(canvas.width / 2 - badgeWidth / 2, badgeY - badgeHeight / 2, badgeWidth, badgeHeight, 50 * S);
           ctx.fill();
           ctx.strokeStyle = 'rgba(212, 175, 55, 0.45)';
-          ctx.lineWidth = 3;
+          ctx.lineWidth = 3 * S;
           ctx.stroke();
           ctx.strokeStyle = 'rgba(212, 175, 55, 0.25)';
-          ctx.lineWidth = 1;
+          ctx.lineWidth = 1 * S;
           ctx.beginPath();
-          ctx.roundRect(canvas.width / 2 - (badgeWidth - 10) / 2, badgeY - (badgeHeight - 10) / 2, badgeWidth - 10, badgeHeight - 10, 46);
+          ctx.roundRect(canvas.width / 2 - (badgeWidth - 10 * S) / 2, badgeY - (badgeHeight - 10 * S) / 2, badgeWidth - 10 * S, badgeHeight - 10 * S, 46 * S);
           ctx.stroke();
           break;
         }
       }
 
-      // Draw surah name text
-      ctx.font = `bold ${textSettings.fontSize * 2.5}px "Amiri", "Scheherazade New", serif`;
+      // Draw surah name text — scaled
+      ctx.font = `bold ${textSettings.fontSize * 2.5 * S}px "Amiri", "Scheherazade New", serif`;
       ctx.fillStyle = textSettings.textColor;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.shadowColor = 'rgba(212, 175, 55, 0.35)';
-      ctx.shadowBlur = 8;
+      ctx.shadowBlur = 8 * S;
       ctx.fillText(surahName, canvas.width / 2, badgeY);
       ctx.shadowBlur = 0;
       ctx.restore();
     }
 
-    // Draw reciter name (if enabled)
+    // Draw reciter name (if enabled) — scaled
     if (displaySettings.showReciterName) {
       const reciterY = displaySettings.showSurahName ? canvas.height * 0.175 : canvas.height * 0.12;
-      ctx.font = `${textSettings.fontSize * 1.0}px "${fontName}", "Noto Naskh Arabic", serif`;
+      ctx.font = `${textSettings.fontSize * 1.0 * S}px "${fontName}", "Noto Naskh Arabic", serif`;
       ctx.fillStyle = textSettings.textColor;
       ctx.globalAlpha = 0.7;
       ctx.fillText(`بصوت ${reciterName}`, canvas.width / 2, reciterY);
@@ -802,24 +808,24 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     // Draw decorative separator (waveform-inspired) - Minimal ornate line
     if (displaySettings.showSurahName || displaySettings.showReciterName) {
       const lineY = displaySettings.showReciterName ? canvas.height * 0.21 : canvas.height * 0.17;
-      const lineHalf = 120;
+      const lineHalf = 120 * S;
 
       // Draw small circles on ends + center dot
       ctx.save();
       ctx.fillStyle = 'rgba(212, 175, 55, 0.5)';
       ctx.beginPath();
-      ctx.arc(canvas.width / 2, lineY, 5, 0, Math.PI * 2);
+      ctx.arc(canvas.width / 2, lineY, 5 * S, 0, Math.PI * 2);
       ctx.fill();
       ctx.beginPath();
-      ctx.arc(canvas.width / 2 - lineHalf, lineY, 3, 0, Math.PI * 2);
+      ctx.arc(canvas.width / 2 - lineHalf, lineY, 3 * S, 0, Math.PI * 2);
       ctx.fill();
       ctx.beginPath();
-      ctx.arc(canvas.width / 2 + lineHalf, lineY, 3, 0, Math.PI * 2);
+      ctx.arc(canvas.width / 2 + lineHalf, lineY, 3 * S, 0, Math.PI * 2);
       ctx.fill();
 
       // Lines
       ctx.strokeStyle = 'rgba(212, 175, 55, 0.35)';
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = 1.5 * S;
       ctx.beginPath();
       ctx.moveTo(canvas.width / 2 - lineHalf + 6, lineY);
       ctx.lineTo(canvas.width / 2 - 10, lineY);
@@ -828,8 +834,8 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       ctx.stroke();
 
       // Side ornaments (symmetric little arrows)
-      drawSideOrnament(ctx, canvas.width / 2 - lineHalf - 20, lineY, 12, false);
-      drawSideOrnament(ctx, canvas.width / 2 + lineHalf + 20, lineY, 12, true);
+      drawSideOrnament(ctx, canvas.width / 2 - lineHalf - 20 * S, lineY, 12 * S, false);
+      drawSideOrnament(ctx, canvas.width / 2 + lineHalf + 20 * S, lineY, 12 * S, true);
       ctx.restore();
     }
 
@@ -876,9 +882,9 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     if (currentAyah && displaySettings.showAyahText) {
       const ayahY = canvas.height * 0.52;
       const maxWidth = canvas.width * 0.85;
-      const lineHeight = textSettings.fontSize * 3.2;
+      const lineHeight = textSettings.fontSize * 3.2 * S;
       
-      ctx.font = `${textSettings.fontSize * 2}px "${fontName}", "Noto Naskh Arabic", serif`;
+      ctx.font = `${textSettings.fontSize * 2 * S}px "${fontName}", "Noto Naskh Arabic", serif`;
       ctx.fillStyle = textSettings.textColor;
       
       // Word wrap
@@ -917,12 +923,12 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
 
       // Draw separator line above the ayah
       if (decoStyle === 'separator' || decoStyle === 'both') {
-        drawAyahSeparator(ctx, canvas.width / 2, startY - 40, 180);
+        drawAyahSeparator(ctx, canvas.width / 2, startY - 40 * S, 180 * S);
       }
 
       // Draw frame around ayah text - centered properly
       if (displaySettings.frameStyle !== 'none') {
-        const framePadding = 40;
+        const framePadding = 40 * S;
         // Center the frame horizontally
         const frameWidth = maxWidth + framePadding * 2;
         const frameX = (canvas.width - frameWidth) / 2;
@@ -1054,25 +1060,25 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
             ctx.shadowBlur = 0;
             
             if (displaySettings.highlightStyle === 'solid') {
-              const padX = 20;
-              const padY = 12;
+              const padX = 20 * S;
+              const padY = 12 * S;
               ctx.fillStyle = highlightBg;
               const left = cursorX - wWidth - padX;
-              const top = y - (textSettings.fontSize * 1.3) - padY;
+              const top = y - (textSettings.fontSize * 1.3 * S) - padY;
               const width = wWidth + padX * 2;
-              const height = textSettings.fontSize * 2.4 + padY * 2;
+              const height = textSettings.fontSize * 2.4 * S + padY * 2;
               ctx.beginPath();
-              ctx.roundRect(left, top, width, height, 24);
+              ctx.roundRect(left, top, width, height, 24 * S);
               ctx.fill();
             } else if (displaySettings.highlightStyle === 'glow') {
               ctx.shadowColor = '#FFD700';
-              ctx.shadowBlur = 20;
+              ctx.shadowBlur = 20 * S;
             } else if (displaySettings.highlightStyle === 'underline') {
               ctx.strokeStyle = '#FFD700';
-              ctx.lineWidth = 3;
+              ctx.lineWidth = 3 * S;
               ctx.beginPath();
-              ctx.moveTo(cursorX - wWidth, y + textSettings.fontSize * 0.8);
-              ctx.lineTo(cursorX, y + textSettings.fontSize * 0.8);
+              ctx.moveTo(cursorX - wWidth, y + textSettings.fontSize * 0.8 * S);
+              ctx.lineTo(cursorX, y + textSettings.fontSize * 0.8 * S);
               ctx.stroke();
             }
             
@@ -1082,7 +1088,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
           ctx.save();
           if (isWordHighlighted && displaySettings.highlightStyle === 'glow') {
             ctx.shadowColor = '#FFD700';
-            ctx.shadowBlur = 25;
+            ctx.shadowBlur = 25 * S;
           }
           ctx.fillStyle = isWordHighlighted ? highlightText : textSettings.textColor;
           ctx.fillText(w, cursorX, y);
@@ -1095,8 +1101,8 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
 
       // Draw ayah number badge (if enabled)
       if (displaySettings.showAyahNumber) {
-        const badgeY = startY + totalHeight + 70;
-        drawAyahBadge(ctx, canvas.width / 2, badgeY, currentAyah.numberInSurah, 36, displaySettings.ayahNumberStyle);
+        const badgeY = startY + totalHeight + 70 * S;
+        drawAyahBadge(ctx, canvas.width / 2, badgeY, currentAyah.numberInSurah, 36 * S, displaySettings.ayahNumberStyle);
       }
       ctx.restore(); // End verse transition transform
     }
