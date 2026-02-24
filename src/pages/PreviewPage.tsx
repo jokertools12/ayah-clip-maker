@@ -103,6 +103,8 @@ export default function PreviewPage() {
   const endAyah = parseInt(searchParams.get('end') || '5');
   const backgroundId = searchParams.get('background') || '';
   const backgroundType = searchParams.get('backgroundType') || 'video';
+  const backgroundUrlParam = searchParams.get('backgroundUrl') || '';
+  const backgroundThumbParam = searchParams.get('backgroundThumb') || '';
   const aspectRatio = (searchParams.get('ratio') || '9:16') as '9:16' | '16:9';
 
   const textSettings: TextSettings = {
@@ -116,9 +118,19 @@ export default function PreviewPage() {
   // ── Static derived data ─────────────────────────────────────────────────────
   const surah = surahs.find((s) => s.number === surahNumber);
   const reciter = reciters.find((r) => r.id === reciterId);
-  const background: BackgroundItem | null =
+  const fallbackBackground =
     [...backgroundVideos, ...backgroundImages, ...slideshowBackgrounds].find((bg) => bg.id === backgroundId) ||
     backgroundImages[0];
+  const background: BackgroundItem | null = backgroundUrlParam
+    ? {
+        id: backgroundId || `external-bg-${Date.now()}`,
+        type: (backgroundType as BackgroundItem['type']) || 'video',
+        url: backgroundUrlParam,
+        thumbnail: backgroundThumbParam || backgroundUrlParam,
+        name: 'خلفية مختارة',
+        category: fallbackBackground.category,
+      }
+    : fallbackBackground;
   const totalAyahsInSurah = surah?.numberOfAyahs ?? endAyah;
 
   // ── Settings state ──────────────────────────────────────────────────────────
@@ -138,6 +150,7 @@ export default function PreviewPage() {
   const [ayahs, setAyahs] = useState<{ numberInSurah: number; text: string }[]>([]);
   const [currentAyahIndex, setCurrentAyahIndex] = useState(0);
   const [highlightWordIndex, setHighlightWordIndex] = useState<number | null>(null);
+  const [highlightWordProgress, setHighlightWordProgress] = useState(0);
 
   // ── Playback state ──────────────────────────────────────────────────────────
   const [isPlaying, setIsPlaying] = useState(false);
@@ -225,6 +238,7 @@ export default function PreviewPage() {
       setIsPlaying(false);
       setCurrentAyahIndex(0);
       setHighlightWordIndex(null);
+      setHighlightWordProgress(0);
       setProgress(0);
       setCurrentTime(0);
       setDuration(0);
@@ -377,6 +391,7 @@ export default function PreviewPage() {
           setIsPlaying(false);
           setCurrentAyahIndex(0);
           setHighlightWordIndex(null);
+          setHighlightWordProgress(0);
           setCurrentTime(0);
           setProgress(0);
           return;
@@ -394,9 +409,17 @@ export default function PreviewPage() {
             if (i !== currentAyahIndex) setCurrentAyahIndex(i);
             if (t.segments && t.segments.length > 0) {
               const seg = t.segments.find((s) => nowMs >= s[1] && nowMs < s[2]);
-              setHighlightWordIndex(seg ? seg[0] - 1 : null);
+              if (seg) {
+                setHighlightWordIndex(seg[0] - 1);
+                const segDuration = Math.max(seg[2] - seg[1], 1);
+                setHighlightWordProgress(Math.min(Math.max((nowMs - seg[1]) / segDuration, 0), 1));
+              } else {
+                setHighlightWordIndex(null);
+                setHighlightWordProgress(0);
+              }
             } else {
               setHighlightWordIndex(null);
+              setHighlightWordProgress(0);
             }
             break;
           }
@@ -414,6 +437,7 @@ export default function PreviewPage() {
           setIsPlaying(false);
           setCurrentAyahIndex(0);
           setHighlightWordIndex(null);
+          setHighlightWordProgress(0);
           setCurrentTime(0);
           setProgress(0);
           return;
@@ -428,22 +452,21 @@ export default function PreviewPage() {
             if (i !== currentAyahIndex) {
               setCurrentAyahIndex(i);
             }
-            // Word highlighting with non-linear distribution for better speech sync
+            // Word highlighting follows current ayah timeline (not fixed-speed animation)
             const ts = everyAyahTimestamps[i];
             const ayahDur = ts.to - ts.from;
             const posInAyah = nowSec - ts.from;
             const wordCount = (ayahs[i]?.text ?? '').split(' ').filter(Boolean).length;
             if (wordCount > 0 && ayahDur > 0) {
-              // Look-ahead (450ms) + slight curve: first words get more time (reciters pause at start)
-              const lookAhead = 0.45;
-              const adjustedPos = Math.min(posInAyah + lookAhead, ayahDur);
-              const ratio = adjustedPos / ayahDur;
-              // Apply slight power curve so early words linger a bit longer (matches recitation cadence)
-              const curved = Math.pow(ratio, 0.85);
-              const wordIdx = Math.min(Math.floor(curved * wordCount), wordCount - 1);
+              const ratio = Math.min(Math.max(posInAyah / ayahDur, 0), 1);
+              const wordIdx = Math.min(Math.floor(ratio * wordCount), wordCount - 1);
               setHighlightWordIndex(wordIdx);
+              const perWord = 1 / wordCount;
+              const localProgress = Math.min(Math.max((ratio - wordIdx * perWord) / Math.max(perWord, 0.0001), 0), 1);
+              setHighlightWordProgress(localProgress);
             } else {
               setHighlightWordIndex(null);
+              setHighlightWordProgress(0);
             }
             break;
           }
@@ -463,6 +486,7 @@ export default function PreviewPage() {
           setIsPlaying(false);
           setCurrentAyahIndex(0);
           setHighlightWordIndex(null);
+          setHighlightWordProgress(0);
           setCurrentTime(0);
           setProgress(0);
           return;
@@ -476,6 +500,20 @@ export default function PreviewPage() {
           const ayahDuration = totalSec / ayahs.length;
           const estimatedIndex = Math.min(Math.floor(relativeSec / ayahDuration), ayahs.length - 1);
           if (estimatedIndex !== currentAyahIndex) setCurrentAyahIndex(estimatedIndex);
+
+          const wordCount = (ayahs[estimatedIndex]?.text ?? '').split(' ').filter(Boolean).length;
+          if (wordCount > 0) {
+            const posInAyah = Math.max(relativeSec - estimatedIndex * ayahDuration, 0);
+            const ratio = Math.min(Math.max(posInAyah / Math.max(ayahDuration, 0.001), 0), 1);
+            const wordIdx = Math.min(Math.floor(ratio * wordCount), wordCount - 1);
+            setHighlightWordIndex(wordIdx);
+            const perWord = 1 / wordCount;
+            const localProgress = Math.min(Math.max((ratio - wordIdx * perWord) / Math.max(perWord, 0.0001), 0), 1);
+            setHighlightWordProgress(localProgress);
+          } else {
+            setHighlightWordIndex(null);
+            setHighlightWordProgress(0);
+          }
         }
       } else {
         setCurrentTime(nowSec);
@@ -490,6 +528,7 @@ export default function PreviewPage() {
       setIsPlaying(false);
       setCurrentAyahIndex(0);
       setHighlightWordIndex(null);
+      setHighlightWordProgress(0);
       setCurrentTime(0);
       setProgress(0);
       if (rangeMs) audio.currentTime = rangeMs.from / 1000;
@@ -597,6 +636,7 @@ export default function PreviewPage() {
         audio.currentTime = timing.timestamp_from / 1000;
         setCurrentAyahIndex(newIndex);
         setHighlightWordIndex(null);
+        setHighlightWordProgress(0);
       }
     }
   };
@@ -752,6 +792,7 @@ export default function PreviewPage() {
               currentAyah={ayahs[currentAyahIndex] || null}
               currentAyahWords={currentAyahWords}
               highlightedWordIndex={highlightWordIndex}
+              highlightWordProgress={highlightWordProgress}
               aspectRatio={aspectRatio}
               textSettings={textSettings}
               displaySettings={displaySettings}

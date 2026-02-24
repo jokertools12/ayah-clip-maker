@@ -1,6 +1,5 @@
 import { useRef, useEffect, forwardRef, useImperativeHandle, useCallback, useState } from 'react';
 import { BackgroundItem } from '@/data/backgrounds';
-import { supabase } from '@/integrations/supabase/client';
 
 // Font family mapping for canvas
 const FONT_MAP: Record<string, string> = {
@@ -31,6 +30,7 @@ interface VideoPreviewProps {
   currentAyah: { numberInSurah: number; text: string } | null;
   currentAyahWords?: string[];
   highlightedWordIndex?: number | null;
+  highlightWordProgress?: number;
   aspectRatio: '9:16' | '16:9';
   textSettings: {
     fontSize: number;
@@ -51,7 +51,7 @@ interface VideoPreviewProps {
     surahNameStyle?: 'classic' | 'banner' | 'calligraphy' | 'circle' | 'diamond' | 'ribbon';
     textShadowStyle?: 'soft' | 'strong' | 'none' | 'glow';
     decorationStyle?: 'none' | 'sideBorder' | 'separator' | 'both';
-    ayahTransition?: 'none' | 'fade' | 'slide' | 'zoom' | 'blur';
+    ayahTransition?: 'none' | 'fade' | 'slide' | 'zoom' | 'blur' | 'rise' | 'rotate' | 'cinematic' | 'elastic';
   };
   isPlaying: boolean;
   onCanvasReady?: (canvas: HTMLCanvasElement) => void;
@@ -87,6 +87,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   currentAyah,
   currentAyahWords,
   highlightedWordIndex,
+  highlightWordProgress = 0,
   aspectRatio,
   textSettings,
   displaySettings = DEFAULT_DISPLAY_SETTINGS,
@@ -142,11 +143,13 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     slideshowImagesRef.current = [];
     
     // Handle slideshow backgrounds (animated type with slideImages)
+    let cancelled = false;
+
     if (bgType === 'animated' && slideImages && slideImages.length > 1) {
       // Preload all slideshow images
       const loadedImages: HTMLImageElement[] = [];
       let loadedCount = 0;
-      
+
       slideImages.forEach((url, index) => {
         const img = new Image();
         img.crossOrigin = 'anonymous';
@@ -166,52 +169,72 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         };
       });
     } else if (bgType === 'video') {
-      // Use edge function proxy to fetch video as blob, bypassing CORS
-      (async () => {
+      // Fetch binary video through backend proxy endpoint to keep canvas readable during export
+      const proxyVideo = async () => {
         try {
-          console.log('🎬 Fetching video via proxy:', bgUrl);
-          const { data, error } = await supabase.functions.invoke('video-proxy', {
-            body: { url: bgUrl },
-          });
-          
-          if (error || !data) {
-            throw new Error(error?.message || 'Proxy returned no data');
+          const projectUrl = import.meta.env.VITE_SUPABASE_URL as string;
+          const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
+
+          if (!projectUrl || !publishableKey) {
+            throw new Error('Missing backend configuration for video proxy');
           }
 
-          // data is already an ArrayBuffer/Blob from the edge function
-          const blob = data instanceof Blob ? data : new Blob([data], { type: 'video/mp4' });
+          const resp = await fetch(`${projectUrl}/functions/v1/video-proxy`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              apikey: publishableKey,
+              Authorization: `Bearer ${publishableKey}`,
+            },
+            body: JSON.stringify({ url: bgUrl }),
+          });
+
+          if (!resp.ok) throw new Error(`Video proxy failed (${resp.status})`);
+
+          const blob = await resp.blob();
+          if (!blob || blob.size === 0) throw new Error('Empty video blob from proxy');
+
           const blobUrl = URL.createObjectURL(blob);
+          if (cancelled) {
+            URL.revokeObjectURL(blobUrl);
+            return;
+          }
 
           const video = document.createElement('video');
           video.muted = true;
           video.loop = true;
           video.playsInline = true;
           video.preload = 'auto';
+          video.crossOrigin = 'anonymous';
           video.src = blobUrl;
 
           video.onloadeddata = () => {
+            if (cancelled) {
+              URL.revokeObjectURL(blobUrl);
+              return;
+            }
             videoRef.current = video;
             setVideoReady(true);
             video.play().catch(console.error);
-            console.log('✅ Video loaded via proxy successfully');
           };
 
           video.onerror = () => {
             URL.revokeObjectURL(blobUrl);
             videoRef.current = null;
-            console.warn('⚠️ Video element error after proxy, falling back to image');
             loadImage(background?.thumbnail || bgUrl);
           };
         } catch (e) {
-          console.warn('⚠️ Video proxy failed, falling back to image:', e);
+          console.warn('Video proxy failed, fallback to thumbnail:', e);
           videoRef.current = null;
           loadImage(background?.thumbnail || bgUrl);
         }
-      })();
+      };
+
+      proxyVideo();
     } else {
       loadImage(bgUrl);
     }
-    
+
     function loadImage(url: string) {
       const img = new Image();
       img.crossOrigin = 'anonymous';
@@ -228,8 +251,12 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     }
     
     return () => {
+      cancelled = true;
       if (videoRef.current) {
         videoRef.current.pause();
+        if (videoRef.current.src.startsWith('blob:')) {
+          URL.revokeObjectURL(videoRef.current.src);
+        }
         videoRef.current = null;
       }
       slideshowImagesRef.current = [];
@@ -1005,19 +1032,55 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
             ctx.globalAlpha = easedProgress;
             break;
           case 'slide':
-            ctx.translate(0, (1 - easedProgress) * 80);
+            ctx.translate(0, (1 - easedProgress) * 80 * S);
             ctx.globalAlpha = easedProgress;
             break;
-          case 'zoom':
+          case 'zoom': {
             const scaleVal = 0.85 + easedProgress * 0.15;
             ctx.translate(canvas.width / 2 * (1 - scaleVal), canvas.height * 0.52 * (1 - scaleVal));
             ctx.scale(scaleVal, scaleVal);
             ctx.globalAlpha = easedProgress;
             break;
+          }
           case 'blur':
-            // Simulate blur with multiple slightly-offset semi-transparent draws
             ctx.globalAlpha = easedProgress;
             break;
+          case 'rise': {
+            const yOffset = (1 - easedProgress) * 120 * S;
+            const scaleVal = 0.96 + easedProgress * 0.04;
+            ctx.translate(canvas.width / 2, canvas.height * 0.52 + yOffset);
+            ctx.scale(scaleVal, scaleVal);
+            ctx.translate(-canvas.width / 2, -canvas.height * 0.52);
+            ctx.globalAlpha = easedProgress;
+            break;
+          }
+          case 'rotate': {
+            const rotate = (1 - easedProgress) * 0.05;
+            ctx.translate(canvas.width / 2, canvas.height * 0.52);
+            ctx.rotate(rotate);
+            ctx.translate(-canvas.width / 2, -canvas.height * 0.52);
+            ctx.globalAlpha = easedProgress;
+            break;
+          }
+          case 'cinematic': {
+            const xOffset = (1 - easedProgress) * 60 * S;
+            const yOffset = (1 - easedProgress) * 30 * S;
+            const scaleVal = 1.05 - easedProgress * 0.05;
+            ctx.translate(canvas.width / 2 + xOffset, canvas.height * 0.52 + yOffset);
+            ctx.scale(scaleVal, scaleVal);
+            ctx.translate(-canvas.width / 2, -canvas.height * 0.52);
+            ctx.globalAlpha = Math.min(1, easedProgress * 1.15);
+            break;
+          }
+          case 'elastic': {
+            const elastic = Math.sin(easedProgress * Math.PI * 1.5) * (1 - easedProgress) * 0.08;
+            const scaleVal = 0.9 + easedProgress * 0.1 + elastic;
+            ctx.translate(canvas.width / 2, canvas.height * 0.52);
+            ctx.scale(scaleVal, scaleVal);
+            ctx.translate(-canvas.width / 2, -canvas.height * 0.52);
+            ctx.globalAlpha = easedProgress;
+            break;
+          }
         }
       }
 
@@ -1084,8 +1147,9 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
               ctx.roundRect(left, top, width, height, 24 * S);
               ctx.fill();
             } else if (displaySettings.highlightStyle === 'glow') {
+              const glowPulse = 0.35 + Math.sin(Math.PI * Math.min(Math.max(highlightWordProgress, 0), 1)) * 0.65;
               ctx.shadowColor = '#FFD700';
-              ctx.shadowBlur = 20 * S;
+              ctx.shadowBlur = (14 + glowPulse * 24) * S;
             } else if (displaySettings.highlightStyle === 'underline') {
               ctx.strokeStyle = '#FFD700';
               ctx.lineWidth = 3 * S;
@@ -1100,8 +1164,9 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
 
           ctx.save();
           if (isWordHighlighted && displaySettings.highlightStyle === 'glow') {
+            const glowPulse = 0.35 + Math.sin(Math.PI * Math.min(Math.max(highlightWordProgress, 0), 1)) * 0.65;
             ctx.shadowColor = '#FFD700';
-            ctx.shadowBlur = 25 * S;
+            ctx.shadowBlur = (18 + glowPulse * 28) * S;
           }
           ctx.fillStyle = isWordHighlighted ? highlightText : textSettings.textColor;
           ctx.fillText(w, cursorX, y);
@@ -1119,7 +1184,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       }
       ctx.restore(); // End verse transition transform
     }
-  }, [background, customBackground, imageLoaded, videoReady, slideshowReady, surahName, reciterName, currentAyah, currentAyahWords, highlightedWordIndex, textSettings, displaySettings, dimensions, getTokenHsl, drawAyahBadge, getCanvasFontFamily, drawIslamicFrame, motionSpeed]);
+  }, [background, customBackground, imageLoaded, videoReady, slideshowReady, surahName, reciterName, currentAyah, currentAyahWords, highlightedWordIndex, highlightWordProgress, textSettings, displaySettings, dimensions, getTokenHsl, drawAyahBadge, getCanvasFontFamily, drawIslamicFrame, motionSpeed]);
 
   // Animation loop for canvas — throttled to TARGET_FPS
   useEffect(() => {
