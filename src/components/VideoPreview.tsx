@@ -1,5 +1,6 @@
 import { useRef, useEffect, forwardRef, useImperativeHandle, useCallback, useState } from 'react';
 import { BackgroundItem } from '@/data/backgrounds';
+import { supabase } from '@/integrations/supabase/client';
 
 // Font family mapping for canvas
 const FONT_MAP: Record<string, string> = {
@@ -112,12 +113,12 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   const isTransitioningRef = useRef(false);
   const VERSE_TRANSITION_DURATION = 800; // ms
 
-  // Get dimensions based on aspect ratio
+  // Canvas renders at high resolution for sharp text, CSS scales it down for display
   const getDimensions = () => {
     if (aspectRatio === '9:16') {
-      return { width: 360, height: 640 };
+      return { width: 1080, height: 1920 };
     }
-    return { width: 640, height: 360 };
+    return { width: 1920, height: 1080 };
   };
 
   const dimensions = getDimensions();
@@ -165,11 +166,20 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         };
       });
     } else if (bgType === 'video') {
-      // Fetch as blob URL to avoid CORS tainting the canvas (which breaks captureStream)
+      // Use edge function proxy to fetch video as blob, bypassing CORS
       (async () => {
         try {
-          const resp = await fetch(bgUrl);
-          const blob = await resp.blob();
+          console.log('🎬 Fetching video via proxy:', bgUrl);
+          const { data, error } = await supabase.functions.invoke('video-proxy', {
+            body: { url: bgUrl },
+          });
+          
+          if (error || !data) {
+            throw new Error(error?.message || 'Proxy returned no data');
+          }
+
+          // data is already an ArrayBuffer/Blob from the edge function
+          const blob = data instanceof Blob ? data : new Blob([data], { type: 'video/mp4' });
           const blobUrl = URL.createObjectURL(blob);
 
           const video = document.createElement('video');
@@ -183,14 +193,17 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
             videoRef.current = video;
             setVideoReady(true);
             video.play().catch(console.error);
+            console.log('✅ Video loaded via proxy successfully');
           };
 
           video.onerror = () => {
             URL.revokeObjectURL(blobUrl);
             videoRef.current = null;
+            console.warn('⚠️ Video element error after proxy, falling back to image');
             loadImage(background?.thumbnail || bgUrl);
           };
-        } catch {
+        } catch (e) {
+          console.warn('⚠️ Video proxy failed, falling back to image:', e);
           videoRef.current = null;
           loadImage(background?.thumbnail || bgUrl);
         }
