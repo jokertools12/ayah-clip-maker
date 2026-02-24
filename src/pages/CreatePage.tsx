@@ -144,6 +144,8 @@ export default function CreatePage() {
       end: endAyah.toString(),
       background: selectedBackground.id,
       backgroundType: selectedBackground.type,
+      backgroundUrl: selectedBackground.url,
+      backgroundThumb: selectedBackground.thumbnail,
       ratio: aspectRatio,
       fontSize: textSettings.fontSize.toString(),
       fontFamily: textSettings.fontFamily,
