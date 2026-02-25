@@ -76,6 +76,10 @@ const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
   textShadowStyle: 'soft',
   decorationStyle: 'none',
   ayahTransition: 'fade',
+  particleDensity: 'medium',
+  watermarkEnabled: false,
+  watermarkText: '',
+  watermarkPosition: 'bottomRight',
 };
 
 const DEFAULT_EXPORT_SETTINGS: ExportSettings = {

@@ -52,6 +52,10 @@ interface VideoPreviewProps {
     textShadowStyle?: 'soft' | 'strong' | 'none' | 'glow';
     decorationStyle?: 'none' | 'sideBorder' | 'separator' | 'both';
     ayahTransition?: 'none' | 'fade' | 'slide' | 'zoom' | 'blur' | 'rise' | 'rotate' | 'cinematic' | 'elastic' | 'random';
+    particleDensity?: 'off' | 'low' | 'medium' | 'high';
+    watermarkEnabled?: boolean;
+    watermarkText?: string;
+    watermarkPosition?: 'bottomLeft' | 'bottomRight' | 'topLeft' | 'topRight' | 'bottomCenter';
   };
   isPlaying: boolean;
   onCanvasReady?: (canvas: HTMLCanvasElement) => void;
@@ -77,6 +81,10 @@ const DEFAULT_DISPLAY_SETTINGS = {
   textShadowStyle: 'soft' as const,
   decorationStyle: 'separator' as const,
   ayahTransition: 'fade' as const,
+  particleDensity: 'medium' as const,
+  watermarkEnabled: false,
+  watermarkText: '',
+  watermarkPosition: 'bottomRight' as const,
 };
 
 export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
@@ -148,7 +156,6 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     setSlideshowReady(false);
     slideshowImagesRef.current = [];
     
-    // Handle slideshow backgrounds (animated type with slideImages)
     let cancelled = false;
 
     if (bgType === 'animated' && slideImages && slideImages.length > 1) {
@@ -175,67 +182,72 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         };
       });
     } else if (bgType === 'video') {
-      // Load video directly – Pexels CDN supports CORS headers
-      const video = document.createElement('video');
-      video.muted = true;
-      video.loop = true;
-      video.playsInline = true;
-      video.preload = 'auto';
-      video.crossOrigin = 'anonymous';
-      video.src = bgUrl;
+      // Always load video via proxy to guarantee same-origin blob URL
+      // This prevents canvas tainting which causes captureStream() to produce blank frames
+      const loadViaProxy = async () => {
+        try {
+          const projectUrl = import.meta.env.VITE_SUPABASE_URL as string;
+          const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
+          if (!projectUrl || !publishableKey) throw new Error('No proxy config');
 
-      video.onloadeddata = () => {
-        if (cancelled) return;
-        videoRef.current = video;
-        setVideoReady(true);
-        video.play().catch(console.error);
+          const resp = await fetch(`${projectUrl}/functions/v1/video-proxy`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              apikey: publishableKey,
+              Authorization: `Bearer ${publishableKey}`,
+            },
+            body: JSON.stringify({ url: bgUrl }),
+          });
+          if (!resp.ok) throw new Error(`Proxy ${resp.status}`);
+          const blob = await resp.blob();
+          if (cancelled || !blob.size) return;
+
+          const blobUrl = URL.createObjectURL(blob);
+          const video = document.createElement('video');
+          video.muted = true;
+          video.loop = true;
+          video.playsInline = true;
+          video.preload = 'auto';
+          video.src = blobUrl;
+          video.onloadeddata = () => {
+            if (cancelled) { URL.revokeObjectURL(blobUrl); return; }
+            videoRef.current = video;
+            setVideoReady(true);
+            video.play().catch(console.error);
+          };
+          video.onerror = () => {
+            URL.revokeObjectURL(blobUrl);
+            console.warn('Proxy video failed, trying direct…');
+            loadDirectVideo();
+          };
+        } catch {
+          console.warn('Proxy failed, trying direct load…');
+          loadDirectVideo();
+        }
       };
 
-      video.onerror = () => {
-        console.warn('Direct video load failed, trying proxy…');
-        // Fallback: try via proxy for non-CORS CDNs
-        const proxyVideo = async () => {
-          try {
-            const projectUrl = import.meta.env.VITE_SUPABASE_URL as string;
-            const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
-            if (!projectUrl || !publishableKey) throw new Error('No proxy config');
-
-            const resp = await fetch(`${projectUrl}/functions/v1/video-proxy`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                apikey: publishableKey,
-                Authorization: `Bearer ${publishableKey}`,
-              },
-              body: JSON.stringify({ url: bgUrl }),
-            });
-            if (!resp.ok) throw new Error(`Proxy ${resp.status}`);
-            const blob = await resp.blob();
-            if (cancelled || !blob.size) return;
-
-            const blobUrl = URL.createObjectURL(blob);
-            const v2 = document.createElement('video');
-            v2.muted = true;
-            v2.loop = true;
-            v2.playsInline = true;
-            v2.preload = 'auto';
-            v2.src = blobUrl;
-            v2.onloadeddata = () => {
-              if (cancelled) { URL.revokeObjectURL(blobUrl); return; }
-              videoRef.current = v2;
-              setVideoReady(true);
-              v2.play().catch(console.error);
-            };
-            v2.onerror = () => {
-              URL.revokeObjectURL(blobUrl);
-              loadImage(background?.thumbnail || bgUrl);
-            };
-          } catch {
-            loadImage(background?.thumbnail || bgUrl);
-          }
+      // Fallback: try direct with crossOrigin (may taint canvas)
+      const loadDirectVideo = () => {
+        const video = document.createElement('video');
+        video.muted = true;
+        video.loop = true;
+        video.playsInline = true;
+        video.preload = 'auto';
+        video.crossOrigin = 'anonymous';
+        video.src = bgUrl;
+        video.onloadeddata = () => {
+          if (cancelled) return;
+          videoRef.current = video;
+          setVideoReady(true);
+          video.play().catch(console.error);
         };
-        proxyVideo();
+        video.onerror = () => {
+          loadImage(background?.thumbnail || bgUrl);
+        };
       };
+
+      loadViaProxy();
     } else {
       loadImage(bgUrl);
     }
@@ -706,31 +718,39 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     ctx.fillRect(0, canvas.height * 0.75, canvas.width, canvas.height * 0.25);
 
     // ── Floating golden particles ──────────────────────────────────────────
-    if (particlesRef.current.length < 20) {
-      particlesRef.current.push({
-        x: Math.random() * canvas.width,
-        y: canvas.height + 10,
-        vx: (Math.random() - 0.5) * 0.8,
-        vy: -(0.3 + Math.random() * 0.7),
-        size: 1.5 + Math.random() * 3,
-        alpha: 0.15 + Math.random() * 0.35,
-        life: 0,
+    const particleDensity = displaySettings.particleDensity || 'medium';
+    const maxParticles = particleDensity === 'off' ? 0 : particleDensity === 'low' ? 10 : particleDensity === 'high' ? 40 : 20;
+    
+    if (maxParticles > 0) {
+      if (particlesRef.current.length < maxParticles) {
+        particlesRef.current.push({
+          x: Math.random() * canvas.width,
+          y: canvas.height + 10,
+          vx: (Math.random() - 0.5) * 0.8,
+          vy: -(0.3 + Math.random() * 0.7),
+          size: 1.5 + Math.random() * 3,
+          alpha: 0.15 + Math.random() * 0.35,
+          life: 0,
+        });
+      }
+      ctx.save();
+      particlesRef.current = particlesRef.current.filter(p => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life += 1;
+        p.alpha *= 0.997;
+        if (p.y < -20 || p.alpha < 0.01) return false;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * S, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(212, 175, 55, ${p.alpha})`;
+        ctx.fill();
+        return true;
       });
+      ctx.restore();
+    } else {
+      // Clear particles when density is off
+      particlesRef.current = [];
     }
-    ctx.save();
-    particlesRef.current = particlesRef.current.filter(p => {
-      p.x += p.vx;
-      p.y += p.vy;
-      p.life += 1;
-      p.alpha *= 0.997;
-      if (p.y < -20 || p.alpha < 0.01) return false;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size * S, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(212, 175, 55, ${p.alpha})`;
-      ctx.fill();
-      return true;
-    });
-    ctx.restore();
 
     // ── Subtle vignette effect ────────────────────────────────────────────
     const vignetteGrad = ctx.createRadialGradient(
@@ -1228,6 +1248,55 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         drawAyahBadge(ctx, canvas.width / 2, badgeY, currentAyah.numberInSurah, 36 * S, displaySettings.ayahNumberStyle);
       }
       ctx.restore(); // End verse transition transform
+    }
+
+    // ── Watermark ──────────────────────────────────────────────────────────
+    if (displaySettings.watermarkEnabled && displaySettings.watermarkText) {
+      ctx.save();
+      const wmText = displaySettings.watermarkText;
+      const wmPos = displaySettings.watermarkPosition || 'bottomRight';
+      const wmFontSize = 18 * S;
+      ctx.font = `${wmFontSize}px "Noto Naskh Arabic", sans-serif`;
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+      ctx.shadowBlur = 4 * S;
+      ctx.textBaseline = 'bottom';
+
+      const padding = 30 * S;
+      let wmX: number, wmY: number;
+
+      switch (wmPos) {
+        case 'bottomLeft':
+          ctx.textAlign = 'left';
+          wmX = padding;
+          wmY = canvas.height - padding;
+          break;
+        case 'bottomCenter':
+          ctx.textAlign = 'center';
+          wmX = canvas.width / 2;
+          wmY = canvas.height - padding;
+          break;
+        case 'topLeft':
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'top';
+          wmX = padding;
+          wmY = padding;
+          break;
+        case 'topRight':
+          ctx.textAlign = 'right';
+          ctx.textBaseline = 'top';
+          wmX = canvas.width - padding;
+          wmY = padding;
+          break;
+        default: // bottomRight
+          ctx.textAlign = 'right';
+          wmX = canvas.width - padding;
+          wmY = canvas.height - padding;
+          break;
+      }
+
+      ctx.fillText(wmText, wmX, wmY);
+      ctx.restore();
     }
   }, [background, customBackground, imageLoaded, videoReady, slideshowReady, surahName, reciterName, currentAyah, currentAyahWords, highlightedWordIndex, highlightWordProgress, textSettings, displaySettings, dimensions, getTokenHsl, drawAyahBadge, getCanvasFontFamily, drawIslamicFrame, motionSpeed]);
 

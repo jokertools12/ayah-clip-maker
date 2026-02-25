@@ -2,7 +2,8 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Eye, EyeOff, Sparkles, Frame, Hash, Wand2 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Eye, EyeOff, Sparkles, Frame, Hash, Wand2, Droplets, Type } from 'lucide-react';
 
 export interface DisplaySettings {
   showSurahName: boolean;
@@ -17,6 +18,10 @@ export interface DisplaySettings {
   textShadowStyle: 'soft' | 'strong' | 'none' | 'glow';
   decorationStyle: 'none' | 'sideBorder' | 'separator' | 'both';
   ayahTransition: 'none' | 'fade' | 'slide' | 'zoom' | 'blur' | 'rise' | 'rotate' | 'cinematic' | 'elastic' | 'random';
+  particleDensity: 'off' | 'low' | 'medium' | 'high';
+  watermarkEnabled: boolean;
+  watermarkText: string;
+  watermarkPosition: 'bottomLeft' | 'bottomRight' | 'topLeft' | 'topRight' | 'bottomCenter';
 }
 
 interface DisplaySettingsPanelProps {
@@ -95,6 +100,21 @@ const surahNameStyleOptions = [
   { value: 'ribbon', label: 'شريط', description: 'شريط ذهبي ملفوف' },
 ];
 
+const particleDensityOptions = [
+  { value: 'off', label: 'إيقاف', description: 'بدون جزيئات' },
+  { value: 'low', label: 'قليل', description: '10 جزيئات' },
+  { value: 'medium', label: 'متوسط', description: '20 جزيئة' },
+  { value: 'high', label: 'كثيف', description: '40 جزيئة' },
+];
+
+const watermarkPositionOptions = [
+  { value: 'bottomRight', label: 'أسفل يمين' },
+  { value: 'bottomLeft', label: 'أسفل يسار' },
+  { value: 'bottomCenter', label: 'أسفل وسط' },
+  { value: 'topRight', label: 'أعلى يمين' },
+  { value: 'topLeft', label: 'أعلى يسار' },
+];
+
 export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPanelProps) {
   const updateSetting = <K extends keyof DisplaySettings>(key: K, value: DisplaySettings[K]) => {
     onChange({ ...settings, [key]: value });
@@ -158,6 +178,81 @@ export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPane
               onCheckedChange={(checked) => updateSetting('showAyahNumber', checked)}
             />
           </div>
+        </div>
+
+        {/* Particle Density */}
+        <div className="space-y-3 pt-2 border-t">
+          <Label className="text-sm flex items-center gap-2">
+            <Droplets className="h-4 w-4" />
+            كثافة الجزيئات الذهبية
+          </Label>
+          <RadioGroup
+            value={settings.particleDensity || 'medium'}
+            onValueChange={(value) => updateSetting('particleDensity', value as DisplaySettings['particleDensity'])}
+            className="grid grid-cols-4 gap-2"
+          >
+            {particleDensityOptions.map((option) => (
+              <div key={option.value} className="relative">
+                <RadioGroupItem value={option.value} id={`particle-${option.value}`} className="peer sr-only" />
+                <Label
+                  htmlFor={`particle-${option.value}`}
+                  className="flex flex-col items-center rounded-lg border-2 border-muted p-2 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all text-center"
+                >
+                  <span className="font-medium text-sm">{option.label}</span>
+                  <span className="text-xs text-muted-foreground">{option.description}</span>
+                </Label>
+              </div>
+            ))}
+          </RadioGroup>
+        </div>
+
+        {/* Watermark */}
+        <div className="space-y-3 pt-2 border-t">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="watermarkEnabled" className="flex items-center gap-2 cursor-pointer">
+              <Type className="h-4 w-4" />
+              علامة مائية
+            </Label>
+            <Switch
+              id="watermarkEnabled"
+              checked={settings.watermarkEnabled || false}
+              onCheckedChange={(checked) => updateSetting('watermarkEnabled', checked)}
+            />
+          </div>
+          {settings.watermarkEnabled && (
+            <div className="space-y-3 pl-2">
+              <div>
+                <Label className="text-xs text-muted-foreground mb-1 block">نص العلامة المائية</Label>
+                <Input
+                  value={settings.watermarkText || ''}
+                  onChange={(e) => updateSetting('watermarkText', e.target.value)}
+                  placeholder="مثال: @username"
+                  className="text-sm"
+                  dir="auto"
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground mb-1 block">موضع العلامة</Label>
+                <RadioGroup
+                  value={settings.watermarkPosition || 'bottomRight'}
+                  onValueChange={(value) => updateSetting('watermarkPosition', value as DisplaySettings['watermarkPosition'])}
+                  className="grid grid-cols-3 gap-2"
+                >
+                  {watermarkPositionOptions.map((option) => (
+                    <div key={option.value} className="relative">
+                      <RadioGroupItem value={option.value} id={`wm-${option.value}`} className="peer sr-only" />
+                      <Label
+                        htmlFor={`wm-${option.value}`}
+                        className="flex items-center justify-center rounded-lg border-2 border-muted p-2 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all text-center text-xs"
+                      >
+                        {option.label}
+                      </Label>
+                    </div>
+                  ))}
+                </RadioGroup>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Highlight Style */}
