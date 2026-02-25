@@ -16,7 +16,7 @@ export interface DisplaySettings {
   surahNameStyle: 'classic' | 'banner' | 'calligraphy' | 'circle' | 'diamond' | 'ribbon';
   textShadowStyle: 'soft' | 'strong' | 'none' | 'glow';
   decorationStyle: 'none' | 'sideBorder' | 'separator' | 'both';
-  ayahTransition: 'none' | 'fade' | 'slide' | 'zoom' | 'blur' | 'rise' | 'rotate' | 'cinematic' | 'elastic';
+  ayahTransition: 'none' | 'fade' | 'slide' | 'zoom' | 'blur' | 'rise' | 'rotate' | 'cinematic' | 'elastic' | 'random';
 }
 
 interface DisplaySettingsPanelProps {
@@ -83,6 +83,7 @@ const transitionOptions = [
   { value: 'rotate', label: 'دوران خفيف', description: 'ميل احترافي' },
   { value: 'cinematic', label: 'سينمائي', description: 'دخول درامي ناعم' },
   { value: 'elastic', label: 'مرن', description: 'ارتداد أنيق' },
+  { value: 'random', label: '🎲 عشوائي', description: 'تأثير مختلف لكل آية' },
 ];
 
 const surahNameStyleOptions = [

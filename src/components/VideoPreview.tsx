@@ -51,7 +51,7 @@ interface VideoPreviewProps {
     surahNameStyle?: 'classic' | 'banner' | 'calligraphy' | 'circle' | 'diamond' | 'ribbon';
     textShadowStyle?: 'soft' | 'strong' | 'none' | 'glow';
     decorationStyle?: 'none' | 'sideBorder' | 'separator' | 'both';
-    ayahTransition?: 'none' | 'fade' | 'slide' | 'zoom' | 'blur' | 'rise' | 'rotate' | 'cinematic' | 'elastic';
+    ayahTransition?: 'none' | 'fade' | 'slide' | 'zoom' | 'blur' | 'rise' | 'rotate' | 'cinematic' | 'elastic' | 'random';
   };
   isPlaying: boolean;
   onCanvasReady?: (canvas: HTMLCanvasElement) => void;
@@ -108,11 +108,17 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   const [slideshowReady, setSlideshowReady] = useState(false);
   const slideshowStartTimeRef = useRef<number>(Date.now());
 
+  // Floating particles state (golden dust)
+  const particlesRef = useRef<Array<{ x: number; y: number; vx: number; vy: number; size: number; alpha: number; life: number }>>([]);
+
   // Verse transition state
   const prevAyahRef = useRef<{ numberInSurah: number; text: string } | null>(null);
   const transitionStartRef = useRef<number>(0);
   const isTransitioningRef = useRef(false);
   const VERSE_TRANSITION_DURATION = 800; // ms
+  // For random transition: pick a random effect per verse change
+  const RANDOM_TRANSITIONS: Array<'fade' | 'slide' | 'zoom' | 'blur' | 'rise' | 'rotate' | 'cinematic' | 'elastic'> = ['fade', 'slide', 'zoom', 'blur', 'rise', 'rotate', 'cinematic', 'elastic'];
+  const currentRandomTransitionRef = useRef<string>('fade');
 
   // Canvas renders at high resolution for sharp text, CSS scales it down for display
   const getDimensions = () => {
@@ -169,68 +175,67 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         };
       });
     } else if (bgType === 'video') {
-      // Fetch binary video through backend proxy endpoint to keep canvas readable during export
-      const proxyVideo = async () => {
-        try {
-          const projectUrl = import.meta.env.VITE_SUPABASE_URL as string;
-          const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
+      // Load video directly – Pexels CDN supports CORS headers
+      const video = document.createElement('video');
+      video.muted = true;
+      video.loop = true;
+      video.playsInline = true;
+      video.preload = 'auto';
+      video.crossOrigin = 'anonymous';
+      video.src = bgUrl;
 
-          if (!projectUrl || !publishableKey) {
-            throw new Error('Missing backend configuration for video proxy');
-          }
-
-          const resp = await fetch(`${projectUrl}/functions/v1/video-proxy`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              apikey: publishableKey,
-              Authorization: `Bearer ${publishableKey}`,
-            },
-            body: JSON.stringify({ url: bgUrl }),
-          });
-
-          if (!resp.ok) throw new Error(`Video proxy failed (${resp.status})`);
-
-          const blob = await resp.blob();
-          if (!blob || blob.size === 0) throw new Error('Empty video blob from proxy');
-
-          const blobUrl = URL.createObjectURL(blob);
-          if (cancelled) {
-            URL.revokeObjectURL(blobUrl);
-            return;
-          }
-
-          const video = document.createElement('video');
-          video.muted = true;
-          video.loop = true;
-          video.playsInline = true;
-          video.preload = 'auto';
-          video.crossOrigin = 'anonymous';
-          video.src = blobUrl;
-
-          video.onloadeddata = () => {
-            if (cancelled) {
-              URL.revokeObjectURL(blobUrl);
-              return;
-            }
-            videoRef.current = video;
-            setVideoReady(true);
-            video.play().catch(console.error);
-          };
-
-          video.onerror = () => {
-            URL.revokeObjectURL(blobUrl);
-            videoRef.current = null;
-            loadImage(background?.thumbnail || bgUrl);
-          };
-        } catch (e) {
-          console.warn('Video proxy failed, fallback to thumbnail:', e);
-          videoRef.current = null;
-          loadImage(background?.thumbnail || bgUrl);
-        }
+      video.onloadeddata = () => {
+        if (cancelled) return;
+        videoRef.current = video;
+        setVideoReady(true);
+        video.play().catch(console.error);
       };
 
-      proxyVideo();
+      video.onerror = () => {
+        console.warn('Direct video load failed, trying proxy…');
+        // Fallback: try via proxy for non-CORS CDNs
+        const proxyVideo = async () => {
+          try {
+            const projectUrl = import.meta.env.VITE_SUPABASE_URL as string;
+            const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
+            if (!projectUrl || !publishableKey) throw new Error('No proxy config');
+
+            const resp = await fetch(`${projectUrl}/functions/v1/video-proxy`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                apikey: publishableKey,
+                Authorization: `Bearer ${publishableKey}`,
+              },
+              body: JSON.stringify({ url: bgUrl }),
+            });
+            if (!resp.ok) throw new Error(`Proxy ${resp.status}`);
+            const blob = await resp.blob();
+            if (cancelled || !blob.size) return;
+
+            const blobUrl = URL.createObjectURL(blob);
+            const v2 = document.createElement('video');
+            v2.muted = true;
+            v2.loop = true;
+            v2.playsInline = true;
+            v2.preload = 'auto';
+            v2.src = blobUrl;
+            v2.onloadeddata = () => {
+              if (cancelled) { URL.revokeObjectURL(blobUrl); return; }
+              videoRef.current = v2;
+              setVideoReady(true);
+              v2.play().catch(console.error);
+            };
+            v2.onerror = () => {
+              URL.revokeObjectURL(blobUrl);
+              loadImage(background?.thumbnail || bgUrl);
+            };
+          } catch {
+            loadImage(background?.thumbnail || bgUrl);
+          }
+        };
+        proxyVideo();
+      };
     } else {
       loadImage(bgUrl);
     }
@@ -700,6 +705,43 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     ctx.fillStyle = bottomGradient;
     ctx.fillRect(0, canvas.height * 0.75, canvas.width, canvas.height * 0.25);
 
+    // ── Floating golden particles ──────────────────────────────────────────
+    if (particlesRef.current.length < 20) {
+      particlesRef.current.push({
+        x: Math.random() * canvas.width,
+        y: canvas.height + 10,
+        vx: (Math.random() - 0.5) * 0.8,
+        vy: -(0.3 + Math.random() * 0.7),
+        size: 1.5 + Math.random() * 3,
+        alpha: 0.15 + Math.random() * 0.35,
+        life: 0,
+      });
+    }
+    ctx.save();
+    particlesRef.current = particlesRef.current.filter(p => {
+      p.x += p.vx;
+      p.y += p.vy;
+      p.life += 1;
+      p.alpha *= 0.997;
+      if (p.y < -20 || p.alpha < 0.01) return false;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size * S, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(212, 175, 55, ${p.alpha})`;
+      ctx.fill();
+      return true;
+    });
+    ctx.restore();
+
+    // ── Subtle vignette effect ────────────────────────────────────────────
+    const vignetteGrad = ctx.createRadialGradient(
+      canvas.width / 2, canvas.height / 2, canvas.width * 0.3,
+      canvas.width / 2, canvas.height / 2, canvas.width * 0.9
+    );
+    vignetteGrad.addColorStop(0, 'transparent');
+    vignetteGrad.addColorStop(1, 'rgba(0, 0, 0, 0.25)');
+    ctx.fillStyle = vignetteGrad;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
     // Get the font family for canvas
     const fontName = getCanvasFontFamily(textSettings.fontFamily);
 
@@ -898,13 +940,16 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         currentAyah.numberInSurah !== prevAyahRef.current.numberInSurah) {
       transitionStartRef.current = Date.now();
       isTransitioningRef.current = true;
+      // Pick a random transition for this verse change
+      currentRandomTransitionRef.current = RANDOM_TRANSITIONS[Math.floor(Math.random() * RANDOM_TRANSITIONS.length)];
     }
     if (currentAyah) {
       prevAyahRef.current = currentAyah;
     }
 
     // Calculate transition progress
-    const transitionType = displaySettings.ayahTransition || 'fade';
+    const rawTransitionType = displaySettings.ayahTransition || 'fade';
+    const transitionType = rawTransitionType === 'random' ? currentRandomTransitionRef.current : rawTransitionType;
     let transitionProgress = 1; // 1 = fully visible
     if (isTransitioningRef.current && transitionType !== 'none') {
       const elapsed = Date.now() - transitionStartRef.current;
