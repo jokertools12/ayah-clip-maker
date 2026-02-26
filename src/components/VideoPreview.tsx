@@ -49,6 +49,7 @@ interface VideoPreviewProps {
     ayahNumberStyle: 'circle' | 'star' | 'diamond' | 'octagon' | 'flower' | 'square' | 'hexagon';
     surahNamePosition?: 'top' | 'bottom' | 'topLeft' | 'topRight';
     surahNameStyle?: 'classic' | 'banner' | 'calligraphy' | 'circle' | 'diamond' | 'ribbon';
+    reciterNameStyle?: 'simple' | 'elegant' | 'badge' | 'tag' | 'glow';
     textShadowStyle?: 'soft' | 'strong' | 'none' | 'glow';
     decorationStyle?: 'none' | 'sideBorder' | 'separator' | 'both';
     ayahTransition?: 'none' | 'fade' | 'slide' | 'zoom' | 'blur' | 'rise' | 'rotate' | 'cinematic' | 'elastic' | 'random';
@@ -78,6 +79,7 @@ const DEFAULT_DISPLAY_SETTINGS = {
   ayahNumberStyle: 'circle' as const,
   surahNamePosition: 'top' as const,
   surahNameStyle: 'classic' as const,
+  reciterNameStyle: 'simple' as const,
   textShadowStyle: 'soft' as const,
   decorationStyle: 'separator' as const,
   ayahTransition: 'fade' as const,
@@ -182,72 +184,79 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         };
       });
     } else if (bgType === 'video') {
-      // Always load video via proxy to guarantee same-origin blob URL
-      // This prevents canvas tainting which causes captureStream() to produce blank frames
+      // Strategy: Try direct CORS load first (Pexels supports CORS headers).
+      // Only fall back to proxy if direct load taints canvas.
+      const createVideoEl = (): HTMLVideoElement => {
+        const video = document.createElement('video');
+        video.muted = true;
+        video.loop = true;
+        video.playsInline = true;
+        video.preload = 'auto';
+        return video;
+      };
+
+      const loadDirectVideo = () => {
+        const video = createVideoEl();
+        video.crossOrigin = 'anonymous';
+        video.src = bgUrl;
+        video.onloadeddata = () => {
+          if (cancelled) return;
+          // Test if canvas stays clean
+          try {
+            const tc = document.createElement('canvas');
+            tc.width = 2; tc.height = 2;
+            const tctx = tc.getContext('2d');
+            tctx?.drawImage(video, 0, 0, 2, 2);
+            tc.toDataURL(); // Throws if tainted
+            videoRef.current = video;
+            setVideoReady(true);
+            video.play().catch(console.error);
+            console.log('✅ Video loaded directly with CORS');
+          } catch {
+            console.warn('Direct video taints canvas, trying proxy…');
+            video.pause(); video.src = '';
+            loadViaProxy();
+          }
+        };
+        video.onerror = () => {
+          console.warn('Direct video load failed, trying proxy…');
+          loadViaProxy();
+        };
+      };
+
       const loadViaProxy = async () => {
         try {
           const projectUrl = import.meta.env.VITE_SUPABASE_URL as string;
           const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
           if (!projectUrl || !publishableKey) throw new Error('No proxy config');
-
           const resp = await fetch(`${projectUrl}/functions/v1/video-proxy`, {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              apikey: publishableKey,
-              Authorization: `Bearer ${publishableKey}`,
-            },
+            headers: { 'Content-Type': 'application/json', apikey: publishableKey, Authorization: `Bearer ${publishableKey}` },
             body: JSON.stringify({ url: bgUrl }),
           });
           if (!resp.ok) throw new Error(`Proxy ${resp.status}`);
           const blob = await resp.blob();
           if (cancelled || !blob.size) return;
-
           const blobUrl = URL.createObjectURL(blob);
-          const video = document.createElement('video');
-          video.muted = true;
-          video.loop = true;
-          video.playsInline = true;
-          video.preload = 'auto';
+          const video = createVideoEl();
           video.src = blobUrl;
           video.onloadeddata = () => {
             if (cancelled) { URL.revokeObjectURL(blobUrl); return; }
             videoRef.current = video;
             setVideoReady(true);
             video.play().catch(console.error);
+            console.log('✅ Video loaded via proxy blob');
           };
           video.onerror = () => {
             URL.revokeObjectURL(blobUrl);
-            console.warn('Proxy video failed, trying direct…');
-            loadDirectVideo();
+            loadImage(background?.thumbnail || bgUrl);
           };
         } catch {
-          console.warn('Proxy failed, trying direct load…');
-          loadDirectVideo();
+          loadImage(background?.thumbnail || bgUrl);
         }
       };
 
-      // Fallback: try direct with crossOrigin (may taint canvas)
-      const loadDirectVideo = () => {
-        const video = document.createElement('video');
-        video.muted = true;
-        video.loop = true;
-        video.playsInline = true;
-        video.preload = 'auto';
-        video.crossOrigin = 'anonymous';
-        video.src = bgUrl;
-        video.onloadeddata = () => {
-          if (cancelled) return;
-          videoRef.current = video;
-          setVideoReady(true);
-          video.play().catch(console.error);
-        };
-        video.onerror = () => {
-          loadImage(background?.thumbnail || bgUrl);
-        };
-      };
-
-      loadViaProxy();
+      loadDirectVideo();
     } else {
       loadImage(bgUrl);
     }
@@ -723,26 +732,41 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     
     if (maxParticles > 0) {
       if (particlesRef.current.length < maxParticles) {
+        // Spawn particles on left/right edges to avoid text area
+        const side = Math.random() > 0.5;
         particlesRef.current.push({
-          x: Math.random() * canvas.width,
+          x: side ? Math.random() * canvas.width * 0.2 : canvas.width * 0.8 + Math.random() * canvas.width * 0.2,
           y: canvas.height + 10,
-          vx: (Math.random() - 0.5) * 0.8,
-          vy: -(0.3 + Math.random() * 0.7),
-          size: 1.5 + Math.random() * 3,
-          alpha: 0.15 + Math.random() * 0.35,
+          vx: (Math.random() - 0.5) * 0.6,
+          vy: -(0.3 + Math.random() * 0.6),
+          size: 1.2 + Math.random() * 2.5,
+          alpha: 0.12 + Math.random() * 0.25,
           life: 0,
         });
       }
       ctx.save();
+      // Define text safe zone (center of canvas where ayah text is rendered)
+      const safeTop = canvas.height * 0.3;
+      const safeBottom = canvas.height * 0.72;
+      const safeLeft = canvas.width * 0.08;
+      const safeRight = canvas.width * 0.92;
+
       particlesRef.current = particlesRef.current.filter(p => {
         p.x += p.vx;
         p.y += p.vy;
         p.life += 1;
         p.alpha *= 0.997;
         if (p.y < -20 || p.alpha < 0.01) return false;
+
+        // Fade out particles that drift into the text zone
+        let drawAlpha = p.alpha;
+        if (p.y > safeTop && p.y < safeBottom && p.x > safeLeft && p.x < safeRight) {
+          drawAlpha *= 0.08; // Nearly invisible in text area
+        }
+
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.size * S, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(212, 175, 55, ${p.alpha})`;
+        ctx.fillStyle = `rgba(212, 175, 55, ${drawAlpha})`;
         ctx.fill();
         return true;
       });
@@ -897,14 +921,84 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       ctx.restore();
     }
 
-    // Draw reciter name (if enabled) — scaled
+    // Draw reciter name (if enabled) with style — scaled
     if (displaySettings.showReciterName) {
       const reciterY = displaySettings.showSurahName ? canvas.height * 0.175 : canvas.height * 0.12;
-      ctx.font = `${textSettings.fontSize * 1.0 * S}px "${fontName}", "Noto Naskh Arabic", serif`;
-      ctx.fillStyle = textSettings.textColor;
-      ctx.globalAlpha = 0.7;
-      ctx.fillText(`بصوت ${reciterName}`, canvas.width / 2, reciterY);
-      ctx.globalAlpha = 1;
+      const reciterText = `بصوت ${reciterName}`;
+      const reciterStyle = displaySettings.reciterNameStyle || 'simple';
+      
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      
+      switch (reciterStyle) {
+        case 'elegant': {
+          ctx.font = `italic ${textSettings.fontSize * 1.1 * S}px "Amiri", "Scheherazade New", serif`;
+          ctx.shadowColor = 'rgba(212, 175, 55, 0.4)';
+          ctx.shadowBlur = 6 * S;
+          ctx.fillStyle = '#D4AF37';
+          ctx.fillText(reciterText, canvas.width / 2, reciterY);
+          break;
+        }
+        case 'badge': {
+          ctx.font = `${textSettings.fontSize * 1.0 * S}px "${fontName}", "Noto Naskh Arabic", serif`;
+          const tw = ctx.measureText(reciterText).width;
+          const bw = tw + 60 * S, bh = 44 * S;
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+          ctx.beginPath();
+          ctx.roundRect(canvas.width / 2 - bw / 2, reciterY - bh / 2, bw, bh, 22 * S);
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(212, 175, 55, 0.4)';
+          ctx.lineWidth = 1.5 * S;
+          ctx.stroke();
+          ctx.fillStyle = textSettings.textColor;
+          ctx.globalAlpha = 0.85;
+          ctx.fillText(reciterText, canvas.width / 2, reciterY);
+          break;
+        }
+        case 'tag': {
+          ctx.font = `bold ${textSettings.fontSize * 0.9 * S}px "${fontName}", "Noto Naskh Arabic", serif`;
+          const tw = ctx.measureText(reciterText).width;
+          const pw = 50 * S, ph = 36 * S;
+          // Tag shape with pointed left edge
+          const tx = canvas.width / 2 - (tw + pw) / 2;
+          ctx.fillStyle = 'rgba(212, 175, 55, 0.18)';
+          ctx.beginPath();
+          ctx.moveTo(tx + 16 * S, reciterY - ph / 2);
+          ctx.lineTo(tx + tw + pw, reciterY - ph / 2);
+          ctx.lineTo(tx + tw + pw, reciterY + ph / 2);
+          ctx.lineTo(tx + 16 * S, reciterY + ph / 2);
+          ctx.lineTo(tx, reciterY);
+          ctx.closePath();
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(212, 175, 55, 0.5)';
+          ctx.lineWidth = 1 * S;
+          ctx.stroke();
+          ctx.fillStyle = textSettings.textColor;
+          ctx.globalAlpha = 0.9;
+          ctx.fillText(reciterText, canvas.width / 2 + 8 * S, reciterY);
+          break;
+        }
+        case 'glow': {
+          ctx.font = `${textSettings.fontSize * 1.0 * S}px "${fontName}", "Noto Naskh Arabic", serif`;
+          ctx.shadowColor = '#D4AF37';
+          ctx.shadowBlur = 18 * S;
+          ctx.fillStyle = '#FFD700';
+          ctx.fillText(reciterText, canvas.width / 2, reciterY);
+          // Second pass for stronger glow
+          ctx.shadowBlur = 8 * S;
+          ctx.fillText(reciterText, canvas.width / 2, reciterY);
+          break;
+        }
+        default: { // simple
+          ctx.font = `${textSettings.fontSize * 1.0 * S}px "${fontName}", "Noto Naskh Arabic", serif`;
+          ctx.fillStyle = textSettings.textColor;
+          ctx.globalAlpha = 0.7;
+          ctx.fillText(reciterText, canvas.width / 2, reciterY);
+          break;
+        }
+      }
+      ctx.restore();
     }
 
     // Draw decorative separator (waveform-inspired) - Minimal ornate line
