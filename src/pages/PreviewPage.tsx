@@ -73,6 +73,7 @@ const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
   ayahNumberStyle: 'circle',
   surahNamePosition: 'top',
   surahNameStyle: 'classic',
+  reciterNameStyle: 'simple',
   textShadowStyle: 'soft',
   decorationStyle: 'none',
   ayahTransition: 'fade',

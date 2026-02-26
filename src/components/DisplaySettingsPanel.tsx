@@ -3,7 +3,10 @@ import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Eye, EyeOff, Sparkles, Frame, Hash, Wand2, Droplets, Type } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Eye, EyeOff, Sparkles, Frame, Hash, Wand2, Droplets, Type, Save, FolderOpen, Trash2, User } from 'lucide-react';
+import { toast } from 'sonner';
+import { useState, useEffect } from 'react';
 
 export interface DisplaySettings {
   showSurahName: boolean;
@@ -15,6 +18,7 @@ export interface DisplaySettings {
   ayahNumberStyle: 'circle' | 'star' | 'diamond' | 'octagon' | 'flower' | 'square' | 'hexagon';
   surahNamePosition: 'top' | 'bottom' | 'topLeft' | 'topRight';
   surahNameStyle: 'classic' | 'banner' | 'calligraphy' | 'circle' | 'diamond' | 'ribbon';
+  reciterNameStyle: 'simple' | 'elegant' | 'badge' | 'tag' | 'glow';
   textShadowStyle: 'soft' | 'strong' | 'none' | 'glow';
   decorationStyle: 'none' | 'sideBorder' | 'separator' | 'both';
   ayahTransition: 'none' | 'fade' | 'slide' | 'zoom' | 'blur' | 'rise' | 'rotate' | 'cinematic' | 'elastic' | 'random';
@@ -100,6 +104,14 @@ const surahNameStyleOptions = [
   { value: 'ribbon', label: 'شريط', description: 'شريط ذهبي ملفوف' },
 ];
 
+const reciterNameStyleOptions = [
+  { value: 'simple', label: 'بسيط', description: 'نص عادي شفاف' },
+  { value: 'elegant', label: 'أنيق', description: 'خط مزخرف بظل' },
+  { value: 'badge', label: 'شارة', description: 'داخل شارة مستطيلة' },
+  { value: 'tag', label: 'علامة', description: 'تصميم وسم حديث' },
+  { value: 'glow', label: 'متوهج', description: 'توهج ذهبي حول النص' },
+];
+
 const particleDensityOptions = [
   { value: 'off', label: 'إيقاف', description: 'بدون جزيئات' },
   { value: 'low', label: 'قليل', description: '10 جزيئات' },
@@ -115,9 +127,62 @@ const watermarkPositionOptions = [
   { value: 'topLeft', label: 'أعلى يسار' },
 ];
 
+// Template storage
+const TEMPLATES_KEY = 'ayah-clip-display-templates';
+
+interface SavedTemplate {
+  id: string;
+  name: string;
+  settings: DisplaySettings;
+  createdAt: number;
+}
+
+function loadTemplates(): SavedTemplate[] {
+  try {
+    const raw = localStorage.getItem(TEMPLATES_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function saveTemplates(templates: SavedTemplate[]) {
+  localStorage.setItem(TEMPLATES_KEY, JSON.stringify(templates));
+}
+
 export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPanelProps) {
+  const [templates, setTemplates] = useState<SavedTemplate[]>(loadTemplates);
+  const [templateName, setTemplateName] = useState('');
+  const [showSaveInput, setShowSaveInput] = useState(false);
+
   const updateSetting = <K extends keyof DisplaySettings>(key: K, value: DisplaySettings[K]) => {
     onChange({ ...settings, [key]: value });
+  };
+
+  const handleSaveTemplate = () => {
+    if (!templateName.trim()) return;
+    const newTemplate: SavedTemplate = {
+      id: `tpl-${Date.now()}`,
+      name: templateName.trim(),
+      settings: { ...settings },
+      createdAt: Date.now(),
+    };
+    const updated = [...templates, newTemplate];
+    setTemplates(updated);
+    saveTemplates(updated);
+    setTemplateName('');
+    setShowSaveInput(false);
+    toast.success(`تم حفظ القالب "${newTemplate.name}"`);
+  };
+
+  const handleLoadTemplate = (tpl: SavedTemplate) => {
+    onChange({ ...tpl.settings });
+    toast.success(`تم تطبيق قالب "${tpl.name}"`);
+  };
+
+  const handleDeleteTemplate = (id: string) => {
+    const updated = templates.filter(t => t.id !== id);
+    setTemplates(updated);
+    saveTemplates(updated);
+    toast.success('تم حذف القالب');
   };
 
   return (
@@ -129,6 +194,47 @@ export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPane
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-5">
+        {/* Save / Load Templates */}
+        <div className="space-y-3 pb-2 border-b">
+          <Label className="text-sm flex items-center gap-2">
+            <Save className="h-4 w-4" />
+            القوالب المحفوظة
+          </Label>
+          {templates.length > 0 && (
+            <div className="space-y-1.5 max-h-32 overflow-y-auto">
+              {templates.map(tpl => (
+                <div key={tpl.id} className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 text-sm">
+                  <button onClick={() => handleLoadTemplate(tpl)} className="flex-1 text-right hover:text-primary transition-colors font-medium truncate">
+                    {tpl.name}
+                  </button>
+                  <button onClick={() => handleDeleteTemplate(tpl.id)} className="text-muted-foreground hover:text-destructive transition-colors p-1">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {showSaveInput ? (
+            <div className="flex gap-2">
+              <Input
+                value={templateName}
+                onChange={e => setTemplateName(e.target.value)}
+                placeholder="اسم القالب..."
+                className="text-sm"
+                dir="auto"
+                onKeyDown={e => e.key === 'Enter' && handleSaveTemplate()}
+              />
+              <Button size="sm" onClick={handleSaveTemplate} disabled={!templateName.trim()}>
+                <Save className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : (
+            <Button variant="outline" size="sm" className="w-full gap-2" onClick={() => setShowSaveInput(true)}>
+              <Save className="h-4 w-4" />
+              حفظ الإعدادات الحالية كقالب
+            </Button>
+          )}
+        </div>
         {/* Visibility Toggles */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
@@ -179,6 +285,34 @@ export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPane
             />
           </div>
         </div>
+
+        {/* Reciter Name Style */}
+        {settings.showReciterName && (
+          <div className="space-y-3 pt-2 border-t">
+            <Label className="text-sm flex items-center gap-2">
+              <User className="h-4 w-4" />
+              شكل اسم القارئ
+            </Label>
+            <RadioGroup
+              value={settings.reciterNameStyle || 'simple'}
+              onValueChange={(value) => updateSetting('reciterNameStyle', value as DisplaySettings['reciterNameStyle'])}
+              className="grid grid-cols-3 gap-2"
+            >
+              {reciterNameStyleOptions.map((option) => (
+                <div key={option.value} className="relative">
+                  <RadioGroupItem value={option.value} id={`reciter-${option.value}`} className="peer sr-only" />
+                  <Label
+                    htmlFor={`reciter-${option.value}`}
+                    className="flex flex-col items-center rounded-lg border-2 border-muted p-2 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all text-center"
+                  >
+                    <span className="font-medium text-sm">{option.label}</span>
+                    <span className="text-xs text-muted-foreground">{option.description}</span>
+                  </Label>
+                </div>
+              ))}
+            </RadioGroup>
+          </div>
+        )}
 
         {/* Particle Density */}
         <div className="space-y-3 pt-2 border-t">
