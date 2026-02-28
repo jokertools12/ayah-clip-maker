@@ -123,19 +123,22 @@ export default function PreviewPage() {
   // ── Static derived data ─────────────────────────────────────────────────────
   const surah = surahs.find((s) => s.number === surahNumber);
   const reciter = reciters.find((r) => r.id === reciterId);
-  const fallbackBackground =
-    [...backgroundVideos, ...backgroundImages, ...slideshowBackgrounds].find((bg) => bg.id === backgroundId) ||
-    backgroundImages[0];
-  const background: BackgroundItem | null = backgroundUrlParam
-    ? {
-        id: backgroundId || `external-bg-${Date.now()}`,
-        type: (backgroundType as BackgroundItem['type']) || 'video',
-        url: backgroundUrlParam,
-        thumbnail: backgroundThumbParam || backgroundUrlParam,
-        name: 'خلفية مختارة',
-        category: fallbackBackground.category,
-      }
-    : fallbackBackground;
+  const fallbackBackground = useMemo(
+    () => [...backgroundVideos, ...backgroundImages, ...slideshowBackgrounds].find((bg) => bg.id === backgroundId) || backgroundImages[0],
+    [backgroundId]
+  );
+  const background: BackgroundItem | null = useMemo(() => {
+    if (!backgroundUrlParam) return fallbackBackground;
+
+    return {
+      id: backgroundId || `external-bg-${backgroundUrlParam}`,
+      type: (backgroundType as BackgroundItem['type']) || 'video',
+      url: backgroundUrlParam,
+      thumbnail: backgroundThumbParam || backgroundUrlParam,
+      name: 'خلفية مختارة',
+      category: fallbackBackground.category,
+    };
+  }, [backgroundUrlParam, fallbackBackground, backgroundId, backgroundType, backgroundThumbParam]);
   const totalAyahsInSurah = surah?.numberOfAyahs ?? endAyah;
 
   // ── Settings state ──────────────────────────────────────────────────────────
@@ -291,26 +294,22 @@ export default function PreviewPage() {
           urls.push(getEveryAyahUrl(reciter, surahNumber, n));
         }
         try {
-          // Probe first ayah to check availability
-          const probe = await fetch(urls[0], { method: 'HEAD' });
-          if (probe.ok && !cancelled) {
-            console.log(`⏳ Concatenating ${urls.length} ayah files into seamless audio…`);
-            const result = await concatenateAudioUrls(urls, (loaded, total) => {
-              console.log(`  📥 Downloaded ${loaded}/${total} ayah files`);
-            });
-            if (cancelled) return;
+          console.log(`⏳ Concatenating ${urls.length} ayah files into seamless audio…`);
+          const result = await concatenateAudioUrls(urls, (loaded, total) => {
+            console.log(`  📥 Downloaded ${loaded}/${total} ayah files`);
+          });
+          if (cancelled) return;
 
-            setEveryAyahUrls(urls);
-            setEveryAyahTimestamps(result.timestamps);
-            setAudioUrl(result.blobUrl);
-            setRangeMs(null); // No range needed – the blob IS the exact range
-            setDuration(result.totalDuration);
-            setPlaybackMode('everyayah');
-            everyAyahIndexRef.current = 0;
-            console.log(`✅ EveryAyah mode – seamless concatenated audio, ${urls.length} ayahs, total ${result.totalDuration.toFixed(1)}s`);
-            setTimingsLoading(false);
-            return;
-          }
+          setEveryAyahUrls(urls);
+          setEveryAyahTimestamps(result.timestamps);
+          setAudioUrl(result.blobUrl);
+          setRangeMs(null); // No range needed – the blob IS the exact range
+          setDuration(result.totalDuration);
+          setPlaybackMode('everyayah');
+          everyAyahIndexRef.current = 0;
+          console.log(`✅ EveryAyah mode – seamless concatenated audio, ${urls.length} ayahs, total ${result.totalDuration.toFixed(1)}s`);
+          setTimingsLoading(false);
+          return;
         } catch (e) {
           console.warn('EveryAyah concatenation failed, falling back…', e);
         }
@@ -648,14 +647,25 @@ export default function PreviewPage() {
 
   // ── Video recording ─────────────────────────────────────────────────────────
   const handleStartRecording = async () => {
-    const canvas = videoPreviewRef.current?.getCanvas();
-    if (!canvas) {
+    const previewApi = videoPreviewRef.current;
+    const canvas = previewApi?.getCanvas();
+    if (!canvas || !previewApi) {
       toast.error('حدث خطأ في تجهيز التسجيل');
+      return;
+    }
+
+    if (!previewApi.isBackgroundReady()) {
+      toast.error('يرجى الانتظار حتى اكتمال تحميل الخلفية قبل التسجيل');
       return;
     }
 
     try {
       await audioEffects.resumeContext();
+
+      // Warm up canvas with a fresh frame right before recording starts
+      previewApi.drawFrame();
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      previewApi.drawFrame();
 
       // Determine recording duration based on mode
       const audio = audioRef.current;
