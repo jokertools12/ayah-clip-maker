@@ -66,6 +66,7 @@ interface VideoPreviewProps {
 export interface VideoPreviewRef {
   getContainer: () => HTMLDivElement | null;
   getCanvas: () => HTMLCanvasElement | null;
+  isBackgroundReady: () => boolean;
   drawFrame: () => void;
 }
 
@@ -150,15 +151,17 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     const bgUrl = customBackground || background?.url;
     const bgType = background?.type || 'image';
     const slideImages = background?.slideImages;
-    
+    const fallbackThumb = background?.thumbnail;
+
     if (!bgUrl) return;
-    
+
     setImageLoaded(false);
     setVideoReady(false);
     setSlideshowReady(false);
     slideshowImagesRef.current = [];
-    
+
     let cancelled = false;
+    let localBlobUrl: string | null = null;
 
     if (bgType === 'animated' && slideImages && slideImages.length > 1) {
       // Preload all slideshow images
@@ -170,6 +173,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         img.crossOrigin = 'anonymous';
         img.src = url;
         img.onload = () => {
+          if (cancelled) return;
           loadedImages[index] = img;
           loadedCount++;
           if (loadedCount === slideImages.length) {
@@ -179,8 +183,8 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
           }
         };
         img.onerror = () => {
-          console.error('Failed to load slideshow image:', url);
           loadedCount++;
+          console.error('Failed to load slideshow image:', url);
         };
       });
     } else if (bgType === 'video') {
@@ -192,36 +196,17 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         video.loop = true;
         video.playsInline = true;
         video.preload = 'auto';
+        video.autoplay = true;
+        video.setAttribute('playsinline', 'true');
         return video;
       };
 
-      const loadDirectVideo = () => {
-        const video = createVideoEl();
-        video.crossOrigin = 'anonymous';
-        video.src = bgUrl;
-        video.onloadeddata = () => {
-          if (cancelled) return;
-          // Test if canvas stays clean
-          try {
-            const tc = document.createElement('canvas');
-            tc.width = 2; tc.height = 2;
-            const tctx = tc.getContext('2d');
-            tctx?.drawImage(video, 0, 0, 2, 2);
-            tc.toDataURL(); // Throws if tainted
-            videoRef.current = video;
-            setVideoReady(true);
-            video.play().catch(console.error);
-            console.log('✅ Video loaded directly with CORS');
-          } catch {
-            console.warn('Direct video taints canvas, trying proxy…');
-            video.pause(); video.src = '';
-            loadViaProxy();
-          }
-        };
-        video.onerror = () => {
-          console.warn('Direct video load failed, trying proxy…');
-          loadViaProxy();
-        };
+      const activateVideo = (video: HTMLVideoElement, successLog: string) => {
+        if (cancelled) return;
+        videoRef.current = video;
+        setVideoReady(true);
+        video.play().catch((err) => console.warn('Video play warning:', err));
+        console.log(successLog);
       };
 
       const loadViaProxy = async () => {
@@ -229,31 +214,59 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
           const projectUrl = import.meta.env.VITE_SUPABASE_URL as string;
           const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
           if (!projectUrl || !publishableKey) throw new Error('No proxy config');
+
           const resp = await fetch(`${projectUrl}/functions/v1/video-proxy`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', apikey: publishableKey, Authorization: `Bearer ${publishableKey}` },
+            headers: {
+              'Content-Type': 'application/json',
+              apikey: publishableKey,
+              Authorization: `Bearer ${publishableKey}`,
+            },
             body: JSON.stringify({ url: bgUrl }),
           });
           if (!resp.ok) throw new Error(`Proxy ${resp.status}`);
+
           const blob = await resp.blob();
           if (cancelled || !blob.size) return;
-          const blobUrl = URL.createObjectURL(blob);
+
+          localBlobUrl = URL.createObjectURL(blob);
           const video = createVideoEl();
-          video.src = blobUrl;
-          video.onloadeddata = () => {
-            if (cancelled) { URL.revokeObjectURL(blobUrl); return; }
-            videoRef.current = video;
-            setVideoReady(true);
-            video.play().catch(console.error);
-            console.log('✅ Video loaded via proxy blob');
-          };
-          video.onerror = () => {
-            URL.revokeObjectURL(blobUrl);
-            loadImage(background?.thumbnail || bgUrl);
-          };
+          video.src = localBlobUrl;
+          video.onloadeddata = () => activateVideo(video, '✅ Video loaded via proxy blob');
+          video.onerror = () => loadImage(fallbackThumb || bgUrl);
         } catch {
-          loadImage(background?.thumbnail || bgUrl);
+          loadImage(fallbackThumb || bgUrl);
         }
+      };
+
+      const loadDirectVideo = () => {
+        const video = createVideoEl();
+        video.crossOrigin = 'anonymous';
+        video.src = bgUrl;
+
+        video.onloadeddata = () => {
+          if (cancelled) return;
+          // Test if canvas stays clean
+          try {
+            const tc = document.createElement('canvas');
+            tc.width = 2;
+            tc.height = 2;
+            const tctx = tc.getContext('2d');
+            tctx?.drawImage(video, 0, 0, 2, 2);
+            tc.toDataURL(); // Throws if tainted
+            activateVideo(video, '✅ Video loaded directly with CORS');
+          } catch {
+            console.warn('Direct video taints canvas, trying proxy…');
+            video.pause();
+            video.src = '';
+            loadViaProxy();
+          }
+        };
+
+        video.onerror = () => {
+          console.warn('Direct video load failed, trying proxy…');
+          loadViaProxy();
+        };
       };
 
       loadDirectVideo();
@@ -266,6 +279,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       img.crossOrigin = 'anonymous';
       img.src = url;
       img.onload = () => {
+        if (cancelled) return;
         imageRef.current = img;
         setImageLoaded(true);
       };
@@ -275,19 +289,19 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         setImageLoaded(false);
       };
     }
-    
+
     return () => {
       cancelled = true;
       if (videoRef.current) {
         videoRef.current.pause();
-        if (videoRef.current.src.startsWith('blob:')) {
-          URL.revokeObjectURL(videoRef.current.src);
-        }
         videoRef.current = null;
+      }
+      if (localBlobUrl) {
+        URL.revokeObjectURL(localBlobUrl);
       }
       slideshowImagesRef.current = [];
     };
-  }, [background, customBackground]);
+  }, [customBackground, background?.url, background?.type, background?.thumbnail, background?.slideImages]);
 
   const getTokenHsl = useCallback((token: string, fallback: string) => {
     try {
@@ -613,11 +627,16 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     if (!canvas || !ctx) return;
 
     const { width, height } = dimensions;
+
     // Use 1x resolution — retina 2x is unnecessary and doubles GPU/CPU cost
     if (canvas.width !== width || canvas.height !== height) {
       canvas.width = width;
       canvas.height = height;
     }
+
+    // Scale factor: all hardcoded sizes were designed for ~1080px width canvas.
+    // Scale them relative to actual canvas width so they look right at all sizes.
+    const S = canvas.width / 1080;
 
     // Clear canvas
     ctx.fillStyle = '#000000';
@@ -796,10 +815,6 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     ctx.shadowBlur = textSettings.shadowIntensity * 20;
     ctx.shadowOffsetX = 2;
     ctx.shadowOffsetY = 2;
-
-    // Scale factor: all hardcoded sizes were designed for ~1080px width canvas.
-    // Scale them relative to actual canvas width so they look right at 360px too.
-    const S = canvas.width / 1080;
 
     // Draw surah name badge (if enabled) based on surahNameStyle
     if (displaySettings.showSurahName) {
@@ -1422,6 +1437,11 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   useImperativeHandle(ref, () => ({
     getContainer: () => containerRef.current,
     getCanvas: () => canvasRef.current,
+    isBackgroundReady: () => {
+      if ((background?.type || 'image') === 'video') return videoReady;
+      if ((background?.type || 'image') === 'animated') return slideshowReady;
+      return imageLoaded || Boolean(customBackground);
+    },
     drawFrame,
   }));
 
