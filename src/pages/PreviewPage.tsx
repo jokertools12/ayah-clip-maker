@@ -87,6 +87,8 @@ const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
   performanceMode: 'balanced',
 };
 
+// Note: frameStyle defaults to 'none' — user must explicitly select a frame
+
 const DEFAULT_EXPORT_SETTINGS: ExportSettings = {
   format: 'mp4',
   quality: 'high',
@@ -222,17 +224,9 @@ export default function PreviewPage() {
   // ── Load ayah texts (Quran mode only) ────────────────────────────────────────
   useEffect(() => {
     if (isIbtahalatMode) {
-      // For ibtahalat, look up track lyrics from data, split into lines as separate "ayahs"
-      const trackId = searchParams.get('trackId') || '';
-      const track = getTrackById(trackId);
-      
-      if (track?.lyrics) {
-        const lyricsLines = track.lyrics.split('\n').map(l => l.trim()).filter(Boolean);
-        setAyahs(lyricsLines.map((line, i) => ({ numberInSurah: i + 1, text: line })));
-      } else {
-        // Fallback to title
-        setAyahs([{ numberInSurah: 1, text: ibtTrackTitle }]);
-      }
+      // Show title as the displayed text - lyrics are not reliably synced with audio
+      // so we only show the ibtahal title centered on screen
+      setAyahs([{ numberInSurah: 1, text: ibtTrackTitle }]);
       return;
     }
     const loadData = async () => {
@@ -1147,27 +1141,11 @@ export default function PreviewPage() {
               isRecording={videoRecorder.isRecording}
               motionSpeed={exportSettings.motionSpeed}
               onBackgroundLoadMethod={setBackgroundLoadMethod}
-              ibtahalatLyricsMode={isIbtahalatMode && ayahs.length > 1}
-              allLyricsLines={isIbtahalatMode ? ayahs.map(a => a.text) : []}
-              currentLyricsIndex={currentAyahIndex}
+              ibtahalatLyricsMode={false}
+              allLyricsLines={[]}
+              currentLyricsIndex={0}
             />
 
-            {/* Background Status Indicator */}
-            {background?.type === 'video' && backgroundLoadMethod && (
-              <div className={`mt-2 flex items-center justify-center gap-2 text-xs px-3 py-1.5 rounded-full ${
-                backgroundLoadMethod === 'direct' ? 'bg-green-500/15 text-green-600 dark:text-green-400' :
-                backgroundLoadMethod === 'proxy' ? 'bg-yellow-500/15 text-yellow-600 dark:text-yellow-400' :
-                'bg-red-500/15 text-red-600 dark:text-red-400'
-              }`}>
-                <span className={`h-2 w-2 rounded-full ${
-                  backgroundLoadMethod === 'direct' ? 'bg-green-500' :
-                  backgroundLoadMethod === 'proxy' ? 'bg-yellow-500' : 'bg-red-500'
-                }`} />
-                {backgroundLoadMethod === 'direct' ? 'Direct — مباشر ✓' :
-                 backgroundLoadMethod === 'proxy' ? 'Proxy — عبر الوسيط' :
-                 'Fallback — صورة بديلة'}
-              </div>
-            )}
 
             <audio ref={audioRef} src={audioUrl} preload="auto" crossOrigin="anonymous" />
           </motion.div>
