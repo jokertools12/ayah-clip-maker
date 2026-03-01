@@ -248,12 +248,16 @@ export default function PreviewPage() {
           },
           body: JSON.stringify({ audioUrl: ibtAudioUrl, language: 'ara' }),
         })
-          .then(res => {
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            return res.json();
+          .then(async (res) => {
+            const payload = await res.json().catch(() => null);
+            if (!res.ok) {
+              const message = payload?.error || `HTTP ${res.status}`;
+              throw new Error(message);
+            }
+            return payload;
           })
           .then(data => {
-            if (data.lines && data.lines.length > 0) {
+            if (data?.lines && data.lines.length > 0) {
               setTranscribedLines(data.lines);
               transcribedLinesRef.current = data.lines;
               // Set ayahs from transcribed lines
@@ -270,9 +274,14 @@ export default function PreviewPage() {
             }
           })
           .catch(err => {
-            console.error('Transcription failed:', err);
+            const message = err instanceof Error ? err.message : 'Unknown error';
+            console.error('Transcription failed:', message);
             setTranscriptionError(true);
-            toast.error('تعذر نسخ كلمات الابتهال تلقائياً');
+            if (message.includes('speech_to_text permission')) {
+              toast.error('مفتاح ElevenLabs الحالي لا يملك صلاحية Speech-to-Text. أعد ربط التكامل بمفتاح يملك الصلاحية.');
+            } else {
+              toast.error('تعذر نسخ كلمات الابتهال تلقائياً');
+            }
           })
           .finally(() => setIsTranscribing(false));
       }
