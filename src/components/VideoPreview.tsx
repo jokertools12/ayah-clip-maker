@@ -834,14 +834,18 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     ctx.fillRect(0, canvas.height * 0.75, canvas.width, canvas.height * 0.25);
 
     // ── Floating golden particles ──────────────────────────────────────────
-    // Disable particles entirely during recording to save CPU
+    // Enable particles during recording for ibtahalat mode for richer visuals
     const particleDensity = displaySettings.particleDensity || 'medium';
     const perfMode = displaySettings.performanceMode || 'balanced';
     const isAnyRecording = !isPreviewRender;
     const previewParticleMultiplier = isPreviewRender ? (isPlaying ? 0.4 : 0) : 0;
     const perfMultiplier = perfMode === 'economy' ? 0.3 : perfMode === 'pro' ? 0.8 : 0.5;
     const baseParticles = particleDensity === 'off' ? 0 : particleDensity === 'low' ? 8 : particleDensity === 'high' ? 25 : 14;
-    const maxParticles = isAnyRecording ? 0 : Math.round(baseParticles * perfMultiplier * previewParticleMultiplier);
+    // Allow particles during recording for ibtahalat (reduced count)
+    const recordingParticleMultiplier = ibtahalatLyricsMode ? 0.3 : 0;
+    const maxParticles = isAnyRecording
+      ? Math.round(baseParticles * perfMultiplier * recordingParticleMultiplier)
+      : Math.round(baseParticles * perfMultiplier * previewParticleMultiplier);
 
     if (maxParticles > 0) {
       if (particlesRef.current.length < maxParticles) {
@@ -884,6 +888,34 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       ctx.restore();
     } else if (particlesRef.current.length > 0) {
       particlesRef.current = [];
+    }
+
+    // ── Twinkling stars effect (for ibtahalat mode) ──────────────────────
+    if (ibtahalatLyricsMode && isPlaying) {
+      ctx.save();
+      const starCount = isAnyRecording ? 6 : 12;
+      const time = Date.now() / 1000;
+      for (let i = 0; i < starCount; i++) {
+        // Deterministic positions based on index
+        const sx = ((i * 137.508) % canvas.width);
+        const sy = ((i * 97.31 + 50) % (canvas.height * 0.25));
+        const bottomSy = canvas.height * 0.78 + ((i * 83.7) % (canvas.height * 0.2));
+        const twinkle = 0.15 + Math.sin(time * (1.5 + i * 0.3) + i * 2.1) * 0.15;
+        const starSize = (1.5 + (i % 3)) * S;
+
+        // Top stars
+        ctx.beginPath();
+        ctx.arc(sx, sy, starSize, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255, 255, 255, ${twinkle})`;
+        ctx.fill();
+
+        // Bottom stars
+        ctx.beginPath();
+        ctx.arc(canvas.width - sx, bottomSy, starSize * 0.8, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(212, 175, 55, ${twinkle * 0.8})`;
+        ctx.fill();
+      }
+      ctx.restore();
     }
 
     // ── Subtle vignette effect (skip during recording to save GPU) ──────
@@ -1194,11 +1226,6 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       const maxVisibleLines = Math.min(7, allLyricsLines.length);
       const halfVisible = Math.floor(maxVisibleLines / 2);
       
-      ctx.save();
-      ctx.direction = 'rtl';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      
       // Calculate which lines to show (centered on current)
       let startLine = Math.max(0, currentLyricsIndex - halfVisible);
       let endLine = Math.min(allLyricsLines.length, startLine + maxVisibleLines);
@@ -1208,6 +1235,92 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       
       const totalVisibleHeight = (endLine - startLine) * lyricsLineHeight;
       const baseY = centerY - totalVisibleHeight / 2 + lyricsLineHeight / 2;
+
+      // ── Animated Islamic decorative frame ──────────────────────────────
+      const frameTime = Date.now() / 1000;
+      const framePad = 40 * S;
+      const frameX = canvas.width * 0.06;
+      const frameY = baseY - lyricsLineHeight / 2 - framePad;
+      const frameW = canvas.width * 0.88;
+      const frameH = totalVisibleHeight + framePad * 2;
+      const cornerR = 20 * S;
+      const glowPulse = 0.4 + Math.sin(frameTime * 1.2) * 0.2;
+
+      ctx.save();
+      // Outer glow
+      ctx.shadowColor = `rgba(212, 175, 55, ${glowPulse * 0.4})`;
+      ctx.shadowBlur = 20 * S;
+      ctx.strokeStyle = `rgba(212, 175, 55, ${0.3 + glowPulse * 0.2})`;
+      ctx.lineWidth = 2.5 * S;
+      ctx.beginPath();
+      ctx.roundRect(frameX, frameY, frameW, frameH, cornerR);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      // Inner decorative line (dashed)
+      ctx.strokeStyle = `rgba(212, 175, 55, ${0.15 + glowPulse * 0.1})`;
+      ctx.lineWidth = 1 * S;
+      ctx.setLineDash([8 * S, 4 * S]);
+      ctx.beginPath();
+      ctx.roundRect(frameX + 8 * S, frameY + 8 * S, frameW - 16 * S, frameH - 16 * S, cornerR - 4 * S);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Corner Islamic ornaments (animated rotation)
+      const drawIslamicCornerOrnament = (cx: number, cy: number, size: number) => {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(frameTime * 0.15);
+        // 8-pointed star
+        const points = 8;
+        const outerR = size;
+        const innerR = size * 0.45;
+        ctx.beginPath();
+        for (let p = 0; p < points * 2; p++) {
+          const r = p % 2 === 0 ? outerR : innerR;
+          const angle = (p * Math.PI) / points - Math.PI / 2;
+          if (p === 0) ctx.moveTo(r * Math.cos(angle), r * Math.sin(angle));
+          else ctx.lineTo(r * Math.cos(angle), r * Math.sin(angle));
+        }
+        ctx.closePath();
+        ctx.fillStyle = `rgba(212, 175, 55, ${0.2 + glowPulse * 0.15})`;
+        ctx.fill();
+        ctx.strokeStyle = `rgba(212, 175, 55, ${0.5 + glowPulse * 0.2})`;
+        ctx.lineWidth = 1.5 * S;
+        ctx.stroke();
+        ctx.restore();
+      };
+
+      const ornamentSize = 14 * S;
+      drawIslamicCornerOrnament(frameX, frameY, ornamentSize);
+      drawIslamicCornerOrnament(frameX + frameW, frameY, ornamentSize);
+      drawIslamicCornerOrnament(frameX + frameW, frameY + frameH, ornamentSize);
+      drawIslamicCornerOrnament(frameX, frameY + frameH, ornamentSize);
+
+      // Top/bottom center diamond ornaments
+      const drawDiamondOrnament = (cx: number, cy: number, size: number) => {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.fillStyle = `rgba(212, 175, 55, ${0.35 + glowPulse * 0.15})`;
+        ctx.beginPath();
+        ctx.moveTo(0, -size);
+        ctx.lineTo(size * 0.6, 0);
+        ctx.lineTo(0, size);
+        ctx.lineTo(-size * 0.6, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      };
+      drawDiamondOrnament(frameX + frameW / 2, frameY, 8 * S);
+      drawDiamondOrnament(frameX + frameW / 2, frameY + frameH, 8 * S);
+
+      ctx.restore();
+
+      // ── Draw lyrics lines ──────────────────────────────────────────────
+      ctx.save();
+      ctx.direction = 'rtl';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
       
       for (let i = startLine; i < endLine; i++) {
         const line = allLyricsLines[i];
@@ -1219,9 +1332,9 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         
         if (isCurrent) {
           // Golden glow effect for current line
-          const glowPulse = 0.6 + Math.sin(Date.now() / 400) * 0.4;
+          const textGlowPulse = 0.6 + Math.sin(Date.now() / 400) * 0.4;
           ctx.shadowColor = '#FFD700';
-          ctx.shadowBlur = (20 + glowPulse * 15) * S;
+          ctx.shadowBlur = (20 + textGlowPulse * 15) * S;
           ctx.font = `bold ${lyricsFontSize * 1.15}px "${fontName}", "Noto Naskh Arabic", serif`;
           ctx.fillStyle = '#FFD700';
           
@@ -1248,7 +1361,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
           ctx.fillStyle = '#FFD700';
           ctx.fillText(line, canvas.width / 2, y);
           // Double pass for stronger glow
-          ctx.shadowBlur = (10 + glowPulse * 8) * S;
+          ctx.shadowBlur = (10 + textGlowPulse * 8) * S;
           ctx.fillText(line, canvas.width / 2, y);
         } else {
           // Faded neighboring lines
