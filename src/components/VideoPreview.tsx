@@ -70,6 +70,7 @@ export interface VideoPreviewRef {
   getContainer: () => HTMLDivElement | null;
   getCanvas: () => HTMLCanvasElement | null;
   isBackgroundReady: () => boolean;
+  ensureBackgroundPlayback: () => Promise<void>;
   getRecordingDimensions: () => { width: number; height: number };
   getRecommendedRecordingFps: () => number;
   drawFrame: (targetCanvas?: HTMLCanvasElement, renderMode?: 'preview' | 'recording') => void;
@@ -154,6 +155,49 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     if (perfMode === 'pro') return 30;
     return 27;
   }, [displaySettings.performanceMode]);
+
+  const ensureBackgroundPlayback = useCallback(async () => {
+    if ((background?.type || 'image') !== 'video') return;
+
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (video.readyState < 2) {
+      await new Promise<void>((resolve) => {
+        let timeoutId: number | null = null;
+
+        const cleanup = () => {
+          video.removeEventListener('loadeddata', onReady);
+          video.removeEventListener('canplay', onReady);
+          video.removeEventListener('error', onDone);
+          if (timeoutId !== null) window.clearTimeout(timeoutId);
+        };
+
+        const onDone = () => {
+          cleanup();
+          resolve();
+        };
+
+        const onReady = () => {
+          cleanup();
+          resolve();
+        };
+
+        video.addEventListener('loadeddata', onReady, { once: true });
+        video.addEventListener('canplay', onReady, { once: true });
+        video.addEventListener('error', onDone, { once: true });
+        timeoutId = window.setTimeout(onDone, 1200);
+      });
+    }
+
+    if (video.paused) {
+      try {
+        await video.play();
+      } catch (err) {
+        console.warn('Could not resume background video before recording:', err);
+      }
+    }
+  }, [background?.type]);
 
   // Get the actual font name for canvas
   const getCanvasFontFamily = useCallback((fontFamily: string): string => {
@@ -643,7 +687,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
 
     const base = getRecordingDimensions();
     const previewPerfMode = displaySettings.performanceMode || 'balanced';
-    const previewScale = previewPerfMode === 'economy' ? 0.42 : previewPerfMode === 'pro' ? 0.72 : 0.56;
+    const previewScale = previewPerfMode === 'economy' ? 0.34 : previewPerfMode === 'pro' ? 0.58 : 0.44;
 
     const width = renderMode === 'recording' ? base.width : Math.round(base.width * previewScale);
     const height = renderMode === 'recording' ? base.height : Math.round(base.height * previewScale);
@@ -763,10 +807,12 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     // ── Floating golden particles ──────────────────────────────────────────
     const particleDensity = displaySettings.particleDensity || 'medium';
     const perfMode = displaySettings.performanceMode || 'balanced';
-    const perfMultiplier = perfMode === 'economy' ? 0.5 : perfMode === 'pro' ? 1 : 0.75;
+    const isPreviewRender = renderMode === 'preview';
+    const previewParticleMultiplier = isPreviewRender ? (isPlaying ? 0.55 : 0) : 1;
+    const perfMultiplier = perfMode === 'economy' ? 0.45 : perfMode === 'pro' ? 1 : 0.7;
     const baseParticles = particleDensity === 'off' ? 0 : particleDensity === 'low' ? 10 : particleDensity === 'high' ? 40 : 20;
-    const maxParticles = Math.round(baseParticles * perfMultiplier);
-    
+    const maxParticles = Math.round(baseParticles * perfMultiplier * previewParticleMultiplier);
+
     if (maxParticles > 0) {
       if (particlesRef.current.length < maxParticles) {
         // Spawn particles on left/right edges to avoid text area
@@ -782,23 +828,21 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         });
       }
       ctx.save();
-      // Define text safe zone (center of canvas where ayah text is rendered)
       const safeTop = canvas.height * 0.3;
       const safeBottom = canvas.height * 0.72;
       const safeLeft = canvas.width * 0.08;
       const safeRight = canvas.width * 0.92;
 
-      particlesRef.current = particlesRef.current.filter(p => {
+      particlesRef.current = particlesRef.current.filter((p) => {
         p.x += p.vx;
         p.y += p.vy;
         p.life += 1;
         p.alpha *= 0.997;
         if (p.y < -20 || p.alpha < 0.01) return false;
 
-        // Fade out particles that drift into the text zone
         let drawAlpha = p.alpha;
         if (p.y > safeTop && p.y < safeBottom && p.x > safeLeft && p.x < safeRight) {
-          drawAlpha *= 0.08; // Nearly invisible in text area
+          drawAlpha *= 0.08;
         }
 
         ctx.beginPath();
@@ -808,20 +852,21 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         return true;
       });
       ctx.restore();
-    } else {
-      // Clear particles when density is off
+    } else if (particlesRef.current.length > 0) {
       particlesRef.current = [];
     }
 
     // ── Subtle vignette effect ────────────────────────────────────────────
-    const vignetteGrad = ctx.createRadialGradient(
-      canvas.width / 2, canvas.height / 2, canvas.width * 0.3,
-      canvas.width / 2, canvas.height / 2, canvas.width * 0.9
-    );
-    vignetteGrad.addColorStop(0, 'transparent');
-    vignetteGrad.addColorStop(1, 'rgba(0, 0, 0, 0.25)');
-    ctx.fillStyle = vignetteGrad;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (!isPreviewRender || isPlaying) {
+      const vignetteGrad = ctx.createRadialGradient(
+        canvas.width / 2, canvas.height / 2, canvas.width * 0.3,
+        canvas.width / 2, canvas.height / 2, canvas.width * 0.9
+      );
+      vignetteGrad.addColorStop(0, 'transparent');
+      vignetteGrad.addColorStop(1, 'rgba(0, 0, 0, 0.25)');
+      ctx.fillStyle = vignetteGrad;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
 
     // Get the font family for canvas
     const fontName = getCanvasFontFamily(textSettings.fontFamily);
@@ -1425,21 +1470,30 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       ctx.fillText(wmText, wmX, wmY);
       ctx.restore();
     }
-  }, [background, customBackground, imageLoaded, videoReady, slideshowReady, surahName, reciterName, currentAyah, currentAyahWords, highlightedWordIndex, highlightWordProgress, textSettings, displaySettings, getRecordingDimensions, getTokenHsl, drawAyahBadge, getCanvasFontFamily, drawIslamicFrame, motionSpeed]);
+  }, [background, customBackground, imageLoaded, videoReady, slideshowReady, surahName, reciterName, currentAyah, currentAyahWords, highlightedWordIndex, highlightWordProgress, textSettings, displaySettings, getRecordingDimensions, getTokenHsl, drawAyahBadge, getCanvasFontFamily, drawIslamicFrame, motionSpeed, isPlaying]);
 
   useEffect(() => {
     drawFrameRuntimeRef.current = drawFrame;
   }, [drawFrame]);
 
-  // Animation loop for preview canvas — throttled and paused during recording isolation
+  // Animation loop for preview canvas — lighter while idle and fully paused during isolated recording
   useEffect(() => {
     if (isRecording) {
-      drawFrameRuntimeRef.current(); // keep one latest still frame visible while recording runs on isolated canvas
+      drawFrameRuntimeRef.current();
+      return;
+    }
+
+    const hasAnimatedBackground =
+      ((background?.type || 'image') === 'video' && videoReady) ||
+      ((background?.type || 'image') === 'animated' && slideshowReady);
+
+    if (!isPlaying && !hasAnimatedBackground) {
+      drawFrameRuntimeRef.current();
       return;
     }
 
     const perfMode = displaySettings.performanceMode || 'balanced';
-    const targetFps = perfMode === 'economy' ? 14 : perfMode === 'pro' ? 22 : 18;
+    const targetFps = perfMode === 'economy' ? 10 : perfMode === 'pro' ? 18 : 14;
     const frameInterval = 1000 / targetFps;
     let lastFrameTime = 0;
 
@@ -1457,7 +1511,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [displaySettings.performanceMode, isRecording]);
+  }, [background?.type, displaySettings.performanceMode, isPlaying, isRecording, videoReady, slideshowReady]);
 
   // Notify when canvas is ready
   useEffect(() => {
@@ -1474,6 +1528,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       if ((background?.type || 'image') === 'animated') return slideshowReady;
       return imageLoaded || Boolean(customBackground);
     },
+    ensureBackgroundPlayback,
     getRecordingDimensions,
     getRecommendedRecordingFps,
     drawFrame,
