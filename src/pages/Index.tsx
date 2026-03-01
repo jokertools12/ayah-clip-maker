@@ -2,7 +2,8 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Layout } from '@/components/Layout';
-import { BookOpen, Video, Sparkles, Play, Users, Download, Music } from 'lucide-react';
+import { BookOpen, Video, Sparkles, Play, Users, Download, Music, Mic, ArrowLeft } from 'lucide-react';
+import { performers, getTracksByPerformer } from '@/data/ibtahalat';
 
 const features = [
   {
@@ -26,14 +27,14 @@ const features = [
     description: 'عرض الآيات بشكل احترافي متزامن مع التلاوة',
   },
   {
-    icon: Download,
-    title: 'تحميل سهل',
-    description: 'تحميل الفيديوهات بجودة عالية لمشاركتها',
+    icon: Music,
+    title: 'ابتهالات وتواشيح',
+    description: 'أنشئ فيديوهات بابتهالات أشهر المبتهلين مثل طوبار والنقشبندي',
   },
   {
-    icon: Play,
-    title: 'صيغ متعددة',
-    description: 'اختر بين الصيغة العمودية للريلز أو الأفقية ليوتيوب',
+    icon: Download,
+    title: 'تحميل سهل',
+    description: 'تحميل الفيديوهات بجودة عالية لمشاركتها على منصات التواصل',
   },
 ];
 
@@ -76,20 +77,20 @@ export default function Index() {
               className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-2 text-sm font-medium text-primary mb-6"
             >
               <Sparkles className="h-4 w-4" />
-              <span>أنشئ مقاطع قرآنية بسهولة</span>
+              <span>أنشئ مقاطع قرآنية وابتهالات بسهولة</span>
             </motion.div>
 
             {/* Title */}
             <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold mb-6 leading-tight">
               <span className="gradient-text">قرآن ريلز</span>
               <br />
-              <span className="text-foreground">مقاطع قرآنية احترافية</span>
+              <span className="text-foreground">مقاطع قرآنية وابتهالات احترافية</span>
             </h1>
 
             {/* Subtitle */}
             <p className="text-lg md:text-xl text-muted-foreground mb-8 max-w-2xl mx-auto leading-relaxed">
-              أنشئ مقاطع فيديو قصيرة من القرآن الكريم مع تلاوات الشيوخ المشهورين
-              وخلفيات طبيعية ساحرة، جاهزة للمشاركة على منصات التواصل الاجتماعي
+              أنشئ مقاطع فيديو احترافية من القرآن الكريم والابتهالات والتواشيح
+              مع أصوات أشهر القراء والمبتهلين وخلفيات ساحرة
             </p>
 
             {/* CTA Buttons */}
@@ -170,6 +171,68 @@ export default function Index() {
               </motion.div>
             ))}
           </motion.div>
+        </div>
+      </section>
+
+      {/* Ibtahalat Section */}
+      <section className="py-20">
+        <div className="container mx-auto px-4">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center mb-12"
+          >
+            <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-2 text-sm font-medium text-primary mb-4">
+              <Music className="h-4 w-4" />
+              <span>جديد</span>
+            </div>
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">ابتهالات وتواشيح</h2>
+            <p className="text-muted-foreground max-w-2xl mx-auto">
+              أنشئ فيديوهات بأجمل الابتهالات والتواشيح لأشهر المبتهلين والمنشدين
+            </p>
+          </motion.div>
+
+          <motion.div
+            variants={containerVariants}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true }}
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10"
+          >
+            {performers.map((performer) => {
+              const trackCount = getTracksByPerformer(performer.id).length;
+              return (
+                <motion.div
+                  key={performer.id}
+                  variants={itemVariants}
+                  className="bg-card rounded-xl p-6 border hover:shadow-lg hover:shadow-primary/5 transition-all duration-300 text-center group"
+                >
+                  <div className="flex h-16 w-16 mx-auto items-center justify-center rounded-full bg-primary/10 text-primary mb-4 group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                    <Mic className="h-8 w-8" />
+                  </div>
+                  <h3 className="text-lg font-bold mb-1">{performer.name}</h3>
+                  <p className="text-sm text-muted-foreground mb-2">{performer.description}</p>
+                  <div className="flex items-center justify-center gap-2">
+                    <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                      {performer.category}
+                    </span>
+                    <span className="text-xs text-muted-foreground">{trackCount} تسجيل</span>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </motion.div>
+
+          <div className="text-center">
+            <Button asChild size="lg" variant="outline" className="text-lg px-8">
+              <Link to="/ibtahalat" className="flex items-center gap-2">
+                <Music className="h-5 w-5" />
+                تصفح جميع الابتهالات
+                <ArrowLeft className="h-4 w-4" />
+              </Link>
+            </Button>
+          </div>
         </div>
       </section>
 
