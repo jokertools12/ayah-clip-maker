@@ -775,10 +775,11 @@ export default function PreviewPage() {
 
         try {
           const recordingCanvas = document.createElement('canvas');
-          // Use quality-based dimensions instead of always 1080x1920
+          // Use quality-based dimensions; for lite mode, scale down once here
           const recordingDimensions = getQualityDimensions(attempt.quality, aspectRatio);
-          recordingCanvas.width = recordingDimensions.width;
-          recordingCanvas.height = recordingDimensions.height;
+          const liteScale = attempt.renderMode === 'recordingLite' ? 0.67 : 1;
+          recordingCanvas.width = Math.round(recordingDimensions.width * liteScale);
+          recordingCanvas.height = Math.round(recordingDimensions.height * liteScale);
 
           const frameInterval = Math.max(1000 / attempt.fps, 16);
           let rafId: number | null = null;
