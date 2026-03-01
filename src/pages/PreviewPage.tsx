@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
+import { getTrackById } from '@/data/ibtahalat';
 import { motion } from 'framer-motion';
 import { Layout } from '@/components/Layout';
 import { VideoPreview, VideoPreviewRef } from '@/components/VideoPreview';
@@ -221,8 +222,17 @@ export default function PreviewPage() {
   // ── Load ayah texts (Quran mode only) ────────────────────────────────────────
   useEffect(() => {
     if (isIbtahalatMode) {
-      // For ibtahalat, create a single "ayah" with the track title as text
-      setAyahs([{ numberInSurah: 1, text: ibtTrackTitle }]);
+      // For ibtahalat, look up track lyrics from data, split into lines as separate "ayahs"
+      const trackId = searchParams.get('trackId') || '';
+      const track = getTrackById(trackId);
+      
+      if (track?.lyrics) {
+        const lyricsLines = track.lyrics.split('\n').map(l => l.trim()).filter(Boolean);
+        setAyahs(lyricsLines.map((line, i) => ({ numberInSurah: i + 1, text: line })));
+      } else {
+        // Fallback to title
+        setAyahs([{ numberInSurah: 1, text: ibtTrackTitle }]);
+      }
       return;
     }
     const loadData = async () => {
@@ -1098,7 +1108,7 @@ export default function PreviewPage() {
               highlightWordProgress={highlightWordProgress}
               aspectRatio={aspectRatio}
               textSettings={textSettings}
-              displaySettings={displaySettings}
+              displaySettings={isIbtahalatMode ? { ...displaySettings, showAyahNumber: false } : displaySettings}
               isPlaying={isPlaying}
               isRecording={videoRecorder.isRecording}
               motionSpeed={exportSettings.motionSpeed}
