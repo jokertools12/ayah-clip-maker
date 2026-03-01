@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -20,10 +21,10 @@ serve(async (req) => {
       });
     }
 
-    const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY");
-    if (!ELEVENLABS_API_KEY) {
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) {
       return new Response(
-        JSON.stringify({ error: "ELEVENLABS_API_KEY is not configured" }),
+        JSON.stringify({ error: "LOVABLE_API_KEY is not configured" }),
         {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -37,91 +38,111 @@ serve(async (req) => {
     if (!audioResp.ok) {
       throw new Error(`Failed to fetch audio: ${audioResp.status}`);
     }
-    const audioBlob = await audioResp.blob();
-    console.log(`Audio fetched, size: ${audioBlob.size} bytes`);
+    const audioBuffer = await audioResp.arrayBuffer();
+    const audioBase64 = base64Encode(audioBuffer);
+    console.log(`Audio fetched, size: ${audioBuffer.byteLength} bytes`);
 
-    // Send to ElevenLabs Scribe
-    const formData = new FormData();
-    formData.append("file", audioBlob, "audio.mp3");
-    formData.append("model_id", "scribe_v2");
-    formData.append("language_code", language || "ara");
-    formData.append("tag_audio_events", "false");
-    formData.append("diarize", "false");
+    // Use Lovable AI Gateway (Gemini) for transcription
+    const systemPrompt = `You are an expert Arabic audio transcriber. Listen to the audio and transcribe it accurately.
 
-    console.log("Sending to ElevenLabs STT...");
-    const sttResp = await fetch("https://api.elevenlabs.io/v1/speech-to-text", {
+IMPORTANT RULES:
+- Transcribe the Arabic speech word by word
+- Split the transcription into logical lines/sentences (each 3-8 words)
+- For each line, estimate the approximate start and end time in seconds
+- Return ONLY valid JSON, no markdown, no explanation
+
+Return JSON in this exact format:
+{
+  "text": "full transcription text",
+  "lines": [
+    {"text": "first line of text", "start": 0.0, "end": 3.5},
+    {"text": "second line of text", "start": 3.5, "end": 7.0}
+  ]
+}`;
+
+    console.log("Sending to Lovable AI Gateway (Gemini)...");
+    const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
-        "xi-api-key": ELEVENLABS_API_KEY,
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "Content-Type": "application/json",
       },
-      body: formData,
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [
+          { role: "system", content: systemPrompt },
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: `Transcribe this ${language === "ara" ? "Arabic" : "Arabic"} audio recording. It is a religious devotional chant (ابتهال). Return the transcription as JSON with lines and timestamps.`,
+              },
+              {
+                type: "input_audio",
+                input_audio: {
+                  data: audioBase64,
+                  format: "mp3",
+                },
+              },
+            ],
+          },
+        ],
+        temperature: 0.1,
+      }),
     });
 
-    if (!sttResp.ok) {
-      const errText = await sttResp.text();
-      console.error(`ElevenLabs STT error: ${sttResp.status}`, errText);
+    if (!aiResp.ok) {
+      const errText = await aiResp.text();
+      console.error(`AI Gateway error: ${aiResp.status}`, errText);
 
-      const missingSttPermission =
-        sttResp.status === 401 &&
-        errText.includes("missing_permissions") &&
-        errText.includes("speech_to_text");
+      if (aiResp.status === 429) {
+        return new Response(
+          JSON.stringify({ error: "Rate limit exceeded, please try again later" }),
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      if (aiResp.status === 402) {
+        return new Response(
+          JSON.stringify({ error: "AI credits exhausted, please add credits" }),
+          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
 
       return new Response(
-        JSON.stringify({
-          error: missingSttPermission
-            ? "ElevenLabs API key is missing speech_to_text permission"
-            : `Transcription failed: ${sttResp.status}`,
-          provider_status: sttResp.status,
-        }),
-        {
-          status: missingSttPermission ? 403 : 502,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        JSON.stringify({ error: `AI transcription failed: ${aiResp.status}` }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const result = await sttResp.json();
-    console.log(`Transcription complete, words: ${result.words?.length || 0}`);
+    const aiResult = await aiResp.json();
+    const rawContent = aiResult.choices?.[0]?.message?.content || "";
+    console.log("AI response received, parsing...");
 
-    // Group words into lines (sentences) based on pauses
-    const words = result.words || [];
-    const lines: { text: string; start: number; end: number }[] = [];
-    let currentLine: { words: string[]; start: number; end: number } | null = null;
-    const PAUSE_THRESHOLD = 0.8; // seconds - gap between words to split lines
+    // Extract JSON from the response (handle markdown code blocks)
+    let jsonStr = rawContent.trim();
+    if (jsonStr.startsWith("```")) {
+      jsonStr = jsonStr.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, "");
+    }
 
-    for (const word of words) {
-      if (!word.text || word.text.trim() === "") continue;
-      
-      if (!currentLine) {
-        currentLine = { words: [word.text], start: word.start, end: word.end };
-      } else {
-        const gap = word.start - currentLine.end;
-        if (gap > PAUSE_THRESHOLD || currentLine.words.length >= 8) {
-          // Finish current line
-          lines.push({
-            text: currentLine.words.join(" "),
-            start: currentLine.start,
-            end: currentLine.end,
-          });
-          currentLine = { words: [word.text], start: word.start, end: word.end };
-        } else {
-          currentLine.words.push(word.text);
-          currentLine.end = word.end;
-        }
-      }
+    let parsed: { text?: string; lines?: { text: string; start: number; end: number }[] };
+    try {
+      parsed = JSON.parse(jsonStr);
+    } catch {
+      console.error("Failed to parse AI JSON:", jsonStr.substring(0, 500));
+      // Fallback: treat entire response as single line
+      parsed = {
+        text: rawContent,
+        lines: [{ text: rawContent, start: 0, end: 30 }],
+      };
     }
-    if (currentLine && currentLine.words.length > 0) {
-      lines.push({
-        text: currentLine.words.join(" "),
-        start: currentLine.start,
-        end: currentLine.end,
-      });
-    }
+
+    const lines = parsed.lines || [];
+    console.log(`Transcription complete: ${lines.length} lines`);
 
     return new Response(
       JSON.stringify({
-        text: result.text,
-        words: result.words,
+        text: parsed.text || lines.map((l) => l.text).join(" "),
         lines,
       }),
       {
