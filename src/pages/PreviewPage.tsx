@@ -473,6 +473,24 @@ export default function PreviewPage() {
         const relativeSec = Math.max(nowSec - trimStart, 0);
         const totalSec = Math.max(trimEnd - trimStart, 0.001);
         updateTimeline(relativeSec, Math.min((relativeSec / totalSec) * 100, 100));
+        // Track current lyrics line
+        const lyricsCount = ayahsRef.current.length;
+        if (lyricsCount > 0) {
+          const lineIndex = Math.min(Math.floor((relativeSec / totalSec) * lyricsCount), lyricsCount - 1);
+          if (lineIndex !== currentAyahIndexRef.current) setCurrentAyahIndex(lineIndex);
+        }
+        return;
+      }
+
+      // ── Ibtahalat full mode (no trim) ───────────────────────────────────
+      if (isIbtahalatMode && !trimEnabled) {
+        const totalSec = Math.max(audio.duration, 0.001);
+        updateTimeline(nowSec, Math.min((nowSec / totalSec) * 100, 100));
+        const lyricsCount = ayahsRef.current.length;
+        if (lyricsCount > 0) {
+          const lineIndex = Math.min(Math.floor((nowSec / totalSec) * lyricsCount), lyricsCount - 1);
+          if (lineIndex !== currentAyahIndexRef.current) setCurrentAyahIndex(lineIndex);
+        }
         return;
       }
 
@@ -1113,6 +1131,9 @@ export default function PreviewPage() {
               isRecording={videoRecorder.isRecording}
               motionSpeed={exportSettings.motionSpeed}
               onBackgroundLoadMethod={setBackgroundLoadMethod}
+              ibtahalatLyricsMode={isIbtahalatMode && ayahs.length > 1}
+              allLyricsLines={isIbtahalatMode ? ayahs.map(a => a.text) : []}
+              currentLyricsIndex={currentAyahIndex}
             />
 
             {/* Background Status Indicator */}

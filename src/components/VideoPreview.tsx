@@ -64,6 +64,12 @@ interface VideoPreviewProps {
   onCanvasReady?: (canvas: HTMLCanvasElement) => void;
   onBackgroundLoadMethod?: (method: 'direct' | 'proxy' | 'fallback') => void;
   motionSpeed?: number; // 1-10, default 3
+  /** Ibtahalat lyrics mode: show all lines with current line glowing */
+  ibtahalatLyricsMode?: boolean;
+  /** All lyrics lines for ibtahalat mode */
+  allLyricsLines?: string[];
+  /** Index of currently active lyrics line */
+  currentLyricsIndex?: number;
 }
 
 export interface VideoPreviewRef {
@@ -114,6 +120,9 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   onCanvasReady,
   onBackgroundLoadMethod,
   motionSpeed = 3,
+  ibtahalatLyricsMode = false,
+  allLyricsLines = [],
+  currentLyricsIndex = 0,
 }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -1177,8 +1186,108 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
     const easedProgress = easeOutCubic(transitionProgress);
 
-    // Draw current ayah (if enabled)
-    if (currentAyah && displaySettings.showAyahText) {
+    // ── Ibtahalat Lyrics Mode: Show multiple lines with golden glow on current ──
+    if (ibtahalatLyricsMode && allLyricsLines.length > 0 && displaySettings.showAyahText) {
+      const centerY = canvas.height * 0.52;
+      const lyricsFontSize = textSettings.fontSize * 1.6 * S;
+      const lyricsLineHeight = lyricsFontSize * 2.2;
+      const maxVisibleLines = Math.min(7, allLyricsLines.length);
+      const halfVisible = Math.floor(maxVisibleLines / 2);
+      
+      ctx.save();
+      ctx.direction = 'rtl';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      
+      // Calculate which lines to show (centered on current)
+      let startLine = Math.max(0, currentLyricsIndex - halfVisible);
+      let endLine = Math.min(allLyricsLines.length, startLine + maxVisibleLines);
+      if (endLine - startLine < maxVisibleLines) {
+        startLine = Math.max(0, endLine - maxVisibleLines);
+      }
+      
+      const totalVisibleHeight = (endLine - startLine) * lyricsLineHeight;
+      const baseY = centerY - totalVisibleHeight / 2 + lyricsLineHeight / 2;
+      
+      for (let i = startLine; i < endLine; i++) {
+        const line = allLyricsLines[i];
+        const y = baseY + (i - startLine) * lyricsLineHeight;
+        const isCurrent = i === currentLyricsIndex;
+        const distFromCurrent = Math.abs(i - currentLyricsIndex);
+        
+        ctx.save();
+        
+        if (isCurrent) {
+          // Golden glow effect for current line
+          const glowPulse = 0.6 + Math.sin(Date.now() / 400) * 0.4;
+          ctx.shadowColor = '#FFD700';
+          ctx.shadowBlur = (20 + glowPulse * 15) * S;
+          ctx.font = `bold ${lyricsFontSize * 1.15}px "${fontName}", "Noto Naskh Arabic", serif`;
+          ctx.fillStyle = '#FFD700';
+          
+          // Draw glow background
+          const tw = ctx.measureText(line).width;
+          const padX = 30 * S;
+          const padY = 14 * S;
+          ctx.save();
+          ctx.shadowBlur = 0;
+          const gradient = ctx.createLinearGradient(
+            canvas.width / 2 - tw / 2 - padX, y,
+            canvas.width / 2 + tw / 2 + padX, y
+          );
+          gradient.addColorStop(0, 'rgba(212, 175, 55, 0)');
+          gradient.addColorStop(0.15, 'rgba(212, 175, 55, 0.12)');
+          gradient.addColorStop(0.5, 'rgba(212, 175, 55, 0.18)');
+          gradient.addColorStop(0.85, 'rgba(212, 175, 55, 0.12)');
+          gradient.addColorStop(1, 'rgba(212, 175, 55, 0)');
+          ctx.fillStyle = gradient;
+          ctx.fillRect(canvas.width / 2 - tw / 2 - padX, y - padY - lyricsFontSize * 0.5, tw + padX * 2, lyricsFontSize + padY * 2);
+          ctx.restore();
+          
+          // Draw the text with glow
+          ctx.fillStyle = '#FFD700';
+          ctx.fillText(line, canvas.width / 2, y);
+          // Double pass for stronger glow
+          ctx.shadowBlur = (10 + glowPulse * 8) * S;
+          ctx.fillText(line, canvas.width / 2, y);
+        } else {
+          // Faded neighboring lines
+          const alpha = Math.max(0.2, 0.7 - distFromCurrent * 0.2);
+          ctx.globalAlpha = alpha;
+          ctx.font = `${lyricsFontSize}px "${fontName}", "Noto Naskh Arabic", serif`;
+          ctx.fillStyle = textSettings.textColor;
+          ctx.shadowColor = `rgba(0, 0, 0, ${textSettings.shadowIntensity * 0.5})`;
+          ctx.shadowBlur = 4 * S;
+          ctx.fillText(line, canvas.width / 2, y);
+        }
+        
+        ctx.restore();
+      }
+      
+      // Draw scroll indicator dots
+      if (allLyricsLines.length > maxVisibleLines) {
+        const dotY = centerY + totalVisibleHeight / 2 + 30 * S;
+        const dotSpacing = 8 * S;
+        const numDots = Math.min(allLyricsLines.length, 15);
+        const dotsWidth = numDots * dotSpacing;
+        
+        ctx.save();
+        for (let i = 0; i < numDots; i++) {
+          const dotX = canvas.width / 2 - dotsWidth / 2 + i * dotSpacing + dotSpacing / 2;
+          const mappedIndex = Math.round((i / numDots) * allLyricsLines.length);
+          const isCurrDot = Math.abs(mappedIndex - currentLyricsIndex) <= 1;
+          ctx.beginPath();
+          ctx.arc(dotX, dotY, isCurrDot ? 3 * S : 1.5 * S, 0, Math.PI * 2);
+          ctx.fillStyle = isCurrDot ? 'rgba(212, 175, 55, 0.8)' : 'rgba(255, 255, 255, 0.3)';
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+      
+      ctx.restore();
+    }
+    // Draw current ayah (if enabled) — standard Quran mode
+    else if (currentAyah && displaySettings.showAyahText) {
       const ayahY = canvas.height * 0.52;
       const maxWidth = canvas.width * 0.85;
       const lineHeight = textSettings.fontSize * 3.2 * S;
@@ -1509,7 +1618,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       ctx.fillText(wmText, wmX, wmY);
       ctx.restore();
     }
-  }, [background, customBackground, imageLoaded, videoReady, slideshowReady, surahName, reciterName, currentAyah, currentAyahWords, highlightedWordIndex, highlightWordProgress, textSettings, displaySettings, getRecordingDimensions, getTokenHsl, drawAyahBadge, getCanvasFontFamily, drawIslamicFrame, motionSpeed, isPlaying]);
+  }, [background, customBackground, imageLoaded, videoReady, slideshowReady, surahName, reciterName, currentAyah, currentAyahWords, highlightedWordIndex, highlightWordProgress, textSettings, displaySettings, getRecordingDimensions, getTokenHsl, drawAyahBadge, getCanvasFontFamily, drawIslamicFrame, motionSpeed, isPlaying, ibtahalatLyricsMode, allLyricsLines, currentLyricsIndex]);
 
   useEffect(() => {
     drawFrameRuntimeRef.current = drawFrame;
