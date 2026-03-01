@@ -2,7 +2,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useAuth } from '@/hooks/useAuth';
-import { BookOpen, Video, Library, LogIn, LogOut, User } from 'lucide-react';
+import { BookOpen, Video, Library, LogIn, LogOut, User, Music } from 'lucide-react';
 import { motion } from 'framer-motion';
 import {
   DropdownMenu,
@@ -51,6 +51,13 @@ export function Navbar() {
             >
               <Video className="h-4 w-4" />
               <span>إنشاء فيديو</span>
+            </Link>
+            <Link
+              to="/ibtahalat"
+              className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Music className="h-4 w-4" />
+              <span>ابتهالات</span>
             </Link>
             {isAuthenticated && (
               <Link

@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Layout } from '@/components/Layout';
-import { BookOpen, Video, Sparkles, Play, Users, Download } from 'lucide-react';
+import { BookOpen, Video, Sparkles, Play, Users, Download, Music } from 'lucide-react';
 
 const features = [
   {
@@ -109,6 +109,12 @@ export default function Index() {
                 <Link to="/surahs">
                   <BookOpen className="h-5 w-5 ml-2" />
                   تصفح السور
+                </Link>
+              </Button>
+              <Button asChild variant="outline" size="lg" className="text-lg px-8">
+                <Link to="/ibtahalat">
+                  <Music className="h-5 w-5 ml-2" />
+                  ابتهالات وتواشيح
                 </Link>
               </Button>
             </motion.div>
