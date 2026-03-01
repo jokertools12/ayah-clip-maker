@@ -313,7 +313,7 @@ export default function BrowsePage() {
                                   audioUrl: track.audioUrl,
                                   ratio: '9:16',
                                 });
-                                navigate(`/ibtahalat?preselect=${track.id}`);
+                                navigate(`/preview?${params.toString()}`);
                               }}
                             >
                               <Video className="h-3 w-3" />

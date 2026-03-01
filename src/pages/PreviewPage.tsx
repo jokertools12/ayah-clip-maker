@@ -759,6 +759,21 @@ export default function PreviewPage() {
     const audio = audioRef.current;
     if (!audio) return;
 
+    // Ibtahalat mode: skip by proportional time
+    if (isIbtahalatMode) {
+      const totalDur = trimEnabled && trimEnd > trimStart ? trimEnd - trimStart : audio.duration;
+      const baseTime = trimEnabled && trimEnd > trimStart ? trimStart : 0;
+      const lyricsCount = ayahs.length;
+      if (lyricsCount <= 0) return;
+      const newIndex = direction === 'forward'
+        ? Math.min(currentAyahIndex + 1, lyricsCount - 1)
+        : Math.max(currentAyahIndex - 1, 0);
+      const targetTime = baseTime + (newIndex / lyricsCount) * totalDur;
+      audio.currentTime = targetTime;
+      setCurrentAyahIndex(newIndex);
+      return;
+    }
+
     if (playbackMode === 'everyayah' && everyAyahTimestamps.length > 0) {
       const newIndex = direction === 'forward'
         ? Math.min(currentAyahIndex + 1, ayahs.length - 1)
@@ -1082,12 +1097,13 @@ export default function PreviewPage() {
 
   // ── Mode label ──────────────────────────────────────────────────────────────
   const modeLabel = (() => {
+    if (isIbtahalatMode) return null; // Ibtahalat uses direct URL, no sync warning needed
     if (playbackMode === 'qf') return null; // perfect – no warning
     if (playbackMode === 'everyayah') return '✅ تزامن دقيق (تشغيل متصل بدون تقطيع)';
     return '⚠️ يتم استخدام الملف الصوتي الكامل (التزامن تقديري)';
   })();
 
-  const canSkip = playbackMode === 'qf' || playbackMode === 'everyayah';
+  const canSkip = playbackMode === 'qf' || playbackMode === 'everyayah' || isIbtahalatMode;
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
@@ -1231,8 +1247,8 @@ export default function PreviewPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => skipAyah('backward')}
-                          disabled={currentAyahIndex === 0 || audioError || !canSkip}
+                         onClick={() => skipAyah('backward')}
+                          disabled={currentAyahIndex === 0 || audioError || (!canSkip && !isIbtahalatMode)}
                         >
                           <SkipForward className="h-5 w-5" />
                         </Button>
@@ -1257,7 +1273,7 @@ export default function PreviewPage() {
                           variant="ghost"
                           size="icon"
                           onClick={() => skipAyah('forward')}
-                          disabled={currentAyahIndex === ayahs.length - 1 || audioError || !canSkip}
+                          disabled={currentAyahIndex === ayahs.length - 1 || audioError || (!canSkip && !isIbtahalatMode)}
                         >
                           <SkipBack className="h-5 w-5" />
                         </Button>
@@ -1277,7 +1293,9 @@ export default function PreviewPage() {
 
                       <div className="text-center p-2 rounded-lg bg-muted/50">
                         <p className="text-sm text-muted-foreground">
-                          الآية <span className="font-bold text-foreground">{ayahs[currentAyahIndex]?.numberInSurah || startAyah}</span> من {ayahs.length}
+                          {isIbtahalatMode ? 'السطر' : 'الآية'}{' '}
+                          <span className="font-bold text-foreground">{isIbtahalatMode ? currentAyahIndex + 1 : (ayahs[currentAyahIndex]?.numberInSurah || startAyah)}</span>{' '}
+                          من {ayahs.length}
                         </p>
                       </div>
                     </div>
