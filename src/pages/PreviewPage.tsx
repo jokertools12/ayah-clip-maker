@@ -650,8 +650,7 @@ export default function PreviewPage() {
   // ── Video recording ─────────────────────────────────────────────────────────
   const handleStartRecording = async () => {
     const previewApi = videoPreviewRef.current;
-    const canvas = previewApi?.getCanvas();
-    if (!canvas || !previewApi) {
+    if (!previewApi) {
       toast.error('حدث خطأ في تجهيز التسجيل');
       return;
     }
@@ -661,20 +660,48 @@ export default function PreviewPage() {
       return;
     }
 
+    let stopIsolatedLoop: (() => void) | null = null;
+
     try {
       await audioEffects.resumeContext();
 
-      // Warm up canvas with a fresh frame right before recording starts
-      previewApi.drawFrame();
-      await new Promise((resolve) => setTimeout(resolve, 80));
-      previewApi.drawFrame();
+      // Isolated recording canvas (separate from visible preview canvas)
+      const recordingCanvas = document.createElement('canvas');
+      const recordingDimensions = previewApi.getRecordingDimensions();
+      recordingCanvas.width = recordingDimensions.width;
+      recordingCanvas.height = recordingDimensions.height;
+
+      const recordingFps = previewApi.getRecommendedRecordingFps();
+      const frameInterval = 1000 / recordingFps;
+      let rafId: number | null = null;
+      let lastFrameTime = 0;
+
+      const renderIsolatedFrame = (now: number) => {
+        rafId = requestAnimationFrame(renderIsolatedFrame);
+        if (now - lastFrameTime < frameInterval) return;
+        lastFrameTime = now;
+        previewApi.drawFrame(recordingCanvas, 'recording');
+      };
+
+      previewApi.drawFrame(recordingCanvas, 'recording');
+      rafId = requestAnimationFrame(renderIsolatedFrame);
+
+      stopIsolatedLoop = () => {
+        if (rafId !== null) {
+          cancelAnimationFrame(rafId);
+          rafId = null;
+        }
+      };
+
+      // Warm up isolated canvas before captureStream starts
+      await new Promise((resolve) => setTimeout(resolve, 90));
+      previewApi.drawFrame(recordingCanvas, 'recording');
 
       // Determine recording duration based on mode
       const audio = audioRef.current;
       let recordingDuration: number;
 
       if (playbackMode === 'everyayah') {
-        // Concatenated blob – play from start, duration is exact
         recordingDuration = audio && audio.duration > 0 ? audio.duration : 60;
         if (audio) audio.currentTime = 0;
       } else if (rangeMs) {
@@ -685,20 +712,23 @@ export default function PreviewPage() {
         if (audio) audio.currentTime = 0;
       }
 
-      toast.info('بدء التسجيل... لا تغلق هذه الصفحة');
+      toast.info('بدء التسجيل في وضع معزول...');
 
       const blob = await videoRecorder.startRecording(
-        canvas,
+        recordingCanvas,
         audio,
         recordingDuration,
         audioEffects.getRecordingStream(),
-        exportSettings.quality
+        exportSettings.quality,
+        recordingFps
       );
 
       if (blob) toast.success('تم إنشاء الفيديو بنجاح!');
     } catch (error) {
       console.error('Recording error:', error);
       toast.error('حدث خطأ في التسجيل');
+    } finally {
+      stopIsolatedLoop?.();
     }
   };
 
@@ -814,6 +844,7 @@ export default function PreviewPage() {
               textSettings={textSettings}
               displaySettings={displaySettings}
               isPlaying={isPlaying}
+              isRecording={videoRecorder.isRecording}
               motionSpeed={exportSettings.motionSpeed}
               onBackgroundLoadMethod={setBackgroundLoadMethod}
             />
