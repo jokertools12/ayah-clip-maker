@@ -704,6 +704,9 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
 
     // For recording: the canvas dimensions are set by the caller (PreviewPage)
     // based on quality preset. We only resize for preview mode.
+    // IMPORTANT: Never resize during recording/recordingLite — the caller sets
+    // the canvas dimensions once before captureStream(). Resizing mid-stream
+    // clears the canvas and produces a static/blank video.
     if (isPreviewRender) {
       const width = Math.round(base.width * previewScale);
       const height = Math.round(base.height * previewScale);
@@ -711,16 +714,8 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         canvas.width = width;
         canvas.height = height;
       }
-    } else if (isLiteRecording) {
-      // Lite recording: scale down whatever the caller set
-      const width = Math.round(canvas.width * recordingScale);
-      const height = Math.round(canvas.height * recordingScale);
-      if (canvas.width !== width || canvas.height !== height) {
-        canvas.width = width;
-        canvas.height = height;
-      }
     }
-    // else: recording mode uses canvas dimensions as-is (set by caller)
+    // else: recording / recordingLite — canvas dimensions are set once by PreviewPage
 
     // Scale factor: all hardcoded sizes were designed for ~1080px width canvas.
     // Scale them relative to actual canvas width so they look right at all sizes.
