@@ -7,7 +7,6 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// Max ~4MB of audio to stay within memory limits (~30-40s of MP3 at 128kbps)
 const MAX_AUDIO_BYTES = 4 * 1024 * 1024;
 
 serve(async (req) => {
@@ -16,9 +15,10 @@ serve(async (req) => {
   }
 
   try {
-    const { audioUrl, language } = await req.json();
-    if (!audioUrl) {
-      return new Response(JSON.stringify({ error: "audioUrl is required" }), {
+    const { audioUrl, audioBase64: inputBase64, language, chunkOffset } = await req.json();
+
+    if (!audioUrl && !inputBase64) {
+      return new Response(JSON.stringify({ error: "audioUrl or audioBase64 is required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -32,53 +32,58 @@ serve(async (req) => {
       );
     }
 
-    // Fetch only the first portion of audio to avoid memory limits
-    console.log(`Fetching audio (max ${MAX_AUDIO_BYTES} bytes) from: ${audioUrl}`);
-    const audioResp = await fetch(audioUrl, {
-      headers: { Range: `bytes=0-${MAX_AUDIO_BYTES - 1}` },
-    });
-    if (!audioResp.ok && audioResp.status !== 206) {
-      throw new Error(`Failed to fetch audio: ${audioResp.status}`);
-    }
+    let audioBase64: string;
 
-    // Read the response as chunks with a size cap
-    const reader = audioResp.body?.getReader();
-    if (!reader) throw new Error("No response body");
-
-    const chunks: Uint8Array[] = [];
-    let totalSize = 0;
-
-    while (totalSize < MAX_AUDIO_BYTES) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const remaining = MAX_AUDIO_BYTES - totalSize;
-      if (value.byteLength > remaining) {
-        chunks.push(value.slice(0, remaining));
-        totalSize += remaining;
-        break;
+    if (inputBase64) {
+      // Client already sent base64 audio data (from chunked processing)
+      audioBase64 = inputBase64;
+      console.log(`Received base64 audio chunk, size: ~${Math.round(inputBase64.length * 3 / 4)} bytes, offset: ${chunkOffset || 0}s`);
+    } else {
+      // Fetch audio from URL (no Range header to avoid 401 on Archive.org)
+      console.log(`Fetching audio (max ${MAX_AUDIO_BYTES} bytes) from: ${audioUrl}`);
+      const audioResp = await fetch(audioUrl);
+      if (!audioResp.ok) {
+        throw new Error(`Failed to fetch audio: ${audioResp.status}`);
       }
-      chunks.push(value);
-      totalSize += value.byteLength;
+
+      const reader = audioResp.body?.getReader();
+      if (!reader) throw new Error("No response body");
+
+      const chunks: Uint8Array[] = [];
+      let totalSize = 0;
+
+      while (totalSize < MAX_AUDIO_BYTES) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const remaining = MAX_AUDIO_BYTES - totalSize;
+        if (value.byteLength > remaining) {
+          chunks.push(value.slice(0, remaining));
+          totalSize += remaining;
+          break;
+        }
+        chunks.push(value);
+        totalSize += value.byteLength;
+      }
+      reader.cancel().catch(() => {});
+
+      const audioBuffer = new Uint8Array(totalSize);
+      let offset = 0;
+      for (const chunk of chunks) {
+        audioBuffer.set(chunk, offset);
+        offset += chunk.byteLength;
+      }
+
+      audioBase64 = base64Encode(audioBuffer);
+      console.log(`Audio fetched, size: ${totalSize} bytes`);
     }
-    reader.cancel().catch(() => {});
 
-    // Combine chunks
-    const audioBuffer = new Uint8Array(totalSize);
-    let offset = 0;
-    for (const chunk of chunks) {
-      audioBuffer.set(chunk, offset);
-      offset += chunk.byteLength;
-    }
-
-    const audioBase64 = base64Encode(audioBuffer);
-    console.log(`Audio fetched, size: ${totalSize} bytes`);
-
+    const timeOffset = chunkOffset || 0;
     const systemPrompt = `You are an expert Arabic audio transcriber. Listen to the audio and transcribe it accurately.
 
 IMPORTANT RULES:
 - Transcribe the Arabic speech word by word
 - Split the transcription into logical lines/sentences (each 3-8 words)
-- For each line, estimate the approximate start and end time in seconds
+- For each line, estimate the approximate start and end time in seconds RELATIVE TO THIS AUDIO CHUNK (starting from 0)
 - Return ONLY valid JSON, no markdown, no explanation
 
 Return JSON in this exact format:
@@ -112,7 +117,7 @@ Return JSON in this exact format:
                 type: "input_audio",
                 input_audio: {
                   data: audioBase64,
-                  format: "mp3",
+                  format: inputBase64 ? "wav" : "mp3",
                 },
               },
             ],
@@ -165,8 +170,14 @@ Return JSON in this exact format:
       };
     }
 
-    const lines = parsed.lines || [];
-    console.log(`Transcription complete: ${lines.length} lines`);
+    // Apply time offset for chunked audio
+    const lines = (parsed.lines || []).map((l) => ({
+      text: l.text,
+      start: l.start + timeOffset,
+      end: l.end + timeOffset,
+    }));
+
+    console.log(`Transcription complete: ${lines.length} lines (offset: ${timeOffset}s)`);
 
     return new Response(
       JSON.stringify({
