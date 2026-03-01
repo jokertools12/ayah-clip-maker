@@ -60,10 +60,21 @@ serve(async (req) => {
     if (!sttResp.ok) {
       const errText = await sttResp.text();
       console.error(`ElevenLabs STT error: ${sttResp.status}`, errText);
+
+      const missingSttPermission =
+        sttResp.status === 401 &&
+        errText.includes("missing_permissions") &&
+        errText.includes("speech_to_text");
+
       return new Response(
-        JSON.stringify({ error: `Transcription failed: ${sttResp.status}` }),
+        JSON.stringify({
+          error: missingSttPermission
+            ? "ElevenLabs API key is missing speech_to_text permission"
+            : `Transcription failed: ${sttResp.status}`,
+          provider_status: sttResp.status,
+        }),
         {
-          status: 502,
+          status: missingSttPermission ? 403 : 502,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
