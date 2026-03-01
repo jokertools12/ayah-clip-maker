@@ -81,6 +81,7 @@ const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
   watermarkEnabled: false,
   watermarkText: '',
   watermarkPosition: 'bottomRight',
+  performanceMode: 'balanced',
 };
 
 const DEFAULT_EXPORT_SETTINGS: ExportSettings = {
@@ -144,6 +145,7 @@ export default function PreviewPage() {
   // ── Settings state ──────────────────────────────────────────────────────────
   const [displaySettings, setDisplaySettings] = useState<DisplaySettings>(DEFAULT_DISPLAY_SETTINGS);
   const [customBackground, setCustomBackground] = useState<string | null>(null);
+  const [backgroundLoadMethod, setBackgroundLoadMethod] = useState<'direct' | 'proxy' | 'fallback' | null>(null);
   const [exportSettings, setExportSettings] = useState<ExportSettings>(DEFAULT_EXPORT_SETTINGS);
   const [selectedPresetId, setSelectedPresetId] = useState<string | undefined>(undefined);
 
@@ -813,7 +815,25 @@ export default function PreviewPage() {
               displaySettings={displaySettings}
               isPlaying={isPlaying}
               motionSpeed={exportSettings.motionSpeed}
+              onBackgroundLoadMethod={setBackgroundLoadMethod}
             />
+
+            {/* Background Status Indicator */}
+            {background?.type === 'video' && backgroundLoadMethod && (
+              <div className={`mt-2 flex items-center justify-center gap-2 text-xs px-3 py-1.5 rounded-full ${
+                backgroundLoadMethod === 'direct' ? 'bg-green-500/15 text-green-600 dark:text-green-400' :
+                backgroundLoadMethod === 'proxy' ? 'bg-yellow-500/15 text-yellow-600 dark:text-yellow-400' :
+                'bg-red-500/15 text-red-600 dark:text-red-400'
+              }`}>
+                <span className={`h-2 w-2 rounded-full ${
+                  backgroundLoadMethod === 'direct' ? 'bg-green-500' :
+                  backgroundLoadMethod === 'proxy' ? 'bg-yellow-500' : 'bg-red-500'
+                }`} />
+                {backgroundLoadMethod === 'direct' ? 'Direct — مباشر ✓' :
+                 backgroundLoadMethod === 'proxy' ? 'Proxy — عبر الوسيط' :
+                 'Fallback — صورة بديلة'}
+              </div>
+            )}
 
             <audio ref={audioRef} src={audioUrl} preload="auto" crossOrigin="anonymous" />
           </motion.div>

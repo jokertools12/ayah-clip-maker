@@ -19,8 +19,8 @@ const FONT_MAP: Record<string, string> = {
 // Slideshow configuration
 const SLIDESHOW_TRANSITION_DURATION = 2000; // 2s smooth crossfade
 const SLIDESHOW_DISPLAY_DURATION = 5000; // 5 seconds per image
-const TARGET_FPS = 30; // Cap animation at 30fps to reduce CPU load
-const FRAME_INTERVAL = 1000 / TARGET_FPS;
+const DEFAULT_TARGET_FPS = 30;
+const FRAME_INTERVAL_DEFAULT = 1000 / DEFAULT_TARGET_FPS;
 
 interface VideoPreviewProps {
   background: BackgroundItem | null;
@@ -57,9 +57,11 @@ interface VideoPreviewProps {
     watermarkEnabled?: boolean;
     watermarkText?: string;
     watermarkPosition?: 'bottomLeft' | 'bottomRight' | 'topLeft' | 'topRight' | 'bottomCenter';
+    performanceMode?: 'economy' | 'balanced' | 'pro';
   };
   isPlaying: boolean;
   onCanvasReady?: (canvas: HTMLCanvasElement) => void;
+  onBackgroundLoadMethod?: (method: 'direct' | 'proxy' | 'fallback') => void;
   motionSpeed?: number; // 1-10, default 3
 }
 
@@ -88,6 +90,7 @@ const DEFAULT_DISPLAY_SETTINGS = {
   watermarkEnabled: false,
   watermarkText: '',
   watermarkPosition: 'bottomRight' as const,
+  performanceMode: 'balanced' as const,
 };
 
 export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
@@ -104,6 +107,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   displaySettings = DEFAULT_DISPLAY_SETTINGS,
   isPlaying,
   onCanvasReady,
+  onBackgroundLoadMethod,
   motionSpeed = 3,
 }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -201,12 +205,13 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         return video;
       };
 
-      const activateVideo = (video: HTMLVideoElement, successLog: string) => {
+      const activateVideo = (video: HTMLVideoElement, successLog: string, method: 'direct' | 'proxy' | 'fallback') => {
         if (cancelled) return;
         videoRef.current = video;
         setVideoReady(true);
         video.play().catch((err) => console.warn('Video play warning:', err));
         console.log(successLog);
+        onBackgroundLoadMethod?.(method);
       };
 
       const loadViaProxy = async () => {
@@ -232,8 +237,8 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
           localBlobUrl = URL.createObjectURL(blob);
           const video = createVideoEl();
           video.src = localBlobUrl;
-          video.onloadeddata = () => activateVideo(video, '✅ Video loaded via proxy blob');
-          video.onerror = () => loadImage(fallbackThumb || bgUrl);
+          video.onloadeddata = () => activateVideo(video, '✅ Video loaded via proxy blob', 'proxy');
+          video.onerror = () => { onBackgroundLoadMethod?.('fallback'); loadImage(fallbackThumb || bgUrl); };
         } catch {
           loadImage(fallbackThumb || bgUrl);
         }
@@ -254,7 +259,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
             const tctx = tc.getContext('2d');
             tctx?.drawImage(video, 0, 0, 2, 2);
             tc.toDataURL(); // Throws if tainted
-            activateVideo(video, '✅ Video loaded directly with CORS');
+            activateVideo(video, '✅ Video loaded directly with CORS', 'direct');
           } catch {
             console.warn('Direct video taints canvas, trying proxy…');
             video.pause();
@@ -702,13 +707,8 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         ctx.restore();
       }
     } else if (videoReady && videoRef.current) {
-      // Draw video frame
-      ctx.save();
-      ctx.translate(canvas.width / 2, canvas.height / 2);
-      ctx.scale(scale, scale);
-      ctx.translate(-canvas.width / 2 + offsetX, -canvas.height / 2 + offsetY);
+      // Draw video frame — NO Ken Burns for video backgrounds to prevent lag
       ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-      ctx.restore();
     } else if (imageRef.current && imageLoaded) {
       // Draw image with Ken Burns
       ctx.save();
@@ -747,7 +747,10 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
 
     // ── Floating golden particles ──────────────────────────────────────────
     const particleDensity = displaySettings.particleDensity || 'medium';
-    const maxParticles = particleDensity === 'off' ? 0 : particleDensity === 'low' ? 10 : particleDensity === 'high' ? 40 : 20;
+    const perfMode = displaySettings.performanceMode || 'balanced';
+    const perfMultiplier = perfMode === 'economy' ? 0.5 : perfMode === 'pro' ? 1 : 0.75;
+    const baseParticles = particleDensity === 'off' ? 0 : particleDensity === 'low' ? 10 : particleDensity === 'high' ? 40 : 20;
+    const maxParticles = Math.round(baseParticles * perfMultiplier);
     
     if (maxParticles > 0) {
       if (particlesRef.current.length < maxParticles) {
@@ -1409,12 +1412,15 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     }
   }, [background, customBackground, imageLoaded, videoReady, slideshowReady, surahName, reciterName, currentAyah, currentAyahWords, highlightedWordIndex, highlightWordProgress, textSettings, displaySettings, dimensions, getTokenHsl, drawAyahBadge, getCanvasFontFamily, drawIslamicFrame, motionSpeed]);
 
-  // Animation loop for canvas — throttled to TARGET_FPS
+  // Animation loop for canvas — throttled based on performance mode
   useEffect(() => {
+    const perfMode = displaySettings.performanceMode || 'balanced';
+    const targetFps = perfMode === 'economy' ? 20 : perfMode === 'pro' ? 30 : 25;
+    const frameInterval = 1000 / targetFps;
     let lastFrameTime = 0;
     const animate = (now: number) => {
       animationFrameRef.current = requestAnimationFrame(animate);
-      if (now - lastFrameTime < FRAME_INTERVAL) return;
+      if (now - lastFrameTime < frameInterval) return;
       lastFrameTime = now;
       drawFrame();
     };
@@ -1425,7 +1431,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [drawFrame]);
+  }, [drawFrame, displaySettings.performanceMode]);
 
   // Notify when canvas is ready
   useEffect(() => {
