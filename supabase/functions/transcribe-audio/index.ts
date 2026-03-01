@@ -7,6 +7,9 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// Max ~4MB of audio to stay within memory limits (~30-40s of MP3 at 128kbps)
+const MAX_AUDIO_BYTES = 4 * 1024 * 1024;
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -25,24 +28,51 @@ serve(async (req) => {
     if (!LOVABLE_API_KEY) {
       return new Response(
         JSON.stringify({ error: "LOVABLE_API_KEY is not configured" }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Fetch the audio file
-    console.log(`Fetching audio from: ${audioUrl}`);
-    const audioResp = await fetch(audioUrl);
-    if (!audioResp.ok) {
+    // Fetch only the first portion of audio to avoid memory limits
+    console.log(`Fetching audio (max ${MAX_AUDIO_BYTES} bytes) from: ${audioUrl}`);
+    const audioResp = await fetch(audioUrl, {
+      headers: { Range: `bytes=0-${MAX_AUDIO_BYTES - 1}` },
+    });
+    if (!audioResp.ok && audioResp.status !== 206) {
       throw new Error(`Failed to fetch audio: ${audioResp.status}`);
     }
-    const audioBuffer = await audioResp.arrayBuffer();
-    const audioBase64 = base64Encode(audioBuffer);
-    console.log(`Audio fetched, size: ${audioBuffer.byteLength} bytes`);
 
-    // Use Lovable AI Gateway (Gemini) for transcription
+    // Read the response as chunks with a size cap
+    const reader = audioResp.body?.getReader();
+    if (!reader) throw new Error("No response body");
+
+    const chunks: Uint8Array[] = [];
+    let totalSize = 0;
+
+    while (totalSize < MAX_AUDIO_BYTES) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const remaining = MAX_AUDIO_BYTES - totalSize;
+      if (value.byteLength > remaining) {
+        chunks.push(value.slice(0, remaining));
+        totalSize += remaining;
+        break;
+      }
+      chunks.push(value);
+      totalSize += value.byteLength;
+    }
+    reader.cancel().catch(() => {});
+
+    // Combine chunks
+    const audioBuffer = new Uint8Array(totalSize);
+    let offset = 0;
+    for (const chunk of chunks) {
+      audioBuffer.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+
+    const audioBase64 = base64Encode(audioBuffer);
+    console.log(`Audio fetched, size: ${totalSize} bytes`);
+
     const systemPrompt = `You are an expert Arabic audio transcriber. Listen to the audio and transcribe it accurately.
 
 IMPORTANT RULES:
@@ -76,7 +106,7 @@ Return JSON in this exact format:
             content: [
               {
                 type: "text",
-                text: `Transcribe this ${language === "ara" ? "Arabic" : "Arabic"} audio recording. It is a religious devotional chant (ابتهال). Return the transcription as JSON with lines and timestamps.`,
+                text: `Transcribe this Arabic audio recording. It is a religious devotional chant (ابتهال). Return the transcription as JSON with lines and timestamps.`,
               },
               {
                 type: "input_audio",
@@ -119,7 +149,6 @@ Return JSON in this exact format:
     const rawContent = aiResult.choices?.[0]?.message?.content || "";
     console.log("AI response received, parsing...");
 
-    // Extract JSON from the response (handle markdown code blocks)
     let jsonStr = rawContent.trim();
     if (jsonStr.startsWith("```")) {
       jsonStr = jsonStr.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, "");
@@ -130,7 +159,6 @@ Return JSON in this exact format:
       parsed = JSON.parse(jsonStr);
     } catch {
       console.error("Failed to parse AI JSON:", jsonStr.substring(0, 500));
-      // Fallback: treat entire response as single line
       parsed = {
         text: rawContent,
         lines: [{ text: rawContent, start: 0, end: 30 }],
@@ -145,20 +173,13 @@ Return JSON in this exact format:
         text: parsed.text || lines.map((l) => l.text).join(" "),
         lines,
       }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {
     console.error("Transcription error:", e);
     return new Response(
-      JSON.stringify({
-        error: e instanceof Error ? e.message : "Unknown error",
-      }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
