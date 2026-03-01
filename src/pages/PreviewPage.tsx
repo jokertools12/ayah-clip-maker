@@ -6,6 +6,7 @@ import { VideoPreview, VideoPreviewRef } from '@/components/VideoPreview';
 import { AudioEffectsPanel } from '@/components/AudioEffectsPanel';
 import { DisplaySettingsPanel, DisplaySettings } from '@/components/DisplaySettingsPanel';
 import { CustomBackgroundUploader } from '@/components/CustomBackgroundUploader';
+import { AudioTrimControl } from '@/components/AudioTrimControl';
 import { ExportFormatSelector, ExportSettings, ExportFormat } from '@/components/ExportFormatSelector';
 import { MotionSpeedControl } from '@/components/MotionSpeedControl';
 import { PresetSelector } from '@/components/PresetSelector';
@@ -50,6 +51,7 @@ import {
   Upload,
   Palette,
   Gauge,
+  Scissors,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -163,6 +165,11 @@ export default function PreviewPage() {
   const [exportSettings, setExportSettings] = useState<ExportSettings>(DEFAULT_EXPORT_SETTINGS);
   const [selectedPresetId, setSelectedPresetId] = useState<string | undefined>(undefined);
 
+  // ── Audio trimming state ────────────────────────────────────────────────────
+  const [trimEnabled, setTrimEnabled] = useState(false);
+  const [trimStart, setTrimStart] = useState(0);
+  const [trimEnd, setTrimEnd] = useState(0);
+
   const applyPreset = useCallback((preset: VideoPreset) => {
     setSelectedPresetId(preset.id);
     setDisplaySettings((prev) => ({ ...prev, ...preset.displaySettings }));
@@ -272,6 +279,7 @@ export default function PreviewPage() {
       setAudioUrl(ibtAudioUrl);
       setPlaybackMode('fallback');
       setTimingsLoading(false);
+      setAudioLoaded(false);
       setAyahTimings([]);
       setRangeMs(null);
       return;
@@ -408,7 +416,12 @@ export default function PreviewPage() {
 
       // Fallback: proportional estimation
       const totalDur = audio.duration;
-      if (totalAyahsInSurah > 0 && totalDur > 0) {
+      if (isIbtahalatMode) {
+        // Ibtahalat: play entire file, no range estimation needed
+        setDuration(totalDur);
+        setRangeMs(null);
+        console.log(`🎵 Ibtahalat mode – full audio ${totalDur.toFixed(1)}s`);
+      } else if (totalAyahsInSurah > 0 && totalDur > 0) {
         const estFrom = ((startAyah - 1) / totalAyahsInSurah) * totalDur;
         const estTo = (endAyah / totalAyahsInSurah) * totalDur;
         setRangeMs({ from: estFrom * 1000, to: estTo * 1000 });
@@ -436,6 +449,22 @@ export default function PreviewPage() {
         setCurrentTime(timeSec);
         setProgress(percent);
       };
+
+      // ── Ibtahalat trim mode ─────────────────────────────────────────────
+      if (isIbtahalatMode && trimEnabled && trimEnd > trimStart) {
+        if (nowSec >= trimEnd) {
+          audio.pause();
+          audio.currentTime = trimStart;
+          setIsPlaying(false);
+          setCurrentTime(0);
+          setProgress(0);
+          return;
+        }
+        const relativeSec = Math.max(nowSec - trimStart, 0);
+        const totalSec = Math.max(trimEnd - trimStart, 0.001);
+        updateTimeline(relativeSec, Math.min((relativeSec / totalSec) * 100, 100));
+        return;
+      }
 
       // ── QF mode ─────────────────────────────────────────────────────────
       if (playbackMode === 'qf' && rangeMs) {
@@ -638,6 +667,7 @@ export default function PreviewPage() {
     totalAyahsInSurah, startAyah, endAyah,
     everyAyahTimestamps,
     videoRecorder.isRecording,
+    isIbtahalatMode, trimEnabled, trimStart, trimEnd,
   ]);
 
   // Format time helper
@@ -659,6 +689,18 @@ export default function PreviewPage() {
       return;
     }
 
+    // If trim is enabled (ibtahalat mode), use trim range
+    if (trimEnabled && isIbtahalatMode && trimStart >= 0 && trimEnd > trimStart) {
+      if (audio.currentTime < trimStart || audio.currentTime >= trimEnd) {
+        audio.currentTime = trimStart;
+      }
+      audio.play().catch((err) => {
+        console.error('Audio play error:', err);
+        toast.error('حدث خطأ في تشغيل الصوت');
+      });
+      return;
+    }
+
     // EveryAyah: concatenated blob, play from start (no range)
     if (playbackMode === 'everyayah') {
       // If at end, restart
@@ -674,7 +716,7 @@ export default function PreviewPage() {
       console.error('Audio play error:', err);
       toast.error('حدث خطأ في تشغيل الصوت');
     });
-  }, [isPlaying, audioEffects, rangeMs, rangeStartSec, rangeEndSec, playbackMode]);
+  }, [isPlaying, audioEffects, rangeMs, rangeStartSec, rangeEndSec, playbackMode, trimEnabled, isIbtahalatMode, trimStart, trimEnd]);
 
   // ── Mute ───────────────────────────────────────────────────────────────────
   const toggleMute = useCallback(() => {
@@ -737,7 +779,11 @@ export default function PreviewPage() {
       let recordingDuration: number;
       let recordingStartAt = 0;
 
-      if (playbackMode === 'everyayah') {
+      // Ibtahalat trim mode
+      if (isIbtahalatMode && trimEnabled && trimEnd > trimStart) {
+        recordingDuration = trimEnd - trimStart;
+        recordingStartAt = trimStart;
+      } else if (playbackMode === 'everyayah') {
         recordingDuration = audio && audio.duration > 0 ? audio.duration : 60;
         recordingStartAt = 0;
       } else if (rangeMs) {
@@ -1076,7 +1122,7 @@ export default function PreviewPage() {
               </div>
             )}
 
-            <audio ref={audioRef} src={audioUrl} preload="auto" {...(!isIbtahalatMode && { crossOrigin: "anonymous" })} />
+            <audio ref={audioRef} src={audioUrl} preload="auto" crossOrigin="anonymous" />
           </motion.div>
 
           {/* Controls */}
@@ -1206,6 +1252,20 @@ export default function PreviewPage() {
                     </div>
                   </CardContent>
                 </Card>
+
+                {/* Audio Trim Control - shown for ibtahalat mode */}
+                {isIbtahalatMode && (
+                  <AudioTrimControl
+                    totalDuration={duration}
+                    onTrimChange={(start, end) => {
+                      setTrimStart(start);
+                      setTrimEnd(end);
+                    }}
+                    trimEnabled={trimEnabled}
+                    onTrimEnabledChange={setTrimEnabled}
+                    disabled={!audioLoaded || audioError}
+                  />
+                )}
               </TabsContent>
 
               <TabsContent value="display" className="mt-4">
