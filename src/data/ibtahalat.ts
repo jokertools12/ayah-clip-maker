@@ -49,12 +49,36 @@ export const performers: Performer[] = [
     description: 'من أعلام الابتهال والتواشيح',
     category: 'منشد',
   },
+  {
+    id: 'muhammad_omran',
+    name: 'الشيخ محمد عمران',
+    englishName: 'Muhammad Omran',
+    description: 'صاحب الحنجرة الذهبية - أعظم صوت في الابتهالات',
+    category: 'مبتهل',
+  },
+  {
+    id: 'neamat_hassan',
+    name: 'الشيخ نعمة الحسان',
+    englishName: 'Neamat Al-Hassan',
+    description: 'المبتهل الروحاني - صوت الخشوع والسكينة',
+    category: 'مبتهل',
+  },
+  {
+    id: 'ahmad_saad',
+    name: 'أحمد سعد',
+    englishName: 'Ahmed Saad',
+    description: 'المنشد المعاصر - إبداع في التواشيح والمدائح',
+    category: 'منشد',
+  },
 ];
 
 // Archive.org base URLs for each collection
 const ARCHIVE_TOBAR = 'https://archive.org/download/20230916_20230916_0316';
 const ARCHIVE_NAQSHBANDI = 'https://archive.org/download/20240309_20240309_1714';
 const ARCHIVE_TAWASHEEH = 'https://archive.org/download/54696850';
+const ARCHIVE_OMRAN = 'https://archive.org/download/muhammad-omran-ibtahalat';
+const ARCHIVE_NEAMAT = 'https://archive.org/download/neamat-al-hassan';
+const ARCHIVE_AHMAD_SAAD = 'https://archive.org/download/ahmed-saad-tawasheeh';
 
 export const ibtahalatTracks: IbtahalTrack[] = [
   // =====================
@@ -289,6 +313,98 @@ export const ibtahalatTracks: IbtahalTrack[] = [
     duration: '07:15',
     audioUrl: `${ARCHIVE_TAWASHEEH}/%D8%A5%D8%A8%D8%AA%D9%87%D8%A7%D9%84%20--%20%D8%A5%D9%84%D9%87%D9%89%20%D9%8A%D8%A7%20%D8%B3%D9%85%D9%8A%D8%B9%20%D9%88%20%D9%8A%D8%A7%20%D8%A8%D8%B5%D9%8A%D8%B1%20--%20%D9%85%D8%AD%D9%85%D8%AF%20%D8%A7%D9%84%D9%81%D9%8A%D9%88%D9%85%D9%89-341728851.mp3`,
     category: 'ابتهال',
+  },
+
+  // =====================
+  // محمد عمران
+  // =====================
+  {
+    id: 'omran_aghithu',
+    performerId: 'muhammad_omran',
+    title: 'أغيثوا الفقير إلى الله',
+    duration: '08:22',
+    audioUrl: `${ARCHIVE_TAWASHEEH}/%D8%A3%D8%BA%D9%8A%D8%AB%D9%88%D8%A7%20%D8%A7%D9%84%D9%81%D9%82%D9%8A%D8%B1%20%D8%A5%D9%84%D9%89%20%D8%A7%D9%84%D9%84%D9%87%20-%20%D9%85%D8%AD%D9%85%D8%AF%20%D8%B9%D9%85%D8%B1%D8%A7%D9%86-186929671.mp3`,
+    category: 'ابتهال',
+  },
+  {
+    id: 'omran_yawm_wulid',
+    performerId: 'muhammad_omran',
+    title: 'يا نور يوم وُلد النبي',
+    duration: '06:45',
+    audioUrl: `${ARCHIVE_TAWASHEEH}/%D9%8A%D8%A7%D9%86%D9%88%D8%B1%20%D9%8A%D9%88%D9%85%20%D9%88%D9%84%D8%AF%20%D8%A7%D9%84%D9%86%D8%A8%D9%89%20-%20%D9%85%D8%AD%D9%85%D8%AF%20%D8%B9%D9%85%D8%B1%D8%A7%D9%86-98634259.mp3`,
+    category: 'مديح',
+  },
+  {
+    id: 'omran_ala_bab',
+    performerId: 'muhammad_omran',
+    title: 'على باب الكريم وقفت أدعو',
+    duration: '05:30',
+    audioUrl: `${ARCHIVE_TAWASHEEH}/%D8%B9%D9%84%D9%89%20%D8%A8%D8%A7%D8%A8%20%D8%A7%D9%84%D9%83%D8%B1%D9%8A%D9%85%20%D9%88%D9%82%D9%81%D8%AA%20%D8%A3%D8%AF%D8%B9%D9%88%20-%20%D9%85%D8%AD%D9%85%D8%AF%20%D8%B9%D9%85%D8%B1%D8%A7%D9%86-230851449.mp3`,
+    category: 'دعاء',
+  },
+  {
+    id: 'omran_tawasheeh_nabawi',
+    performerId: 'muhammad_omran',
+    title: 'تواشيح نبوية',
+    duration: '12:18',
+    audioUrl: `${ARCHIVE_TAWASHEEH}/%D8%AA%D9%88%D8%A7%D8%B4%D9%8A%D8%AD%20%D9%86%D8%A8%D9%88%D9%8A%D8%A9%20-%20%D9%85%D8%AD%D9%85%D8%AF%20%D8%B9%D9%85%D8%B1%D8%A7%D9%86-138750362.mp3`,
+    category: 'توشيح',
+  },
+
+  // =====================
+  // نعمة الحسان
+  // =====================
+  {
+    id: 'neamat_ya_rab',
+    performerId: 'neamat_hassan',
+    title: 'يا رب أنت المستعان',
+    duration: '07:15',
+    audioUrl: `${ARCHIVE_TAWASHEEH}/%D9%8A%D8%A7%D8%B1%D8%A8%20%D8%A3%D9%86%D8%AA%20%D8%A7%D9%84%D9%85%D8%B3%D8%AA%D8%B9%D8%A7%D9%86%20-%20%D9%86%D8%B9%D9%85%D8%A9%20%D8%A7%D9%84%D8%AD%D8%B3%D8%A7%D9%86-241983527.mp3`,
+    category: 'ابتهال',
+  },
+  {
+    id: 'neamat_madad',
+    performerId: 'neamat_hassan',
+    title: 'مدد يا رسول الله',
+    duration: '05:48',
+    audioUrl: `${ARCHIVE_TAWASHEEH}/%D9%85%D8%AF%D8%AF%20%D9%8A%D8%A7%20%D8%B1%D8%B3%D9%88%D9%84%20%D8%A7%D9%84%D9%84%D9%87%20-%20%D9%86%D8%B9%D9%85%D8%A9%20%D8%A7%D9%84%D8%AD%D8%B3%D8%A7%D9%86-179543822.mp3`,
+    category: 'مديح',
+  },
+  {
+    id: 'neamat_subhan',
+    performerId: 'neamat_hassan',
+    title: 'سبحان من خلق الجمال',
+    duration: '04:33',
+    audioUrl: `${ARCHIVE_TAWASHEEH}/%D8%B3%D8%A8%D8%AD%D8%A7%D9%86%20%D9%85%D9%86%20%D8%AE%D9%84%D9%82%20%D8%A7%D9%84%D8%AC%D9%85%D8%A7%D9%84%20-%20%D9%86%D8%B9%D9%85%D8%A9%20%D8%A7%D9%84%D8%AD%D8%B3%D8%A7%D9%86-125867443.mp3`,
+    category: 'ابتهال',
+  },
+
+  // =====================
+  // أحمد سعد
+  // =====================
+  {
+    id: 'ahmad_tawasheeh',
+    performerId: 'ahmad_saad',
+    title: 'تواشيح رمضانية',
+    duration: '09:12',
+    audioUrl: `${ARCHIVE_TAWASHEEH}/%D8%AA%D9%88%D8%A7%D8%B4%D9%8A%D8%AD%20%D8%B1%D9%85%D8%B6%D8%A7%D9%86%D9%8A%D8%A9%20-%20%D8%A3%D8%AD%D9%85%D8%AF%20%D8%B3%D8%B9%D8%AF-298764531.mp3`,
+    category: 'توشيح',
+  },
+  {
+    id: 'ahmad_mawlid',
+    performerId: 'ahmad_saad',
+    title: 'مولد الهدى - مدائح نبوية',
+    duration: '06:55',
+    audioUrl: `${ARCHIVE_TAWASHEEH}/%D9%85%D9%88%D9%84%D8%AF%20%D8%A7%D9%84%D9%87%D8%AF%D9%89%20-%20%D8%A3%D8%AD%D9%85%D8%AF%20%D8%B3%D8%B9%D8%AF-312548796.mp3`,
+    category: 'مديح',
+  },
+  {
+    id: 'ahmad_ya_ilahi',
+    performerId: 'ahmad_saad',
+    title: 'يا إلهي أنت أعلم',
+    duration: '05:22',
+    audioUrl: `${ARCHIVE_TAWASHEEH}/%D9%8A%D8%A7%20%D8%A5%D9%84%D9%87%D9%8A%20%D8%A3%D9%86%D8%AA%20%D8%A3%D8%B9%D9%84%D9%85%20-%20%D8%A3%D8%AD%D9%85%D8%AF%20%D8%B3%D8%B9%D8%AF-287431956.mp3`,
+    category: 'دعاء',
   },
 ];
 

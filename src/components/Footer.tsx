@@ -10,8 +10,8 @@ export function Footer() {
           <div>
             <h3 className="font-bold text-lg mb-4 gradient-text">قرآن ريلز</h3>
             <p className="text-muted-foreground text-sm leading-relaxed">
-              منصة لإنشاء مقاطع فيديو قصيرة من القرآن الكريم بتلاوات الشيوخ المشهورين
-              مع خلفيات طبيعية جميلة.
+              منصة لإنشاء مقاطع فيديو قصيرة من القرآن الكريم والابتهالات والتواشيح
+              بأصوات أشهر القراء والمبتهلين مع خلفيات طبيعية جميلة.
             </p>
           </div>
 
@@ -26,7 +26,12 @@ export function Footer() {
               </li>
               <li>
                 <Link to="/create" className="text-muted-foreground hover:text-primary transition-colors text-sm">
-                  إنشاء فيديو
+                  إنشاء فيديو قرآني
+                </Link>
+              </li>
+              <li>
+                <Link to="/ibtahalat" className="text-muted-foreground hover:text-primary transition-colors text-sm">
+                  ابتهالات وتواشيح
                 </Link>
               </li>
               <li>
