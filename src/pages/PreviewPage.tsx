@@ -198,6 +198,7 @@ export default function PreviewPage() {
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const currentAyahIndexRef = useRef(0);
   const ayahsRef = useRef<{ numberInSurah: number; text: string }[]>([]);
+  const recordingUiLastUpdateRef = useRef(0);
 
   // ── Load ayah texts ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -399,6 +400,17 @@ export default function PreviewPage() {
     const handleTimeUpdate = () => {
       const nowSec = audio.currentTime;
       const nowMs = nowSec * 1000;
+      const isRecordingNow = videoRecorder.isRecording;
+
+      const updateTimeline = (timeSec: number, percent: number) => {
+        if (isRecordingNow) {
+          const ts = performance.now();
+          if (ts - recordingUiLastUpdateRef.current < 250) return;
+          recordingUiLastUpdateRef.current = ts;
+        }
+        setCurrentTime(timeSec);
+        setProgress(percent);
+      };
 
       // ── QF mode ─────────────────────────────────────────────────────────
       if (playbackMode === 'qf' && rangeMs) {
@@ -417,8 +429,7 @@ export default function PreviewPage() {
         }
 
         const relativeSec = Math.max(nowSec - rangeStartSec, 0);
-        setCurrentTime(relativeSec);
-        setProgress(Math.min((relativeSec / totalSec) * 100, 100));
+        updateTimeline(relativeSec, Math.min((relativeSec / totalSec) * 100, 100));
 
         // Find current verse
         for (let i = ayahTimings.length - 1; i >= 0; i--) {
@@ -426,7 +437,12 @@ export default function PreviewPage() {
           if (!t) continue;
           if (nowMs >= t.timestamp_from && nowMs < t.timestamp_to) {
             if (i !== currentAyahIndexRef.current) setCurrentAyahIndex(i);
-            if (t.segments && t.segments.length > 0) {
+
+            // Disable expensive word-by-word highlight updates during recording
+            if (isRecordingNow) {
+              setHighlightWordIndex(null);
+              setHighlightWordProgress(0);
+            } else if (t.segments && t.segments.length > 0) {
               const seg = t.segments.find((s) => nowMs >= s[1] && nowMs < s[2]);
               if (seg) {
                 setHighlightWordIndex(seg[0] - 1);
@@ -462,8 +478,7 @@ export default function PreviewPage() {
           return;
         }
 
-        setCurrentTime(nowSec);
-        setProgress(Math.min((nowSec / totalSec) * 100, 100));
+        updateTimeline(nowSec, Math.min((nowSec / totalSec) * 100, 100));
 
         // Find current ayah based on exact timestamps
         for (let i = everyAyahTimestamps.length - 1; i >= 0; i--) {
@@ -471,6 +486,14 @@ export default function PreviewPage() {
             if (i !== currentAyahIndexRef.current) {
               setCurrentAyahIndex(i);
             }
+
+            // Disable expensive word-by-word highlight updates during recording
+            if (isRecordingNow) {
+              setHighlightWordIndex(null);
+              setHighlightWordProgress(0);
+              break;
+            }
+
             // Word highlighting follows current ayah timeline (not fixed-speed animation)
             const ts = everyAyahTimestamps[i];
             const ayahDur = ts.to - ts.from;
@@ -512,14 +535,20 @@ export default function PreviewPage() {
         }
 
         const relativeSec = Math.max(nowSec - estStartSec, 0);
-        setCurrentTime(relativeSec);
-        setProgress(Math.min((relativeSec / totalSec) * 100, 100));
+        updateTimeline(relativeSec, Math.min((relativeSec / totalSec) * 100, 100));
 
         const ayahsCount = ayahsRef.current.length;
         if (ayahsCount > 0) {
           const ayahDuration = totalSec / ayahsCount;
           const estimatedIndex = Math.min(Math.floor(relativeSec / ayahDuration), ayahsCount - 1);
           if (estimatedIndex !== currentAyahIndexRef.current) setCurrentAyahIndex(estimatedIndex);
+
+          // Disable expensive word-by-word highlight updates during recording
+          if (isRecordingNow) {
+            setHighlightWordIndex(null);
+            setHighlightWordProgress(0);
+            return;
+          }
 
           const wordCount = (ayahsRef.current[estimatedIndex]?.text ?? '').split(' ').filter(Boolean).length;
           if (wordCount > 0) {
@@ -536,8 +565,7 @@ export default function PreviewPage() {
           }
         }
       } else {
-        setCurrentTime(nowSec);
-        setProgress(audio.duration > 0 ? (nowSec / audio.duration) * 100 : 0);
+        updateTimeline(nowSec, audio.duration > 0 ? (nowSec / audio.duration) * 100 : 0);
       }
     };
 
@@ -584,6 +612,7 @@ export default function PreviewPage() {
     rangeStartSec, rangeEndSec,
     totalAyahsInSurah, startAyah, endAyah,
     everyAyahTimestamps,
+    videoRecorder.isRecording,
   ]);
 
   // Format time helper
@@ -694,6 +723,16 @@ export default function PreviewPage() {
         recordingStartAt = 0;
       }
 
+      const isLongRecording = recordingDuration >= 45;
+      const isVeryLongRecording = recordingDuration >= 90;
+      const longRecordingFpsCap = isVeryLongRecording ? 18 : isLongRecording ? 20 : 30;
+      const clampQualityForDuration = (quality: ExportQuality): ExportQuality => {
+        if (isVeryLongRecording) return 'low';
+        if (!isLongRecording) return quality;
+        if (quality === 'ultra' || quality === 'high') return 'medium';
+        return quality;
+      };
+
       type RecordingAttemptKey = 'smooth' | 'compatibility' | 'quality';
       type RecordingAttempt = {
         id: RecordingAttemptKey;
@@ -711,54 +750,58 @@ export default function PreviewPage() {
       };
 
       const baseFps = previewApi.getRecommendedRecordingFps();
-      const compatibilityQuality: ExportQuality =
+      const selectedQuality = clampQualityForDuration(exportSettings.quality);
+      const compatibilityQuality: ExportQuality = clampQualityForDuration(
         exportSettings.quality === 'ultra'
           ? 'medium'
           : exportSettings.quality === 'high'
           ? 'medium'
-          : exportSettings.quality;
+          : exportSettings.quality
+      );
 
       const attemptsByMode: Record<RecordingAttemptKey, RecordingAttempt> = {
         smooth: {
           id: 'smooth',
           label: 'سلس',
-          renderMode: 'recording',
-          fps: Math.max(22, Math.min(baseFps, 26)),
-          quality: exportSettings.quality,
+          renderMode: isLongRecording ? 'recordingLite' : 'recording',
+          fps: Math.max(18, Math.min(baseFps, isLongRecording ? 22 : 26, longRecordingFpsCap)),
+          quality: selectedQuality,
           recorderOptions: {
             strategy: 'smooth',
-            bitrateMultiplier: 0.9,
-            timesliceMs: 1800,
+            bitrateMultiplier: isLongRecording ? 0.82 : 0.9,
+            timesliceMs: isLongRecording ? 2600 : 1800,
             mimeTypeCandidates: ['video/webm;codecs=vp8,opus', 'video/webm;codecs=vp9,opus', 'video/webm'],
-            captureStreamFps: Math.max(22, Math.min(baseFps, 26)),
+            captureStreamFps: Math.max(18, Math.min(baseFps, isLongRecording ? 22 : 26, longRecordingFpsCap)),
           },
         },
         compatibility: {
           id: 'compatibility',
           label: 'توافق عالي',
           renderMode: 'recordingLite',
-          fps: Math.max(18, Math.min(baseFps - 2, 22)),
+          fps: Math.max(16, Math.min(baseFps - 2, isLongRecording ? 20 : 22, longRecordingFpsCap)),
           quality: compatibilityQuality,
           recorderOptions: {
             strategy: 'compatibility',
-            bitrateMultiplier: 0.72,
-            timesliceMs: 2200,
+            bitrateMultiplier: isVeryLongRecording ? 0.6 : 0.72,
+            timesliceMs: isLongRecording ? 2800 : 2200,
             mimeTypeCandidates: ['video/webm;codecs=vp8,opus', 'video/webm'],
-            captureStreamFps: Math.max(18, Math.min(baseFps - 2, 22)),
+            captureStreamFps: Math.max(16, Math.min(baseFps - 2, isLongRecording ? 20 : 22, longRecordingFpsCap)),
           },
         },
         quality: {
           id: 'quality',
           label: 'جودة قصوى',
-          renderMode: 'recording',
-          fps: Math.max(26, Math.min(baseFps + 1, 30)),
-          quality: exportSettings.quality,
+          renderMode: isLongRecording ? 'recordingLite' : 'recording',
+          fps: Math.max(20, Math.min(baseFps + 1, isLongRecording ? 24 : 30, longRecordingFpsCap)),
+          quality: selectedQuality,
           recorderOptions: {
-            strategy: 'quality',
-            bitrateMultiplier: 1,
-            timesliceMs: 1400,
-            mimeTypeCandidates: ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'],
-            captureStreamFps: Math.max(26, Math.min(baseFps + 1, 30)),
+            strategy: isLongRecording ? 'smooth' : 'quality',
+            bitrateMultiplier: isLongRecording ? 0.86 : 1,
+            timesliceMs: isLongRecording ? 2200 : 1400,
+            mimeTypeCandidates: isLongRecording
+              ? ['video/webm;codecs=vp8,opus', 'video/webm']
+              : ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'],
+            captureStreamFps: Math.max(20, Math.min(baseFps + 1, isLongRecording ? 24 : 30, longRecordingFpsCap)),
           },
         },
       };
@@ -768,6 +811,10 @@ export default function PreviewPage() {
       const attempts = exportSettings.recordingMethod === 'auto'
         ? [attemptsByMode.compatibility, attemptsByMode.smooth, attemptsByMode.quality]
         : [attemptsByMode[selectedMode]];
+
+      if (isLongRecording) {
+        toast.info('تم تفعيل وضع التسجيل الطويل تلقائيًا لتجنب التهنيج.');
+      }
 
       let lastError: unknown = null;
 
@@ -788,15 +835,21 @@ export default function PreviewPage() {
           let lastFrameTime = 0;
           let stopped = false;
 
+          const drawIsolatedFrame = () => {
+            const livePreviewApi = videoPreviewRef.current;
+            const draw = livePreviewApi?.drawFrame ?? previewApi.drawFrame;
+            draw(recordingCanvas, attempt.renderMode);
+          };
+
           const renderIsolatedFrame = (now: number) => {
             if (stopped) return;
             rafId = requestAnimationFrame(renderIsolatedFrame);
             if (now - lastFrameTime < frameInterval) return;
             lastFrameTime = now;
-            previewApi.drawFrame(recordingCanvas, attempt.renderMode);
+            drawIsolatedFrame();
           };
 
-          previewApi.drawFrame(recordingCanvas, attempt.renderMode);
+          drawIsolatedFrame();
           rafId = requestAnimationFrame(renderIsolatedFrame);
 
           stopIsolatedLoop = () => {
@@ -809,7 +862,7 @@ export default function PreviewPage() {
 
           // Warm up isolated canvas before captureStream starts
           await new Promise((resolve) => setTimeout(resolve, 120));
-          previewApi.drawFrame(recordingCanvas, attempt.renderMode);
+          drawIsolatedFrame();
 
           if (audio) {
             audio.pause();
