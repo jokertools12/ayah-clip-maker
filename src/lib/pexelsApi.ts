@@ -125,20 +125,25 @@ export async function getPopularPexelsVideos(
   }
 }
 
-// Get the best quality video URL (prefer HD portrait)
-export function getBestVideoUrl(video: PexelsVideo): string {
-  // Sort by quality - prefer HD portrait videos
+// Get optimal video URL — prefer SD/HD portrait, avoid UHD to reduce CPU load
+export function getBestVideoUrl(video: PexelsVideo, preferLowRes = false): string {
   const files = [...video.video_files].sort((a, b) => {
     // Prefer portrait orientation
     const aIsPortrait = a.height > a.width;
     const bIsPortrait = b.height > b.width;
     if (aIsPortrait !== bIsPortrait) return aIsPortrait ? -1 : 1;
     
-    // Then by quality (higher is better, but not too high for performance)
-    const qualityOrder = { hd: 3, sd: 2, uhd: 1 };
-    const aQuality = qualityOrder[a.quality as keyof typeof qualityOrder] || 0;
-    const bQuality = qualityOrder[b.quality as keyof typeof qualityOrder] || 0;
-    return bQuality - aQuality;
+    // Prefer SD for low-res mode (mobile / compatibility), HD otherwise
+    // Never pick UHD — too heavy for canvas recording
+    const qualityOrder = preferLowRes
+      ? { sd: 3, hd: 2, uhd: 0 }
+      : { hd: 3, sd: 2, uhd: 0 };
+    const aQuality = qualityOrder[a.quality as keyof typeof qualityOrder] ?? 0;
+    const bQuality = qualityOrder[b.quality as keyof typeof qualityOrder] ?? 0;
+    if (aQuality !== bQuality) return bQuality - aQuality;
+
+    // For same quality tier, prefer smaller file (lower resolution)
+    return (a.width * a.height) - (b.width * b.height);
   });
 
   return files[0]?.link || video.video_files[0]?.link || '';

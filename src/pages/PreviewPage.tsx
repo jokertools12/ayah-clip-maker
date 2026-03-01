@@ -21,7 +21,7 @@ import { backgroundVideos, backgroundImages, slideshowBackgrounds, BackgroundIte
 import { useQuranApi } from '@/hooks/useQuranApi';
 import { useAuth } from '@/hooks/useAuth';
 import { useAudioEffects } from '@/hooks/useAudioEffects';
-import { useVideoRecorder, ExportQuality } from '@/hooks/useVideoRecorder';
+import { useVideoRecorder, ExportQuality, getQualityDimensions } from '@/hooks/useVideoRecorder';
 import {
   fetchChapterRecitationAudioById,
   QuranFoundationTimestamp,
@@ -761,9 +761,10 @@ export default function PreviewPage() {
         },
       };
 
-      const selectedMode: RecordingAttemptKey = exportSettings.recordingMethod === 'auto' ? 'smooth' : exportSettings.recordingMethod;
+      // Start with compatibility for auto mode (least CPU), only try heavier if it fails
+      const selectedMode: RecordingAttemptKey = exportSettings.recordingMethod === 'auto' ? 'compatibility' : exportSettings.recordingMethod;
       const attempts = exportSettings.recordingMethod === 'auto'
-        ? [attemptsByMode.smooth, attemptsByMode.compatibility, attemptsByMode.quality]
+        ? [attemptsByMode.compatibility, attemptsByMode.smooth, attemptsByMode.quality]
         : [attemptsByMode[selectedMode]];
 
       let lastError: unknown = null;
@@ -774,7 +775,8 @@ export default function PreviewPage() {
 
         try {
           const recordingCanvas = document.createElement('canvas');
-          const recordingDimensions = previewApi.getRecordingDimensions();
+          // Use quality-based dimensions instead of always 1080x1920
+          const recordingDimensions = getQualityDimensions(attempt.quality, aspectRatio);
           recordingCanvas.width = recordingDimensions.width;
           recordingCanvas.height = recordingDimensions.height;
 
