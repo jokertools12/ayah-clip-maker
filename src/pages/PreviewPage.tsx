@@ -104,10 +104,21 @@ export default function PreviewPage() {
   const videoRecorder = useVideoRecorder();
 
   // ── URL params ──────────────────────────────────────────────────────────────
+  const pageMode = searchParams.get('mode') || 'quran'; // 'quran' | 'ibtahalat'
+  const isIbtahalatMode = pageMode === 'ibtahalat';
+
+  // Quran params
   const surahNumber = parseInt(searchParams.get('surah') || '1');
   const reciterId = searchParams.get('reciter') || 'mishary_alafasy';
   const startAyah = parseInt(searchParams.get('start') || '1');
   const endAyah = parseInt(searchParams.get('end') || '5');
+
+  // Ibtahalat params
+  const ibtTrackTitle = searchParams.get('trackTitle') || '';
+  const ibtPerformerName = searchParams.get('performerName') || '';
+  const ibtAudioUrl = searchParams.get('audioUrl') || '';
+
+  // Shared params
   const backgroundId = searchParams.get('background') || '';
   const backgroundType = searchParams.get('backgroundType') || 'video';
   const backgroundUrlParam = searchParams.get('backgroundUrl') || '';
@@ -200,8 +211,13 @@ export default function PreviewPage() {
   const ayahsRef = useRef<{ numberInSurah: number; text: string }[]>([]);
   const recordingUiLastUpdateRef = useRef(0);
 
-  // ── Load ayah texts ─────────────────────────────────────────────────────────
+  // ── Load ayah texts (Quran mode only) ────────────────────────────────────────
   useEffect(() => {
+    if (isIbtahalatMode) {
+      // For ibtahalat, create a single "ayah" with the track title as text
+      setAyahs([{ numberInSurah: 1, text: ibtTrackTitle }]);
+      return;
+    }
     const loadData = async () => {
       const data = await fetchAyahs(surahNumber, startAyah, endAyah);
       if (data) {
@@ -209,13 +225,12 @@ export default function PreviewPage() {
           let text = ayah.text;
           // Always strip bismillah from ayah 1 for all surahs except Al-Fatiha (1) & At-Tawbah (9)
           if (index === 0 && startAyah <= 1 && surahNumber !== 1 && surahNumber !== 9) {
-            // Split and normalize each word to base Arabic letters only
             const words = text.split(/\s+/).filter(Boolean);
             const normalize = (w: string) => w
-              .replace(/[^\u0621-\u064A\u0671-\u06FF]/g, '') // strip diacritics
-              .replace(/[\u06E1\u06E4\u0640]/g, '') // strip sukun variants & tatweel
-              .replace(/\u0671/g, '\u0627') // ٱ → ا
-              .replace(/\u06CC/g, '\u064A'); // ی (farsi yeh) → ي
+              .replace(/[^\u0621-\u064A\u0671-\u06FF]/g, '')
+              .replace(/[\u06E1\u06E4\u0640]/g, '')
+              .replace(/\u0671/g, '\u0627')
+              .replace(/\u06CC/g, '\u064A');
             
             let cutAfter = -1;
             for (let wi = 0; wi < Math.min(words.length, 8); wi++) {
@@ -235,7 +250,7 @@ export default function PreviewPage() {
       }
     };
     loadData();
-  }, [surahNumber, startAyah, endAyah, fetchAyahs]);
+  }, [isIbtahalatMode, ibtTrackTitle, surahNumber, startAyah, endAyah, fetchAyahs]);
 
   useEffect(() => {
     currentAyahIndexRef.current = currentAyahIndex;
@@ -252,6 +267,16 @@ export default function PreviewPage() {
 
   // ── Load audio strategy ─────────────────────────────────────────────────────
   useEffect(() => {
+    // Ibtahalat mode: simple direct audio URL, no complex sync
+    if (isIbtahalatMode) {
+      setAudioUrl(ibtAudioUrl);
+      setPlaybackMode('fallback');
+      setTimingsLoading(false);
+      setAyahTimings([]);
+      setRangeMs(null);
+      return;
+    }
+
     if (!reciter) return;
     let cancelled = false;
 
@@ -346,7 +371,7 @@ export default function PreviewPage() {
 
     load();
     return () => { cancelled = true; };
-  }, [reciter?.id, reciter?.quranFoundationId, reciter?.everyAyahSubfolder, surahNumber, startAyah, endAyah]);
+  }, [isIbtahalatMode, ibtAudioUrl, reciter?.id, reciter?.quranFoundationId, reciter?.everyAyahSubfolder, surahNumber, startAyah, endAyah]);
 
   // ── Audio effects init ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -923,14 +948,18 @@ export default function PreviewPage() {
   }, []);
 
   const downloadFilename = useMemo(() => {
-    const base = `${surah?.englishName || surah?.name || 'quran'}-${reciter?.id || 'reciter'}`;
+    const base = isIbtahalatMode
+      ? `ibtahal-${ibtTrackTitle.slice(0, 30)}`
+      : `${surah?.englishName || surah?.name || 'quran'}-${reciter?.id || 'reciter'}`;
     return `${toSafeFilename(base)}.mp4`;
-  }, [surah?.englishName, surah?.name, reciter?.id, toSafeFilename]);
+  }, [isIbtahalatMode, ibtTrackTitle, surah?.englishName, surah?.name, reciter?.id, toSafeFilename]);
 
   // ── Export ──────────────────────────────────────────────────────────────────
   const handleExport = useCallback((format: ExportFormat) => {
     const baseFilename = toSafeFilename(
-      `${surah?.englishName || surah?.name || 'quran'}-${reciter?.id || 'reciter'}`
+      isIbtahalatMode
+        ? `ibtahal-${ibtTrackTitle.slice(0, 30)}`
+        : `${surah?.englishName || surah?.name || 'quran'}-${reciter?.id || 'reciter'}`
     );
     switch (format) {
       case 'mp4':
@@ -958,12 +987,12 @@ export default function PreviewPage() {
     try {
       const { error } = await supabase.from('saved_videos').insert({
         user_id: user.id,
-        surah_number: surahNumber,
-        surah_name: surah?.name || '',
-        reciter_id: reciterId,
-        reciter_name: reciter?.name || '',
-        start_ayah: startAyah,
-        end_ayah: endAyah,
+        surah_number: isIbtahalatMode ? 0 : surahNumber,
+        surah_name: isIbtahalatMode ? `ابتهال: ${ibtTrackTitle}` : (surah?.name || ''),
+        reciter_id: isIbtahalatMode ? 'ibtahalat' : reciterId,
+        reciter_name: isIbtahalatMode ? ibtPerformerName : (reciter?.name || ''),
+        start_ayah: isIbtahalatMode ? 0 : startAyah,
+        end_ayah: isIbtahalatMode ? 0 : endAyah,
         background_type: backgroundType,
         aspect_ratio: aspectRatio,
       });
@@ -996,7 +1025,9 @@ export default function PreviewPage() {
           animate={{ opacity: 1, y: 0 }}
           className="flex items-center gap-2 text-sm text-muted-foreground mb-6"
         >
-          <Link to="/create" className="hover:text-primary transition-colors">إنشاء فيديو</Link>
+          <Link to={isIbtahalatMode ? "/ibtahalat" : "/create"} className="hover:text-primary transition-colors">
+            {isIbtahalatMode ? 'ابتهالات وتواشيح' : 'إنشاء فيديو'}
+          </Link>
           <ChevronRight className="h-4 w-4" />
           <span>المعاينة</span>
         </motion.div>
@@ -1013,8 +1044,8 @@ export default function PreviewPage() {
               ref={videoPreviewRef}
               background={background}
               customBackground={customBackground}
-              surahName={surah?.name || ''}
-              reciterName={reciter?.name || ''}
+              surahName={isIbtahalatMode ? ibtTrackTitle : (surah?.name || '')}
+              reciterName={isIbtahalatMode ? ibtPerformerName : (reciter?.name || '')}
               currentAyah={ayahs[currentAyahIndex] || null}
               currentAyahWords={currentAyahWords}
               highlightedWordIndex={highlightWordIndex}
@@ -1045,7 +1076,7 @@ export default function PreviewPage() {
               </div>
             )}
 
-            <audio ref={audioRef} src={audioUrl} preload="auto" crossOrigin="anonymous" />
+            <audio ref={audioRef} src={audioUrl} preload="auto" {...(!isIbtahalatMode && { crossOrigin: "anonymous" })} />
           </motion.div>
 
           {/* Controls */}
@@ -1058,9 +1089,11 @@ export default function PreviewPage() {
             {/* Info Card */}
             <Card>
               <CardContent className="p-4">
-                <h3 className="text-xl font-bold">{surah?.name}</h3>
+                <h3 className="text-xl font-bold">{isIbtahalatMode ? ibtTrackTitle : surah?.name}</h3>
                 <p className="text-muted-foreground text-sm">
-                  {`الآيات ${startAyah} - ${endAyah} | ${reciter?.name}`}
+                  {isIbtahalatMode
+                    ? ibtPerformerName
+                    : `الآيات ${startAyah} - ${endAyah} | ${reciter?.name}`}
                 </p>
                 {modeLabel && (
                   <p className={`text-xs mt-1 ${playbackMode === 'everyayah' ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>

@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import SurahsPage from "./pages/SurahsPage";
 import CreatePage from "./pages/CreatePage";
+import IbtahalatPage from "./pages/IbtahalatPage";
 import PreviewPage from "./pages/PreviewPage";
 import AuthPage from "./pages/AuthPage";
 import LibraryPage from "./pages/LibraryPage";
@@ -23,6 +24,7 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/surahs" element={<SurahsPage />} />
           <Route path="/create" element={<CreatePage />} />
+          <Route path="/ibtahalat" element={<IbtahalatPage />} />
           <Route path="/preview" element={<PreviewPage />} />
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/library" element={<LibraryPage />} />
