@@ -26,6 +26,7 @@ export interface DisplaySettings {
   watermarkEnabled: boolean;
   watermarkText: string;
   watermarkPosition: 'bottomLeft' | 'bottomRight' | 'topLeft' | 'topRight' | 'bottomCenter';
+  performanceMode: 'economy' | 'balanced' | 'pro';
 }
 
 interface DisplaySettingsPanelProps {
@@ -125,6 +126,12 @@ const watermarkPositionOptions = [
   { value: 'bottomCenter', label: 'أسفل وسط' },
   { value: 'topRight', label: 'أعلى يمين' },
   { value: 'topLeft', label: 'أعلى يسار' },
+];
+
+const performanceModeOptions = [
+  { value: 'economy', label: '🔋 اقتصادي', description: 'أخف أداء، جزيئات أقل، 20 FPS' },
+  { value: 'balanced', label: '⚖️ متوازن', description: 'توازن بين الجودة والأداء' },
+  { value: 'pro', label: '🎬 احترافي', description: 'أعلى جودة، 30 FPS' },
 ];
 
 // Template storage
@@ -387,6 +394,31 @@ export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPane
               </div>
             </div>
           )}
+        </div>
+
+        {/* Performance Mode */}
+        <div className="space-y-3 pt-2 border-t">
+          <Label className="text-sm flex items-center gap-2">
+            ⚡ وضع الأداء
+          </Label>
+          <RadioGroup
+            value={settings.performanceMode || 'balanced'}
+            onValueChange={(value) => updateSetting('performanceMode', value as DisplaySettings['performanceMode'])}
+            className="grid grid-cols-3 gap-2"
+          >
+            {performanceModeOptions.map((option) => (
+              <div key={option.value} className="relative">
+                <RadioGroupItem value={option.value} id={`perf-${option.value}`} className="peer sr-only" />
+                <Label
+                  htmlFor={`perf-${option.value}`}
+                  className="flex flex-col items-center rounded-lg border-2 border-muted p-2 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all text-center"
+                >
+                  <span className="font-medium text-sm">{option.label}</span>
+                  <span className="text-xs text-muted-foreground">{option.description}</span>
+                </Label>
+              </div>
+            ))}
+          </RadioGroup>
         </div>
 
         {/* Highlight Style */}
