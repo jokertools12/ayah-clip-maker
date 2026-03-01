@@ -191,6 +191,7 @@ export default function PreviewPage() {
   const [transcribedLines, setTranscribedLines] = useState<{ text: string; start: number; end: number }[]>([]);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [transcriptionError, setTranscriptionError] = useState(false);
+  const [transcriptionProgress, setTranscriptionProgress] = useState<{ completed: number; total: number } | null>(null);
   const transcribedLinesRef = useRef<{ text: string; start: number; end: number }[]>([]);
 
   // ── Playback state ──────────────────────────────────────────────────────────
@@ -234,11 +235,29 @@ export default function PreviewPage() {
       // Start with title, then transcribe
       setAyahs([{ numberInSurah: 1, text: ibtTrackTitle }]);
       
-      // Transcribe audio using chunked client-side processing
+      // Transcribe audio using chunked client-side processing (with cache)
       if (ibtAudioUrl && !isTranscribing && transcribedLines.length === 0 && !transcriptionError) {
+        // Check cache first
+        const cacheKey = `transcription_cache_${btoa(ibtAudioUrl).slice(0, 64)}`;
+        const cached = localStorage.getItem(cacheKey);
+        if (cached) {
+          try {
+            const data = JSON.parse(cached) as { lines: { text: string; start: number; end: number }[] };
+            if (data?.lines?.length > 0) {
+              setTranscribedLines(data.lines);
+              transcribedLinesRef.current = data.lines;
+              setAyahs(data.lines.map((line, i) => ({ numberInSurah: i + 1, text: line.text })));
+              toast.success(`تم تحميل ${data.lines.length} سطر من الذاكرة المؤقتة`);
+              return;
+            }
+          } catch { /* ignore bad cache */ }
+        }
+
         setIsTranscribing(true);
+        setTranscriptionProgress(null);
         
         transcribeFullAudio(ibtAudioUrl, (completed, total) => {
+          setTranscriptionProgress({ completed, total });
           console.log(`📝 Transcription progress: ${completed}/${total} chunks`);
         })
           .then(data => {
@@ -250,8 +269,9 @@ export default function PreviewPage() {
                 text: line.text,
               }));
               setAyahs(transcribedAyahs);
+              // Save to cache
+              try { localStorage.setItem(cacheKey, JSON.stringify({ lines: data.lines })); } catch { /* quota */ }
               toast.success(`تم نسخ ${data.lines.length} سطر من الابتهال بنجاح`);
-              console.log(`✅ Transcription complete: ${data.lines.length} lines`);
             } else {
               console.warn('No lines in transcription result');
               setTranscriptionError(true);
@@ -263,7 +283,10 @@ export default function PreviewPage() {
             setTranscriptionError(true);
             toast.error('تعذر نسخ كلمات الابتهال تلقائياً');
           })
-          .finally(() => setIsTranscribing(false));
+          .finally(() => {
+            setIsTranscribing(false);
+            setTranscriptionProgress(null);
+          });
       }
       return;
     }
@@ -1224,10 +1247,20 @@ export default function PreviewPage() {
                   </p>
                 )}
                 {isIbtahalatMode && isTranscribing && (
-                  <p className="text-xs mt-1 text-amber-500 flex items-center gap-1">
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    جارٍ نسخ الكلمات من الصوت...
-                  </p>
+                  <div className="mt-2 space-y-1.5">
+                    <div className="flex items-center gap-1 text-xs text-amber-500">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      {transcriptionProgress
+                        ? `جارٍ نسخ الجزء ${transcriptionProgress.completed} من ${transcriptionProgress.total}...`
+                        : 'جارٍ تحميل الصوت وتحضيره للنسخ...'}
+                    </div>
+                    {transcriptionProgress && transcriptionProgress.total > 0 && (
+                      <Progress
+                        value={(transcriptionProgress.completed / transcriptionProgress.total) * 100}
+                        className="h-2"
+                      />
+                    )}
+                  </div>
                 )}
                 {isIbtahalatMode && transcribedLines.length > 0 && (
                   <p className="text-xs mt-1 text-green-600 dark:text-green-400">
