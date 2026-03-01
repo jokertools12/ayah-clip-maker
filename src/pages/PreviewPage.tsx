@@ -88,6 +88,7 @@ const DEFAULT_EXPORT_SETTINGS: ExportSettings = {
   format: 'mp4',
   quality: 'high',
   motionSpeed: 1.5,
+  recordingMethod: 'auto',
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -671,72 +672,184 @@ export default function PreviewPage() {
       return;
     }
 
-    let stopIsolatedLoop: (() => void) | null = null;
-
     try {
       await audioEffects.resumeContext();
       await previewApi.ensureBackgroundPlayback();
 
-      // Isolated recording canvas (separate from visible preview canvas)
-      const recordingCanvas = document.createElement('canvas');
-      const recordingDimensions = previewApi.getRecordingDimensions();
-      recordingCanvas.width = recordingDimensions.width;
-      recordingCanvas.height = recordingDimensions.height;
-
-      const recordingFps = previewApi.getRecommendedRecordingFps();
-      const frameInterval = Math.max(1000 / recordingFps, 16);
-      let intervalId: number | null = null;
-
-      const renderIsolatedFrame = () => {
-        previewApi.drawFrame(recordingCanvas, 'recording');
-      };
-
-      renderIsolatedFrame();
-      intervalId = window.setInterval(renderIsolatedFrame, frameInterval);
-
-      stopIsolatedLoop = () => {
-        if (intervalId !== null) {
-          window.clearInterval(intervalId);
-          intervalId = null;
-        }
-      };
-
-      // Warm up isolated canvas before captureStream starts
-      await new Promise((resolve) => setTimeout(resolve, 90));
-      previewApi.drawFrame(recordingCanvas, 'recording');
-
-      // Determine recording duration based on mode
+      // Determine recording duration based on playback mode
       const audio = audioRef.current;
       let recordingDuration: number;
+      let recordingStartAt = 0;
 
       if (playbackMode === 'everyayah') {
         recordingDuration = audio && audio.duration > 0 ? audio.duration : 60;
-        if (audio) audio.currentTime = 0;
+        recordingStartAt = 0;
       } else if (rangeMs) {
         recordingDuration = Math.max((rangeMs.to - rangeMs.from) / 1000, 1);
-        if (audio) audio.currentTime = rangeMs.from / 1000;
+        recordingStartAt = rangeMs.from / 1000;
       } else {
         recordingDuration = audio && audio.duration > 0 ? audio.duration : 60;
-        if (audio) audio.currentTime = 0;
+        recordingStartAt = 0;
       }
 
-      toast.info('بدء التسجيل في وضع معزول وخفيف...');
+      type RecordingAttemptKey = 'smooth' | 'compatibility' | 'quality';
+      type RecordingAttempt = {
+        id: RecordingAttemptKey;
+        label: string;
+        renderMode: 'recording' | 'recordingLite';
+        fps: number;
+        quality: ExportQuality;
+        recorderOptions: {
+          strategy: 'smooth' | 'compatibility' | 'quality';
+          bitrateMultiplier: number;
+          timesliceMs: number;
+          mimeTypeCandidates: string[];
+          captureStreamFps: number;
+        };
+      };
 
-      const blob = await videoRecorder.startRecording(
-        recordingCanvas,
-        audio,
-        recordingDuration,
-        audioEffects.getRecordingStream(),
-        exportSettings.quality,
-        recordingFps
-      );
+      const baseFps = previewApi.getRecommendedRecordingFps();
+      const compatibilityQuality: ExportQuality =
+        exportSettings.quality === 'ultra'
+          ? 'medium'
+          : exportSettings.quality === 'high'
+          ? 'medium'
+          : exportSettings.quality;
 
-      if (blob) toast.success('تم إنشاء الفيديو بنجاح!');
+      const attemptsByMode: Record<RecordingAttemptKey, RecordingAttempt> = {
+        smooth: {
+          id: 'smooth',
+          label: 'سلس',
+          renderMode: 'recording',
+          fps: Math.max(22, Math.min(baseFps, 26)),
+          quality: exportSettings.quality,
+          recorderOptions: {
+            strategy: 'smooth',
+            bitrateMultiplier: 0.9,
+            timesliceMs: 1800,
+            mimeTypeCandidates: ['video/webm;codecs=vp8,opus', 'video/webm;codecs=vp9,opus', 'video/webm'],
+            captureStreamFps: Math.max(22, Math.min(baseFps, 26)),
+          },
+        },
+        compatibility: {
+          id: 'compatibility',
+          label: 'توافق عالي',
+          renderMode: 'recordingLite',
+          fps: Math.max(18, Math.min(baseFps - 2, 22)),
+          quality: compatibilityQuality,
+          recorderOptions: {
+            strategy: 'compatibility',
+            bitrateMultiplier: 0.72,
+            timesliceMs: 2200,
+            mimeTypeCandidates: ['video/webm;codecs=vp8,opus', 'video/webm'],
+            captureStreamFps: Math.max(18, Math.min(baseFps - 2, 22)),
+          },
+        },
+        quality: {
+          id: 'quality',
+          label: 'جودة قصوى',
+          renderMode: 'recording',
+          fps: Math.max(26, Math.min(baseFps + 1, 30)),
+          quality: exportSettings.quality,
+          recorderOptions: {
+            strategy: 'quality',
+            bitrateMultiplier: 1,
+            timesliceMs: 1400,
+            mimeTypeCandidates: ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'],
+            captureStreamFps: Math.max(26, Math.min(baseFps + 1, 30)),
+          },
+        },
+      };
+
+      const selectedMode: RecordingAttemptKey = exportSettings.recordingMethod === 'auto' ? 'smooth' : exportSettings.recordingMethod;
+      const attempts = exportSettings.recordingMethod === 'auto'
+        ? [attemptsByMode.smooth, attemptsByMode.compatibility, attemptsByMode.quality]
+        : [attemptsByMode[selectedMode]];
+
+      let lastError: unknown = null;
+
+      for (let i = 0; i < attempts.length; i++) {
+        const attempt = attempts[i];
+        let stopIsolatedLoop: (() => void) | null = null;
+
+        try {
+          const recordingCanvas = document.createElement('canvas');
+          const recordingDimensions = previewApi.getRecordingDimensions();
+          recordingCanvas.width = recordingDimensions.width;
+          recordingCanvas.height = recordingDimensions.height;
+
+          const frameInterval = Math.max(1000 / attempt.fps, 16);
+          let rafId: number | null = null;
+          let lastFrameTime = 0;
+          let stopped = false;
+
+          const renderIsolatedFrame = (now: number) => {
+            if (stopped) return;
+            rafId = requestAnimationFrame(renderIsolatedFrame);
+            if (now - lastFrameTime < frameInterval) return;
+            lastFrameTime = now;
+            previewApi.drawFrame(recordingCanvas, attempt.renderMode);
+          };
+
+          previewApi.drawFrame(recordingCanvas, attempt.renderMode);
+          rafId = requestAnimationFrame(renderIsolatedFrame);
+
+          stopIsolatedLoop = () => {
+            stopped = true;
+            if (rafId !== null) {
+              cancelAnimationFrame(rafId);
+              rafId = null;
+            }
+          };
+
+          // Warm up isolated canvas before captureStream starts
+          await new Promise((resolve) => setTimeout(resolve, 120));
+          previewApi.drawFrame(recordingCanvas, attempt.renderMode);
+
+          if (audio) {
+            audio.pause();
+            audio.currentTime = recordingStartAt;
+          }
+
+          toast.info(
+            exportSettings.recordingMethod === 'auto'
+              ? `بدء التسجيل (${attempt.label})...`
+              : 'بدء التسجيل...'
+          );
+
+          const blob = await videoRecorder.startRecording(
+            recordingCanvas,
+            audio,
+            recordingDuration,
+            audioEffects.getRecordingStream(),
+            attempt.quality,
+            attempt.fps,
+            attempt.recorderOptions
+          );
+
+          if (blob) {
+            toast.success('تم إنشاء الفيديو بنجاح!');
+            return;
+          }
+
+          lastError = new Error('لم يتم إنشاء ملف فيديو');
+        } catch (error) {
+          lastError = error;
+
+          if (i < attempts.length - 1) {
+            videoRecorder.reset();
+            toast.warning(`فشل وضع "${attempt.label}"، سيتم تجربة وضع بديل...`);
+            await previewApi.ensureBackgroundPlayback();
+          }
+        } finally {
+          stopIsolatedLoop?.();
+        }
+      }
+
+      throw lastError instanceof Error ? lastError : new Error('حدث خطأ في التسجيل');
     } catch (error) {
       console.error('Recording error:', error);
-      toast.error('حدث خطأ في التسجيل');
-    } finally {
-      stopIsolatedLoop?.();
+      toast.error('فشل التسجيل على هذا الوضع. جرّب طريقة توافق أعلى أو جودة أقل.');
     }
   };
 

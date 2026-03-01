@@ -3,6 +3,7 @@ import { convertWebmToMp4 } from '@/lib/ffmpeg';
 import fixWebmDuration from 'fix-webm-duration';
 
 export type ExportQuality = 'low' | 'medium' | 'high' | 'ultra';
+export type RecordingStrategy = 'quality' | 'smooth' | 'compatibility';
 
 export interface QualitySettings {
   label: string;
@@ -10,11 +11,19 @@ export interface QualitySettings {
   bitrate: number;
 }
 
+export interface RecordingOptions {
+  strategy?: RecordingStrategy;
+  bitrateMultiplier?: number;
+  timesliceMs?: number;
+  mimeTypeCandidates?: string[];
+  captureStreamFps?: number;
+}
+
 export const QUALITY_PRESETS: Record<ExportQuality, QualitySettings> = {
-  low: { label: '480p - سريع', resolution: '854x480', bitrate: 1200000 },
-  medium: { label: '720p HD', resolution: '1280x720', bitrate: 2800000 },
-  high: { label: '1080p Full HD', resolution: '1920x1080', bitrate: 5000000 },
-  ultra: { label: '4K Ultra HD', resolution: '3840x2160', bitrate: 10000000 },
+  low: { label: '480p - سريع', resolution: '854x480', bitrate: 900000 },
+  medium: { label: '720p HD', resolution: '1280x720', bitrate: 1800000 },
+  high: { label: '1080p Full HD', resolution: '1920x1080', bitrate: 3200000 },
+  ultra: { label: 'Ultra (للأجهزة القوية)', resolution: '1920x1080 عالي', bitrate: 5000000 },
 };
 
 export interface VideoRecorderState {
@@ -54,11 +63,14 @@ export function useVideoRecorder() {
     duration: number = 30,
     audioStream?: MediaStream | null,
     quality: ExportQuality = 'high',
-    captureFps: number = 24
+    captureFps: number = 24,
+    options?: RecordingOptions
   ): Promise<Blob | null> => {
     return new Promise(async (resolve, reject) => {
       try {
         const qualitySettings = QUALITY_PRESETS[quality];
+        const strategy = options?.strategy ?? 'smooth';
+        const bitrateMultiplier = Math.min(Math.max(options?.bitrateMultiplier ?? 1, 0.45), 1.2);
         
         setState({
           isRecording: true,
@@ -75,7 +87,11 @@ export function useVideoRecorder() {
 
         // Capture at configurable FPS — lower values reduce CPU, higher values improve smoothness
         const safeFps = Number.isFinite(captureFps) ? Math.min(Math.max(captureFps, 15), 30) : 24;
-        const canvasStream = canvas.captureStream(safeFps);
+        const requestedStreamFps = options?.captureStreamFps;
+        const streamFps = Number.isFinite(requestedStreamFps)
+          ? Math.min(Math.max(requestedStreamFps as number, 1), 30)
+          : safeFps;
+        const canvasStream = canvas.captureStream(streamFps);
 
         // Combine video + audio tracks.
         const tracks = [...canvasStream.getVideoTracks()];
@@ -91,17 +107,36 @@ export function useVideoRecorder() {
         }
         const combinedStream = new MediaStream(tracks);
 
-        // Setup MediaRecorder with best available codec
-        const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
-          ? 'video/webm;codecs=vp9,opus'
-          : MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
-          ? 'video/webm;codecs=vp8,opus'
-          : 'video/webm';
+        const stopTracks = () => {
+          combinedStream.getTracks().forEach((track) => {
+            try {
+              track.stop();
+            } catch {
+              // ignore
+            }
+          });
+        };
 
-        const mediaRecorder = new MediaRecorder(combinedStream, {
-          mimeType,
-          videoBitsPerSecond: qualitySettings.bitrate,
-        });
+        // Setup MediaRecorder with strategy-based codec fallback
+        const defaultCandidates = strategy === 'quality'
+          ? ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm']
+          : ['video/webm;codecs=vp8,opus', 'video/webm;codecs=vp9,opus', 'video/webm'];
+        const mimeCandidates = options?.mimeTypeCandidates?.length ? options.mimeTypeCandidates : defaultCandidates;
+        const resolvedMime = mimeCandidates.find((candidate) => MediaRecorder.isTypeSupported(candidate));
+        const mimeType = resolvedMime || 'video/webm';
+
+        const fpsFactor = safeFps <= 20 ? 0.82 : safeFps <= 24 ? 0.9 : 1;
+        const safeBitrate = Math.max(650000, Math.round(qualitySettings.bitrate * bitrateMultiplier * fpsFactor));
+
+        const recorderOptions: MediaRecorderOptions = {
+          videoBitsPerSecond: safeBitrate,
+        };
+
+        if (resolvedMime) {
+          recorderOptions.mimeType = resolvedMime;
+        }
+
+        const mediaRecorder = new MediaRecorder(combinedStream, recorderOptions);
         mediaRecorderRef.current = mediaRecorder;
 
         mediaRecorder.ondataavailable = (e) => {
@@ -147,6 +182,7 @@ export function useVideoRecorder() {
             stage: 'جاهز للتحميل!',
           }));
 
+          stopTracks();
           resolve(blob);
         };
 
@@ -156,6 +192,7 @@ export function useVideoRecorder() {
             progressIntervalId = null;
           }
           console.error('MediaRecorder error:', e);
+          stopTracks();
           setState((prev) => ({
             ...prev,
             isRecording: false,
@@ -165,12 +202,17 @@ export function useVideoRecorder() {
         };
 
         // Start recording — use larger timeslice to reduce overhead
+        const chunkIntervalMs = Math.min(Math.max(options?.timesliceMs ?? 1500, 500), 4000);
         setState((prev) => ({ ...prev, stage: 'جاري بدء التسجيل...' }));
-        mediaRecorder.start(1000);
+        mediaRecorder.start(chunkIntervalMs);
 
         // Reset and play audio (if available)
         if (audioElement) {
-          await audioElement.play();
+          try {
+            await audioElement.play();
+          } catch (err) {
+            console.warn('Audio play warning during recording:', err);
+          }
         }
 
         // Progress tracking (throttled to reduce React re-renders while recording)
