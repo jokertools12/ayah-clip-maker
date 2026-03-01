@@ -73,7 +73,7 @@ export interface VideoPreviewRef {
   ensureBackgroundPlayback: () => Promise<void>;
   getRecordingDimensions: () => { width: number; height: number };
   getRecommendedRecordingFps: () => number;
-  drawFrame: (targetCanvas?: HTMLCanvasElement, renderMode?: 'preview' | 'recording') => void;
+  drawFrame: (targetCanvas?: HTMLCanvasElement, renderMode?: 'preview' | 'recording' | 'recordingLite') => void;
 }
 
 const DEFAULT_DISPLAY_SETTINGS = {
@@ -120,7 +120,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   const imageRef = useRef<HTMLImageElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
-  const drawFrameRuntimeRef = useRef<(targetCanvas?: HTMLCanvasElement, renderMode?: 'preview' | 'recording') => void>(() => {});
+  const drawFrameRuntimeRef = useRef<(targetCanvas?: HTMLCanvasElement, renderMode?: 'preview' | 'recording' | 'recordingLite') => void>(() => {});
   const [imageLoaded, setImageLoaded] = useState(false);
   const [videoReady, setVideoReady] = useState(false);
 
@@ -680,7 +680,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   };
 
   // Draw frame on canvas
-  const drawFrame = useCallback((targetCanvas?: HTMLCanvasElement, renderMode: 'preview' | 'recording' = 'preview') => {
+  const drawFrame = useCallback((targetCanvas?: HTMLCanvasElement, renderMode: 'preview' | 'recording' | 'recordingLite' = 'preview') => {
     const canvas = targetCanvas || canvasRef.current;
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
@@ -688,9 +688,12 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     const base = getRecordingDimensions();
     const previewPerfMode = displaySettings.performanceMode || 'balanced';
     const previewScale = previewPerfMode === 'economy' ? 0.34 : previewPerfMode === 'pro' ? 0.58 : 0.44;
+    const isPreviewRender = renderMode === 'preview';
+    const isLiteRecording = renderMode === 'recordingLite';
+    const recordingScale = isLiteRecording ? 0.78 : 1;
 
-    const width = renderMode === 'recording' ? base.width : Math.round(base.width * previewScale);
-    const height = renderMode === 'recording' ? base.height : Math.round(base.height * previewScale);
+    const width = isPreviewRender ? Math.round(base.width * previewScale) : Math.round(base.width * recordingScale);
+    const height = isPreviewRender ? Math.round(base.height * previewScale) : Math.round(base.height * recordingScale);
 
     // Keep preview canvas light, keep recording canvas full-resolution.
     if (canvas.width !== width || canvas.height !== height) {
@@ -706,11 +709,12 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Draw background with Ken Burns effect - use prop motionSpeed
-    const t = (Date.now() / 1000) * motionSpeed;
-    const scale = 1.06 + Math.sin(t * 0.2) * 0.04; // gentler motion
-    const offsetX = Math.sin(t * 0.12) * 20;
-    const offsetY = Math.cos(t * 0.1) * 16;
+    // Draw background motion (lighter in recordingLite)
+    const motionFactor = isLiteRecording ? 0.55 : 1;
+    const t = (Date.now() / 1000) * motionSpeed * motionFactor;
+    const scale = 1.04 + Math.sin(t * 0.2) * (0.03 * motionFactor);
+    const offsetX = Math.sin(t * 0.12) * (20 * motionFactor);
+    const offsetY = Math.cos(t * 0.1) * (16 * motionFactor);
     
     // Handle slideshow backgrounds
     if (slideshowReady && slideshowImagesRef.current.length > 1) {
@@ -807,11 +811,11 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     // ── Floating golden particles ──────────────────────────────────────────
     const particleDensity = displaySettings.particleDensity || 'medium';
     const perfMode = displaySettings.performanceMode || 'balanced';
-    const isPreviewRender = renderMode === 'preview';
     const previewParticleMultiplier = isPreviewRender ? (isPlaying ? 0.55 : 0) : 1;
+    const recordingParticleMultiplier = isLiteRecording ? 0 : 1;
     const perfMultiplier = perfMode === 'economy' ? 0.45 : perfMode === 'pro' ? 1 : 0.7;
     const baseParticles = particleDensity === 'off' ? 0 : particleDensity === 'low' ? 10 : particleDensity === 'high' ? 40 : 20;
-    const maxParticles = Math.round(baseParticles * perfMultiplier * previewParticleMultiplier);
+    const maxParticles = Math.round(baseParticles * perfMultiplier * previewParticleMultiplier * recordingParticleMultiplier);
 
     if (maxParticles > 0) {
       if (particlesRef.current.length < maxParticles) {
@@ -857,7 +861,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     }
 
     // ── Subtle vignette effect ────────────────────────────────────────────
-    if (!isPreviewRender || isPlaying) {
+    if ((!isPreviewRender || isPlaying) && !isLiteRecording) {
       const vignetteGrad = ctx.createRadialGradient(
         canvas.width / 2, canvas.height / 2, canvas.width * 0.3,
         canvas.width / 2, canvas.height / 2, canvas.width * 0.9
@@ -874,10 +878,11 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     // Text settings
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
+    const shadowMultiplier = isLiteRecording ? 0.5 : 1;
     ctx.shadowColor = `rgba(0, 0, 0, ${textSettings.shadowIntensity})`;
-    ctx.shadowBlur = textSettings.shadowIntensity * 20;
-    ctx.shadowOffsetX = 2;
-    ctx.shadowOffsetY = 2;
+    ctx.shadowBlur = textSettings.shadowIntensity * 20 * shadowMultiplier;
+    ctx.shadowOffsetX = isLiteRecording ? 1 : 2;
+    ctx.shadowOffsetY = isLiteRecording ? 1 : 2;
 
     // Draw surah name badge (if enabled) based on surahNameStyle
     if (displaySettings.showSurahName) {
