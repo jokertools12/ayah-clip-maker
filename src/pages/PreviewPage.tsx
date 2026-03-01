@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { getTrackById } from '@/data/ibtahalat';
+import { transcribeFullAudio } from '@/lib/chunkedTranscribe';
 import { motion } from 'framer-motion';
 import { Layout } from '@/components/Layout';
 import { VideoPreview, VideoPreviewRef } from '@/components/VideoPreview';
@@ -233,35 +234,18 @@ export default function PreviewPage() {
       // Start with title, then transcribe
       setAyahs([{ numberInSurah: 1, text: ibtTrackTitle }]);
       
-      // Transcribe audio using ElevenLabs STT
+      // Transcribe audio using chunked client-side processing
       if (ibtAudioUrl && !isTranscribing && transcribedLines.length === 0 && !transcriptionError) {
         setIsTranscribing(true);
-        const projectUrl = import.meta.env.VITE_SUPABASE_URL as string;
-        const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
         
-        fetch(`${projectUrl}/functions/v1/transcribe-audio`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            apikey: publishableKey,
-            Authorization: `Bearer ${publishableKey}`,
-          },
-          body: JSON.stringify({ audioUrl: ibtAudioUrl, language: 'ara' }),
+        transcribeFullAudio(ibtAudioUrl, (completed, total) => {
+          console.log(`📝 Transcription progress: ${completed}/${total} chunks`);
         })
-          .then(async (res) => {
-            const payload = await res.json().catch(() => null);
-            if (!res.ok) {
-              const message = payload?.error || `HTTP ${res.status}`;
-              throw new Error(message);
-            }
-            return payload;
-          })
           .then(data => {
             if (data?.lines && data.lines.length > 0) {
               setTranscribedLines(data.lines);
               transcribedLinesRef.current = data.lines;
-              // Set ayahs from transcribed lines
-              const transcribedAyahs = data.lines.map((line: { text: string }, i: number) => ({
+              const transcribedAyahs = data.lines.map((line, i) => ({
                 numberInSurah: i + 1,
                 text: line.text,
               }));
@@ -277,11 +261,7 @@ export default function PreviewPage() {
             const message = err instanceof Error ? err.message : 'Unknown error';
             console.error('Transcription failed:', message);
             setTranscriptionError(true);
-            if (message.includes('speech_to_text permission')) {
-              toast.error('مفتاح ElevenLabs الحالي لا يملك صلاحية Speech-to-Text. أعد ربط التكامل بمفتاح يملك الصلاحية.');
-            } else {
-              toast.error('تعذر نسخ كلمات الابتهال تلقائياً');
-            }
+            toast.error('تعذر نسخ كلمات الابتهال تلقائياً');
           })
           .finally(() => setIsTranscribing(false));
       }
