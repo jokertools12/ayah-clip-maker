@@ -1,5 +1,5 @@
-import { useState, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Layout } from '@/components/Layout';
 import { BackgroundSelector } from '@/components/BackgroundSelector';
@@ -45,7 +45,11 @@ type BrowseMode = 'byPerformer' | 'byCategory' | 'search';
 
 export default function IbtahalatPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [currentStep, setCurrentStep] = useState(1);
+  
+  // Handle step param from BrowsePage (skip to step 2 with pre-selected track)
+  const initializedFromParams = useRef(false);
   const [selectedPerformer, setSelectedPerformer] = useState<string | null>(null);
   const [selectedTrack, setSelectedTrack] = useState<string | null>(null);
   const [selectedBackground, setSelectedBackground] = useState<BackgroundItem | null>(
@@ -57,6 +61,18 @@ export default function IbtahalatPage() {
   const [browseMode, setBrowseMode] = useState<BrowseMode>('byCategory');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Initialize from URL params (e.g. coming from BrowsePage)
+  useEffect(() => {
+    if (initializedFromParams.current) return;
+    const stepParam = searchParams.get('step');
+    const trackIdParam = searchParams.get('trackId');
+    if (stepParam === '2' && trackIdParam) {
+      initializedFromParams.current = true;
+      setSelectedTrack(trackIdParam);
+      setCurrentStep(2);
+    }
+  }, [searchParams]);
 
   const selectedPerformerData = performers.find(p => p.id === selectedPerformer);
   const selectedTrackData = ibtahalatTracks.find(t => t.id === selectedTrack);

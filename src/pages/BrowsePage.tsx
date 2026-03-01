@@ -303,7 +303,17 @@ export default function BrowsePage() {
                               size="sm"
                               variant="outline"
                               className="shrink-0 gap-1"
-                              onClick={() => navigate('/ibtahalat')}
+                              onClick={() => {
+                                const performer = getPerformerById(track.performerId);
+                                const params = new URLSearchParams({
+                                  mode: 'ibtahalat',
+                                  trackId: track.id,
+                                  trackTitle: track.title,
+                                  performerName: performer?.name || '',
+                                  audioUrl: track.audioUrl,
+                                });
+                                navigate(`/ibtahalat?step=2&${params.toString()}`);
+                              }}
                             >
                               <Video className="h-3 w-3" />
                               فيديو

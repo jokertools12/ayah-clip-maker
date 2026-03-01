@@ -186,6 +186,12 @@ export default function PreviewPage() {
   const [highlightWordIndex, setHighlightWordIndex] = useState<number | null>(null);
   const [highlightWordProgress, setHighlightWordProgress] = useState(0);
 
+  // ── Transcription state (ibtahalat) ─────────────────────────────────────────
+  const [transcribedLines, setTranscribedLines] = useState<{ text: string; start: number; end: number }[]>([]);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [transcriptionError, setTranscriptionError] = useState(false);
+  const transcribedLinesRef = useRef<{ text: string; start: number; end: number }[]>([]);
+
   // ── Playback state ──────────────────────────────────────────────────────────
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -221,12 +227,55 @@ export default function PreviewPage() {
   const ayahsRef = useRef<{ numberInSurah: number; text: string }[]>([]);
   const recordingUiLastUpdateRef = useRef(0);
 
-  // ── Load ayah texts (Quran mode only) ────────────────────────────────────────
+  // ── Load ayah texts (Quran mode) / Transcribe audio (Ibtahalat mode) ───────
   useEffect(() => {
     if (isIbtahalatMode) {
-      // Show title as the displayed text - lyrics are not reliably synced with audio
-      // so we only show the ibtahal title centered on screen
+      // Start with title, then transcribe
       setAyahs([{ numberInSurah: 1, text: ibtTrackTitle }]);
+      
+      // Transcribe audio using ElevenLabs STT
+      if (ibtAudioUrl && !isTranscribing && transcribedLines.length === 0 && !transcriptionError) {
+        setIsTranscribing(true);
+        const projectUrl = import.meta.env.VITE_SUPABASE_URL as string;
+        const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
+        
+        fetch(`${projectUrl}/functions/v1/transcribe-audio`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            apikey: publishableKey,
+            Authorization: `Bearer ${publishableKey}`,
+          },
+          body: JSON.stringify({ audioUrl: ibtAudioUrl, language: 'ara' }),
+        })
+          .then(res => {
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return res.json();
+          })
+          .then(data => {
+            if (data.lines && data.lines.length > 0) {
+              setTranscribedLines(data.lines);
+              transcribedLinesRef.current = data.lines;
+              // Set ayahs from transcribed lines
+              const transcribedAyahs = data.lines.map((line: { text: string }, i: number) => ({
+                numberInSurah: i + 1,
+                text: line.text,
+              }));
+              setAyahs(transcribedAyahs);
+              toast.success(`تم نسخ ${data.lines.length} سطر من الابتهال بنجاح`);
+              console.log(`✅ Transcription complete: ${data.lines.length} lines`);
+            } else {
+              console.warn('No lines in transcription result');
+              setTranscriptionError(true);
+            }
+          })
+          .catch(err => {
+            console.error('Transcription failed:', err);
+            setTranscriptionError(true);
+            toast.error('تعذر نسخ كلمات الابتهال تلقائياً');
+          })
+          .finally(() => setIsTranscribing(false));
+      }
       return;
     }
     const loadData = async () => {
@@ -234,7 +283,6 @@ export default function PreviewPage() {
       if (data) {
         const processedAyahs = data.map((ayah, index) => {
           let text = ayah.text;
-          // Always strip bismillah from ayah 1 for all surahs except Al-Fatiha (1) & At-Tawbah (9)
           if (index === 0 && startAyah <= 1 && surahNumber !== 1 && surahNumber !== 9) {
             const words = text.split(/\s+/).filter(Boolean);
             const normalize = (w: string) => w
@@ -242,14 +290,10 @@ export default function PreviewPage() {
               .replace(/[\u06E1\u06E4\u0640]/g, '')
               .replace(/\u0671/g, '\u0627')
               .replace(/\u06CC/g, '\u064A');
-            
             let cutAfter = -1;
             for (let wi = 0; wi < Math.min(words.length, 8); wi++) {
               const clean = normalize(words[wi]);
-              if (clean === 'الرحيم') {
-                cutAfter = wi;
-                break;
-              }
+              if (clean === 'الرحيم') { cutAfter = wi; break; }
             }
             if (cutAfter >= 0 && cutAfter < words.length - 1) {
               text = words.slice(cutAfter + 1).join(' ');
@@ -261,7 +305,7 @@ export default function PreviewPage() {
       }
     };
     loadData();
-  }, [isIbtahalatMode, ibtTrackTitle, surahNumber, startAyah, endAyah, fetchAyahs]);
+  }, [isIbtahalatMode, ibtTrackTitle, ibtAudioUrl, surahNumber, startAyah, endAyah, fetchAyahs]);
 
   useEffect(() => {
     currentAyahIndexRef.current = currentAyahIndex;
@@ -467,11 +511,20 @@ export default function PreviewPage() {
         const relativeSec = Math.max(nowSec - trimStart, 0);
         const totalSec = Math.max(trimEnd - trimStart, 0.001);
         updateTimeline(relativeSec, Math.min((relativeSec / totalSec) * 100, 100));
-        // Track current lyrics line
-        const lyricsCount = ayahsRef.current.length;
-        if (lyricsCount > 0) {
-          const lineIndex = Math.min(Math.floor((relativeSec / totalSec) * lyricsCount), lyricsCount - 1);
-          if (lineIndex !== currentAyahIndexRef.current) setCurrentAyahIndex(lineIndex);
+        // Use transcribed timestamps if available
+        const tLines = transcribedLinesRef.current;
+        if (tLines.length > 0) {
+          let foundIdx = 0;
+          for (let i = tLines.length - 1; i >= 0; i--) {
+            if (nowSec >= tLines[i].start) { foundIdx = i; break; }
+          }
+          if (foundIdx !== currentAyahIndexRef.current) setCurrentAyahIndex(foundIdx);
+        } else {
+          const lyricsCount = ayahsRef.current.length;
+          if (lyricsCount > 0) {
+            const lineIndex = Math.min(Math.floor((relativeSec / totalSec) * lyricsCount), lyricsCount - 1);
+            if (lineIndex !== currentAyahIndexRef.current) setCurrentAyahIndex(lineIndex);
+          }
         }
         return;
       }
@@ -480,10 +533,20 @@ export default function PreviewPage() {
       if (isIbtahalatMode && !trimEnabled) {
         const totalSec = Math.max(audio.duration, 0.001);
         updateTimeline(nowSec, Math.min((nowSec / totalSec) * 100, 100));
-        const lyricsCount = ayahsRef.current.length;
-        if (lyricsCount > 0) {
-          const lineIndex = Math.min(Math.floor((nowSec / totalSec) * lyricsCount), lyricsCount - 1);
-          if (lineIndex !== currentAyahIndexRef.current) setCurrentAyahIndex(lineIndex);
+        // Use transcribed timestamps if available for accurate sync
+        const tLines = transcribedLinesRef.current;
+        if (tLines.length > 0) {
+          let foundIdx = 0;
+          for (let i = tLines.length - 1; i >= 0; i--) {
+            if (nowSec >= tLines[i].start) { foundIdx = i; break; }
+          }
+          if (foundIdx !== currentAyahIndexRef.current) setCurrentAyahIndex(foundIdx);
+        } else {
+          const lyricsCount = ayahsRef.current.length;
+          if (lyricsCount > 0) {
+            const lineIndex = Math.min(Math.floor((nowSec / totalSec) * lyricsCount), lyricsCount - 1);
+            if (lineIndex !== currentAyahIndexRef.current) setCurrentAyahIndex(lineIndex);
+          }
         }
         return;
       }
@@ -1141,9 +1204,9 @@ export default function PreviewPage() {
               isRecording={videoRecorder.isRecording}
               motionSpeed={exportSettings.motionSpeed}
               onBackgroundLoadMethod={setBackgroundLoadMethod}
-              ibtahalatLyricsMode={false}
-              allLyricsLines={[]}
-              currentLyricsIndex={0}
+              ibtahalatLyricsMode={isIbtahalatMode && transcribedLines.length > 1}
+              allLyricsLines={isIbtahalatMode && transcribedLines.length > 1 ? transcribedLines.map(l => l.text) : []}
+              currentLyricsIndex={currentAyahIndex}
             />
 
 
@@ -1169,6 +1232,22 @@ export default function PreviewPage() {
                 {modeLabel && (
                   <p className={`text-xs mt-1 ${playbackMode === 'everyayah' ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>
                     {modeLabel}
+                  </p>
+                )}
+                {isIbtahalatMode && isTranscribing && (
+                  <p className="text-xs mt-1 text-amber-500 flex items-center gap-1">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    جارٍ نسخ الكلمات من الصوت...
+                  </p>
+                )}
+                {isIbtahalatMode && transcribedLines.length > 0 && (
+                  <p className="text-xs mt-1 text-green-600 dark:text-green-400">
+                    ✅ تم نسخ {transcribedLines.length} سطر — مزامنة دقيقة مع الصوت
+                  </p>
+                )}
+                {isIbtahalatMode && transcriptionError && (
+                  <p className="text-xs mt-1 text-muted-foreground">
+                    ⚠️ يتم عرض عنوان الابتهال فقط
                   </p>
                 )}
               </CardContent>
