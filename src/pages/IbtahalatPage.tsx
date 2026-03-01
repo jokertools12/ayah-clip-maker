@@ -10,12 +10,15 @@ import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import { BackgroundItem, getRandomBackground } from '@/data/backgrounds';
 import {
   performers,
   ibtahalatTracks,
   getTracksByPerformer,
   getTracksByCategory,
+  getPerformerById,
+  searchTracks,
   Performer,
   IbtahalTrack,
 } from '@/data/ibtahalat';
@@ -31,10 +34,14 @@ import {
   Monitor,
   Smartphone,
   Volume2,
+  Filter,
+  List,
+  User,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 type AspectRatio = '9:16' | '16:9';
+type BrowseMode = 'byPerformer' | 'byCategory' | 'search';
 
 export default function IbtahalatPage() {
   const navigate = useNavigate();
@@ -47,10 +54,33 @@ export default function IbtahalatPage() {
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('9:16');
   const [searchQuery, setSearchQuery] = useState('');
   const [playingTrackId, setPlayingTrackId] = useState<string | null>(null);
+  const [browseMode, setBrowseMode] = useState<BrowseMode>('byCategory');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const selectedPerformerData = performers.find(p => p.id === selectedPerformer);
   const selectedTrackData = ibtahalatTracks.find(t => t.id === selectedTrack);
+
+  // Get tracks based on browse mode
+  const getFilteredTracks = (): IbtahalTrack[] => {
+    let tracks: IbtahalTrack[];
+
+    if (browseMode === 'search' && searchQuery.trim()) {
+      tracks = searchTracks(searchQuery);
+    } else if (browseMode === 'byPerformer' && selectedPerformer) {
+      tracks = getTracksByPerformer(selectedPerformer);
+    } else if (browseMode === 'byCategory') {
+      tracks = selectedCategory === 'all'
+        ? ibtahalatTracks
+        : getTracksByCategory(selectedCategory as IbtahalTrack['category']);
+    } else {
+      tracks = ibtahalatTracks;
+    }
+
+    return tracks;
+  };
+
+  const filteredTracks = getFilteredTracks();
 
   const filteredPerformers = performers.filter(
     p => p.name.includes(searchQuery) || p.englishName.toLowerCase().includes(searchQuery.toLowerCase())
@@ -73,19 +103,15 @@ export default function IbtahalatPage() {
   }, [playingTrackId]);
 
   const handleNextStep = () => {
-    if (currentStep === 1 && !selectedPerformer) {
-      toast.error('الرجاء اختيار مبتهل');
-      return;
-    }
-    if (currentStep === 2 && !selectedTrack) {
+    if (currentStep === 1 && !selectedTrack) {
       toast.error('الرجاء اختيار ابتهال');
       return;
     }
-    if (currentStep === 3 && !selectedBackground) {
+    if (currentStep === 2 && !selectedBackground) {
       toast.error('الرجاء اختيار خلفية');
       return;
     }
-    setCurrentStep(prev => Math.min(prev + 1, 4));
+    setCurrentStep(prev => Math.min(prev + 1, 3));
   };
 
   const handlePrevStep = () => {
@@ -116,9 +142,15 @@ export default function IbtahalatPage() {
     navigate(`/preview?${params.toString()}`);
   };
 
-  const stepLabels = ['اختر المبتهل', 'اختر الابتهال', 'اختر الخلفية', 'المعاينة'];
+  const stepLabels = ['اختر الابتهال', 'اختر الخلفية', 'المعاينة'];
 
-  const performerTracks = selectedPerformer ? getTracksByPerformer(selectedPerformer) : [];
+  const categories = [
+    { value: 'all', label: 'الكل', count: ibtahalatTracks.length },
+    { value: 'ابتهال', label: 'ابتهال', count: getTracksByCategory('ابتهال').length },
+    { value: 'توشيح', label: 'توشيح', count: getTracksByCategory('توشيح').length },
+    { value: 'مديح', label: 'مديح', count: getTracksByCategory('مديح').length },
+    { value: 'دعاء', label: 'دعاء', count: getTracksByCategory('دعاء').length },
+  ];
 
   return (
     <Layout>
@@ -134,7 +166,7 @@ export default function IbtahalatPage() {
             ابتهالات وتواشيح
           </h1>
           <p className="text-muted-foreground">
-            أنشئ فيديو بابتهالات وتواشيح أشهر المبتهلين والمنشدين
+            أنشئ فيديو بابتهالات وتواشيح أشهر المبتهلين والمنشدين - {ibtahalatTracks.length} تسجيل متاح
           </p>
         </motion.div>
 
@@ -145,7 +177,7 @@ export default function IbtahalatPage() {
           transition={{ delay: 0.1 }}
           className="flex items-center justify-center gap-1 md:gap-2 mb-6 overflow-x-auto pb-2"
         >
-          {[1, 2, 3, 4].map((step) => (
+          {[1, 2, 3].map((step) => (
             <div key={step} className="flex items-center">
               <div
                 className={`flex h-9 w-9 md:h-10 md:w-10 items-center justify-center rounded-full font-bold transition-all text-sm ${
@@ -158,7 +190,7 @@ export default function IbtahalatPage() {
               >
                 {step}
               </div>
-              {step < 4 && (
+              {step < 3 && (
                 <div
                   className={`w-6 md:w-12 h-1 rounded ${
                     currentStep > step ? 'bg-primary' : 'bg-muted'
@@ -193,93 +225,140 @@ export default function IbtahalatPage() {
           animate={{ opacity: 1, x: 0 }}
           className="mb-8"
         >
-          {/* Step 1: Select Performer */}
+          {/* Step 1: Select Track (with browse modes) */}
           {currentStep === 1 && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Mic className="h-5 w-5" />
-                  اختر المبتهل أو المنشد
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="relative mb-4">
-                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="ابحث عن مبتهل..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pr-10"
-                  />
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {filteredPerformers.map((performer) => (
-                    <PerformerCard
-                      key={performer.id}
-                      performer={performer}
-                      trackCount={getTracksByPerformer(performer.id).length}
-                      isSelected={selectedPerformer === performer.id}
-                      onClick={() => setSelectedPerformer(performer.id)}
-                    />
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Step 2: Select Track */}
-          {currentStep === 2 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
                   <Music className="h-5 w-5" />
-                  اختر الابتهال - {selectedPerformerData?.name}
+                  اختر الابتهال
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <Tabs defaultValue="all" className="w-full">
-                  <TabsList className="w-full grid grid-cols-5 mb-4">
-                    <TabsTrigger value="all">الكل</TabsTrigger>
-                    <TabsTrigger value="ابتهال">ابتهال</TabsTrigger>
-                    <TabsTrigger value="توشيح">توشيح</TabsTrigger>
-                    <TabsTrigger value="مديح">مديح</TabsTrigger>
-                    <TabsTrigger value="دعاء">دعاء</TabsTrigger>
-                  </TabsList>
+                {/* Browse Mode Tabs */}
+                <div className="flex gap-2 mb-4 flex-wrap">
+                  <Button
+                    variant={browseMode === 'byCategory' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setBrowseMode('byCategory')}
+                    className="gap-1"
+                  >
+                    <Filter className="h-4 w-4" />
+                    حسب التصنيف
+                  </Button>
+                  <Button
+                    variant={browseMode === 'byPerformer' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setBrowseMode('byPerformer')}
+                    className="gap-1"
+                  >
+                    <User className="h-4 w-4" />
+                    حسب المبتهل
+                  </Button>
+                  <Button
+                    variant={browseMode === 'search' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setBrowseMode('search')}
+                    className="gap-1"
+                  >
+                    <Search className="h-4 w-4" />
+                    بحث
+                  </Button>
+                </div>
 
-                  {['all', 'ابتهال', 'توشيح', 'مديح', 'دعاء'].map(cat => {
-                    const tracks = cat === 'all'
-                      ? performerTracks
-                      : performerTracks.filter(t => t.category === cat);
-                    return (
-                      <TabsContent key={cat} value={cat}>
-                        <ScrollArea className="h-[50vh]">
-                          <div className="space-y-3 p-1">
-                            {tracks.length === 0 ? (
-                              <p className="text-center text-muted-foreground py-8">لا توجد تسجيلات في هذا التصنيف</p>
-                            ) : (
-                              tracks.map(track => (
-                                <TrackCard
-                                  key={track.id}
-                                  track={track}
-                                  isSelected={selectedTrack === track.id}
-                                  isPlaying={playingTrackId === track.id}
-                                  onClick={() => setSelectedTrack(track.id)}
-                                  onPlayPreview={() => handlePlayPreview(track)}
-                                />
-                              ))
-                            )}
-                          </div>
-                        </ScrollArea>
-                      </TabsContent>
-                    );
-                  })}
-                </Tabs>
+                {/* Search Input */}
+                {browseMode === 'search' && (
+                  <div className="relative mb-4">
+                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="ابحث في الابتهالات والتواشيح..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pr-10"
+                      autoFocus
+                    />
+                  </div>
+                )}
+
+                {/* Category Filter */}
+                {browseMode === 'byCategory' && (
+                  <div className="flex gap-2 mb-4 flex-wrap">
+                    {categories.map(cat => (
+                      <Button
+                        key={cat.value}
+                        variant={selectedCategory === cat.value ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setSelectedCategory(cat.value)}
+                      >
+                        {cat.label}
+                        <Badge variant="secondary" className="mr-1 text-xs">
+                          {cat.count}
+                        </Badge>
+                      </Button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Performer Selector */}
+                {browseMode === 'byPerformer' && (
+                  <div className="mb-4">
+                    <div className="relative mb-3">
+                      <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="ابحث عن مبتهل..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pr-10"
+                      />
+                    </div>
+                    <div className="flex gap-2 flex-wrap mb-4">
+                      {filteredPerformers.map(p => (
+                        <Button
+                          key={p.id}
+                          variant={selectedPerformer === p.id ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setSelectedPerformer(p.id)}
+                          className="gap-1"
+                        >
+                          <Mic className="h-3 w-3" />
+                          {p.name}
+                          <Badge variant="secondary" className="mr-1 text-xs">
+                            {getTracksByPerformer(p.id).length}
+                          </Badge>
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Tracks List */}
+                <ScrollArea className="h-[55vh]">
+                  <div className="space-y-3 p-1">
+                    {filteredTracks.length === 0 ? (
+                      <p className="text-center text-muted-foreground py-8">
+                        لا توجد نتائج
+                      </p>
+                    ) : (
+                      filteredTracks.map(track => (
+                        <TrackCard
+                          key={track.id}
+                          track={track}
+                          showPerformer={browseMode !== 'byPerformer'}
+                          isSelected={selectedTrack === track.id}
+                          isPlaying={playingTrackId === track.id}
+                          onClick={() => setSelectedTrack(track.id)}
+                          onPlayPreview={() => handlePlayPreview(track)}
+                        />
+                      ))
+                    )}
+                  </div>
+                </ScrollArea>
               </CardContent>
             </Card>
           )}
 
-          {/* Step 3: Background */}
-          {currentStep === 3 && (
+          {/* Step 2: Background */}
+          {currentStep === 2 && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2">
                 <BackgroundSelector
@@ -323,8 +402,8 @@ export default function IbtahalatPage() {
             </div>
           )}
 
-          {/* Step 4: Preview */}
-          {currentStep === 4 && (
+          {/* Step 3: Summary */}
+          {currentStep === 3 && (
             <Card>
               <CardHeader>
                 <CardTitle>ملخص الفيديو</CardTitle>
@@ -333,7 +412,9 @@ export default function IbtahalatPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="p-4 rounded-lg bg-muted/50 space-y-2">
                     <p className="text-sm text-muted-foreground">المبتهل</p>
-                    <p className="font-bold text-lg">{selectedPerformerData?.name}</p>
+                    <p className="font-bold text-lg">
+                      {selectedTrackData ? getPerformerById(selectedTrackData.performerId)?.name : ''}
+                    </p>
                   </div>
                   <div className="p-4 rounded-lg bg-muted/50 space-y-2">
                     <p className="text-sm text-muted-foreground">الابتهال</p>
@@ -348,6 +429,14 @@ export default function IbtahalatPage() {
                     <p className="font-bold">{aspectRatio === '9:16' ? 'عمودي (ريلز)' : 'أفقي (يوتيوب)'}</p>
                   </div>
                 </div>
+                {selectedTrackData?.lyrics && (
+                  <div className="p-4 rounded-lg bg-muted/50 space-y-2">
+                    <p className="text-sm text-muted-foreground">كلمات الابتهال</p>
+                    <p className="font-medium text-right leading-relaxed whitespace-pre-line text-sm">
+                      {selectedTrackData.lyrics}
+                    </p>
+                  </div>
+                )}
                 <Button onClick={handleCreateVideo} size="lg" className="w-full text-lg">
                   <Play className="h-5 w-5 ml-2" />
                   إنشاء الفيديو
@@ -368,7 +457,7 @@ export default function IbtahalatPage() {
             <ChevronRight className="h-4 w-4" />
             السابق
           </Button>
-          {currentStep < 4 ? (
+          {currentStep < 3 ? (
             <Button onClick={handleNextStep} className="gap-2">
               التالي
               <ChevronLeft className="h-4 w-4" />
@@ -387,64 +476,23 @@ export default function IbtahalatPage() {
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
-function PerformerCard({
-  performer,
-  trackCount,
-  isSelected,
-  onClick,
-}: {
-  performer: Performer;
-  trackCount: number;
-  isSelected: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <motion.div
-      whileHover={{ scale: 1.02 }}
-      whileTap={{ scale: 0.98 }}
-      onClick={onClick}
-      className={`cursor-pointer rounded-xl p-5 border-2 transition-all duration-200 ${
-        isSelected
-          ? 'border-primary bg-primary/5 shadow-lg shadow-primary/10'
-          : 'border-border hover:border-primary/50 hover:bg-muted/50'
-      }`}
-    >
-      <div className="flex items-start gap-4">
-        <div className={`flex h-14 w-14 items-center justify-center rounded-full ${
-          isSelected ? 'gradient-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
-        }`}>
-          <Mic className="h-7 w-7" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <h3 className="font-bold text-lg truncate">{performer.name}</h3>
-          <p className="text-sm text-muted-foreground">{performer.description}</p>
-          <div className="flex items-center gap-2 mt-2">
-            <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-              {performer.category}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              {trackCount} تسجيل
-            </span>
-          </div>
-        </div>
-      </div>
-    </motion.div>
-  );
-}
-
 function TrackCard({
   track,
+  showPerformer = false,
   isSelected,
   isPlaying,
   onClick,
   onPlayPreview,
 }: {
   track: IbtahalTrack;
+  showPerformer?: boolean;
   isSelected: boolean;
   isPlaying: boolean;
   onClick: () => void;
   onPlayPreview: () => void;
 }) {
+  const performer = showPerformer ? getPerformerById(track.performerId) : null;
+
   return (
     <div
       onClick={onClick}
@@ -459,29 +507,37 @@ function TrackCard({
           e.stopPropagation();
           onPlayPreview();
         }}
-        className={`flex-shrink-0 flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
-          isPlaying ? 'gradient-primary text-primary-foreground' : 'bg-muted hover:bg-primary/20'
+        className={`flex-shrink-0 h-10 w-10 rounded-full flex items-center justify-center transition-colors ${
+          isPlaying
+            ? 'bg-primary text-primary-foreground'
+            : 'bg-muted hover:bg-primary/20'
         }`}
       >
         {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
       </button>
       <div className="flex-1 min-w-0">
-        <h4 className="font-semibold truncate">{track.title}</h4>
-        <div className="flex items-center gap-2 mt-1">
-          <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
+        <h4 className="font-bold truncate">{track.title}</h4>
+        <div className="flex items-center gap-2 mt-1 flex-wrap">
+          {showPerformer && performer && (
+            <span className="text-xs text-muted-foreground flex items-center gap-1">
+              <Mic className="h-3 w-3" />
+              {performer.name}
+            </span>
+          )}
+          <Badge variant="outline" className="text-xs">
             {track.category}
-          </span>
-          <span className="text-xs text-muted-foreground flex items-center gap-1">
-            <Volume2 className="h-3 w-3" />
-            {track.duration}
-          </span>
+          </Badge>
+          <span className="text-xs text-muted-foreground">{track.duration}</span>
+          {track.lyrics && (
+            <Badge variant="secondary" className="text-xs">
+              كلمات
+            </Badge>
+          )}
         </div>
       </div>
       {isSelected && (
-        <div className="flex-shrink-0 h-6 w-6 rounded-full gradient-primary flex items-center justify-center">
-          <svg className="h-3.5 w-3.5 text-primary-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-          </svg>
+        <div className="flex-shrink-0 h-6 w-6 rounded-full bg-primary flex items-center justify-center">
+          <Sparkles className="h-3 w-3 text-primary-foreground" />
         </div>
       )}
     </div>
