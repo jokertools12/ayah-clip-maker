@@ -193,6 +193,8 @@ export default function PreviewPage() {
   const audioRef = useRef<HTMLAudioElement>(null);
   const videoPreviewRef = useRef<VideoPreviewRef>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
+  const currentAyahIndexRef = useRef(0);
+  const ayahsRef = useRef<{ numberInSurah: number; text: string }[]>([]);
 
   // ── Load ayah texts ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -230,6 +232,14 @@ export default function PreviewPage() {
     };
     loadData();
   }, [surahNumber, startAyah, endAyah, fetchAyahs]);
+
+  useEffect(() => {
+    currentAyahIndexRef.current = currentAyahIndex;
+  }, [currentAyahIndex]);
+
+  useEffect(() => {
+    ayahsRef.current = ayahs;
+  }, [ayahs]);
 
   const currentAyahWords = useMemo(() => {
     const text = ayahs[currentAyahIndex]?.text ?? '';
@@ -412,7 +422,7 @@ export default function PreviewPage() {
           const t = ayahTimings[i];
           if (!t) continue;
           if (nowMs >= t.timestamp_from && nowMs < t.timestamp_to) {
-            if (i !== currentAyahIndex) setCurrentAyahIndex(i);
+            if (i !== currentAyahIndexRef.current) setCurrentAyahIndex(i);
             if (t.segments && t.segments.length > 0) {
               const seg = t.segments.find((s) => nowMs >= s[1] && nowMs < s[2]);
               if (seg) {
@@ -455,14 +465,14 @@ export default function PreviewPage() {
         // Find current ayah based on exact timestamps
         for (let i = everyAyahTimestamps.length - 1; i >= 0; i--) {
           if (nowSec >= everyAyahTimestamps[i].from) {
-            if (i !== currentAyahIndex) {
+            if (i !== currentAyahIndexRef.current) {
               setCurrentAyahIndex(i);
             }
             // Word highlighting follows current ayah timeline (not fixed-speed animation)
             const ts = everyAyahTimestamps[i];
             const ayahDur = ts.to - ts.from;
             const posInAyah = nowSec - ts.from;
-            const wordCount = (ayahs[i]?.text ?? '').split(' ').filter(Boolean).length;
+            const wordCount = (ayahsRef.current[i]?.text ?? '').split(' ').filter(Boolean).length;
             if (wordCount > 0 && ayahDur > 0) {
               const ratio = Math.min(Math.max(posInAyah / ayahDur, 0), 1);
               const wordIdx = Math.min(Math.floor(ratio * wordCount), wordCount - 1);
@@ -502,12 +512,13 @@ export default function PreviewPage() {
         setCurrentTime(relativeSec);
         setProgress(Math.min((relativeSec / totalSec) * 100, 100));
 
-        if (ayahs.length > 0) {
-          const ayahDuration = totalSec / ayahs.length;
-          const estimatedIndex = Math.min(Math.floor(relativeSec / ayahDuration), ayahs.length - 1);
-          if (estimatedIndex !== currentAyahIndex) setCurrentAyahIndex(estimatedIndex);
+        const ayahsCount = ayahsRef.current.length;
+        if (ayahsCount > 0) {
+          const ayahDuration = totalSec / ayahsCount;
+          const estimatedIndex = Math.min(Math.floor(relativeSec / ayahDuration), ayahsCount - 1);
+          if (estimatedIndex !== currentAyahIndexRef.current) setCurrentAyahIndex(estimatedIndex);
 
-          const wordCount = (ayahs[estimatedIndex]?.text ?? '').split(' ').filter(Boolean).length;
+          const wordCount = (ayahsRef.current[estimatedIndex]?.text ?? '').split(' ').filter(Boolean).length;
           if (wordCount > 0) {
             const posInAyah = Math.max(relativeSec - estimatedIndex * ayahDuration, 0);
             const ratio = Math.min(Math.max(posInAyah / Math.max(ayahDuration, 0.001), 0), 1);
@@ -566,8 +577,8 @@ export default function PreviewPage() {
       audio.removeEventListener('pause', handlePause);
     };
   }, [
-    playbackMode, rangeMs, ayahTimings, currentAyahIndex,
-    rangeStartSec, rangeEndSec, ayahs.length,
+    playbackMode, rangeMs, ayahTimings,
+    rangeStartSec, rangeEndSec,
     totalAyahsInSurah, startAyah, endAyah,
     everyAyahTimestamps,
   ]);
@@ -664,6 +675,7 @@ export default function PreviewPage() {
 
     try {
       await audioEffects.resumeContext();
+      await previewApi.ensureBackgroundPlayback();
 
       // Isolated recording canvas (separate from visible preview canvas)
       const recordingCanvas = document.createElement('canvas');
@@ -672,24 +684,20 @@ export default function PreviewPage() {
       recordingCanvas.height = recordingDimensions.height;
 
       const recordingFps = previewApi.getRecommendedRecordingFps();
-      const frameInterval = 1000 / recordingFps;
-      let rafId: number | null = null;
-      let lastFrameTime = 0;
+      const frameInterval = Math.max(1000 / recordingFps, 16);
+      let intervalId: number | null = null;
 
-      const renderIsolatedFrame = (now: number) => {
-        rafId = requestAnimationFrame(renderIsolatedFrame);
-        if (now - lastFrameTime < frameInterval) return;
-        lastFrameTime = now;
+      const renderIsolatedFrame = () => {
         previewApi.drawFrame(recordingCanvas, 'recording');
       };
 
-      previewApi.drawFrame(recordingCanvas, 'recording');
-      rafId = requestAnimationFrame(renderIsolatedFrame);
+      renderIsolatedFrame();
+      intervalId = window.setInterval(renderIsolatedFrame, frameInterval);
 
       stopIsolatedLoop = () => {
-        if (rafId !== null) {
-          cancelAnimationFrame(rafId);
-          rafId = null;
+        if (intervalId !== null) {
+          window.clearInterval(intervalId);
+          intervalId = null;
         }
       };
 
@@ -712,7 +720,7 @@ export default function PreviewPage() {
         if (audio) audio.currentTime = 0;
       }
 
-      toast.info('بدء التسجيل في وضع معزول...');
+      toast.info('بدء التسجيل في وضع معزول وخفيف...');
 
       const blob = await videoRecorder.startRecording(
         recordingCanvas,

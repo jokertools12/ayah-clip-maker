@@ -11,10 +11,10 @@ export interface QualitySettings {
 }
 
 export const QUALITY_PRESETS: Record<ExportQuality, QualitySettings> = {
-  low: { label: '480p - سريع', resolution: '854x480', bitrate: 2000000 },
-  medium: { label: '720p HD', resolution: '1280x720', bitrate: 5000000 },
-  high: { label: '1080p Full HD', resolution: '1920x1080', bitrate: 8000000 },
-  ultra: { label: '4K Ultra HD', resolution: '3840x2160', bitrate: 15000000 },
+  low: { label: '480p - سريع', resolution: '854x480', bitrate: 1200000 },
+  medium: { label: '720p HD', resolution: '1280x720', bitrate: 2800000 },
+  high: { label: '1080p Full HD', resolution: '1920x1080', bitrate: 5000000 },
+  ultra: { label: '4K Ultra HD', resolution: '3840x2160', bitrate: 10000000 },
 };
 
 export interface VideoRecorderState {
@@ -112,10 +112,16 @@ export function useVideoRecorder() {
 
         // Track recording start time for duration fix
         const startTime = Date.now();
+        let progressIntervalId: number | null = null;
+        let lastProgressStep = -1;
 
         mediaRecorder.onstop = async () => {
           if (animationFrameRef.current) {
             cancelAnimationFrame(animationFrameRef.current);
+          }
+          if (progressIntervalId !== null) {
+            window.clearInterval(progressIntervalId);
+            progressIntervalId = null;
           }
 
           const rawBlob = new Blob(chunksRef.current, { type: mimeType });
@@ -145,6 +151,10 @@ export function useVideoRecorder() {
         };
 
         mediaRecorder.onerror = (e) => {
+          if (progressIntervalId !== null) {
+            window.clearInterval(progressIntervalId);
+            progressIntervalId = null;
+          }
           console.error('MediaRecorder error:', e);
           setState((prev) => ({
             ...prev,
@@ -156,33 +166,39 @@ export function useVideoRecorder() {
 
         // Start recording — use larger timeslice to reduce overhead
         setState((prev) => ({ ...prev, stage: 'جاري بدء التسجيل...' }));
-        mediaRecorder.start(500);
+        mediaRecorder.start(1000);
 
         // Reset and play audio (if available)
         if (audioElement) {
           await audioElement.play();
         }
 
-        // Progress tracking
-        
-        const progressInterval = setInterval(() => {
+        // Progress tracking (throttled to reduce React re-renders while recording)
+        progressIntervalId = window.setInterval(() => {
           const elapsed = (Date.now() - startTime) / 1000;
           const progress = Math.min((elapsed / duration) * 100, 100);
-          
+          const progressStep = Math.round(progress);
+
           let stage = 'جاري التسجيل...';
           if (progress < 25) stage = 'جاري تسجيل الخلفية...';
           else if (progress < 50) stage = 'جاري تسجيل الصوت...';
           else if (progress < 75) stage = 'جاري معالجة الآيات...';
           else stage = 'جاري إنهاء الفيديو...';
 
-          setState((prev) => ({ ...prev, progress, stage }));
+          if (progressStep !== lastProgressStep) {
+            lastProgressStep = progressStep;
+            setState((prev) => ({ ...prev, progress, stage }));
+          }
 
           if (elapsed >= duration) {
-            clearInterval(progressInterval);
+            if (progressIntervalId !== null) {
+              window.clearInterval(progressIntervalId);
+              progressIntervalId = null;
+            }
             mediaRecorder.stop();
             if (audioElement) audioElement.pause();
           }
-        }, 100);
+        }, 250);
 
       } catch (error) {
         console.error('Recording error:', error);
