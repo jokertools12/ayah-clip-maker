@@ -10,6 +10,7 @@ import IbtahalatPage from "./pages/IbtahalatPage";
 import PreviewPage from "./pages/PreviewPage";
 import AuthPage from "./pages/AuthPage";
 import LibraryPage from "./pages/LibraryPage";
+import BrowsePage from "./pages/BrowsePage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,6 +29,7 @@ const App = () => (
           <Route path="/preview" element={<PreviewPage />} />
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/library" element={<LibraryPage />} />
+          <Route path="/browse" element={<BrowsePage />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

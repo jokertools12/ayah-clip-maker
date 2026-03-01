@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Layout } from '@/components/Layout';
-import { BookOpen, Video, Sparkles, Play, Users, Download, Music, Mic, ArrowLeft } from 'lucide-react';
+import { BookOpen, Video, Sparkles, Play, Users, Download, Music, Mic, ArrowLeft, Globe } from 'lucide-react';
 import { performers, getTracksByPerformer } from '@/data/ibtahalat';
 
 const features = [
@@ -116,6 +116,12 @@ export default function Index() {
                 <Link to="/ibtahalat">
                   <Music className="h-5 w-5 ml-2" />
                   ابتهالات وتواشيح
+                </Link>
+              </Button>
+              <Button asChild variant="ghost" size="lg" className="text-lg px-8">
+                <Link to="/browse">
+                  <Globe className="h-5 w-5 ml-2" />
+                  تصفح شامل
                 </Link>
               </Button>
             </motion.div>
