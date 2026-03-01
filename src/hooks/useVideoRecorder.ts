@@ -9,6 +9,10 @@ export interface QualitySettings {
   label: string;
   resolution: string;
   bitrate: number;
+  /** Actual canvas width for recording */
+  canvasWidth: number;
+  /** Actual canvas height for recording (portrait 9:16) */
+  canvasHeight: number;
 }
 
 export interface RecordingOptions {
@@ -20,11 +24,20 @@ export interface RecordingOptions {
 }
 
 export const QUALITY_PRESETS: Record<ExportQuality, QualitySettings> = {
-  low: { label: '480p - سريع', resolution: '854x480', bitrate: 900000 },
-  medium: { label: '720p HD', resolution: '1280x720', bitrate: 1800000 },
-  high: { label: '1080p Full HD', resolution: '1920x1080', bitrate: 3200000 },
-  ultra: { label: 'Ultra (للأجهزة القوية)', resolution: '1920x1080 عالي', bitrate: 5000000 },
+  low:    { label: '480p - سريع',           resolution: '480×854',      bitrate: 700_000,   canvasWidth: 480,  canvasHeight: 854  },
+  medium: { label: '720p HD',               resolution: '720×1280',     bitrate: 1_500_000, canvasWidth: 720,  canvasHeight: 1280 },
+  high:   { label: '1080p Full HD',          resolution: '1080×1920',    bitrate: 3_000_000, canvasWidth: 1080, canvasHeight: 1920 },
+  ultra:  { label: 'Ultra (للأجهزة القوية)', resolution: '1080×1920 عالي', bitrate: 5_000_000, canvasWidth: 1080, canvasHeight: 1920 },
 };
+
+/** Return recording canvas dimensions for the given quality + aspect ratio */
+export function getQualityDimensions(quality: ExportQuality, aspectRatio: '9:16' | '16:9') {
+  const preset = QUALITY_PRESETS[quality];
+  if (aspectRatio === '16:9') {
+    return { width: preset.canvasHeight, height: preset.canvasWidth }; // swap
+  }
+  return { width: preset.canvasWidth, height: preset.canvasHeight };
+}
 
 export interface VideoRecorderState {
   isRecording: boolean;
@@ -52,8 +65,6 @@ export function useVideoRecorder() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const animationFrameRef = useRef<number | null>(null);
-
-  // Used to coordinate async conversion across callbacks without stale closures.
   const conversionInProgressRef = useRef<boolean>(false);
   const mp4BlobRef = useRef<Blob | null>(null);
 
@@ -73,32 +84,24 @@ export function useVideoRecorder() {
         const bitrateMultiplier = Math.min(Math.max(options?.bitrateMultiplier ?? 1, 0.45), 1.2);
         
         setState({
-          isRecording: true,
-          progress: 0,
-          videoBlob: null,
-          mp4Blob: null,
-          isConverting: false,
-          convertProgress: 0,
-          error: null,
+          isRecording: true, progress: 0, videoBlob: null, mp4Blob: null,
+          isConverting: false, convertProgress: 0, error: null,
           stage: 'جاري تجهيز التسجيل...',
         });
         chunksRef.current = [];
-      conversionInProgressRef.current = false;
+        conversionInProgressRef.current = false;
 
-        // Capture at configurable FPS — lower values reduce CPU, higher values improve smoothness
-        const safeFps = Number.isFinite(captureFps) ? Math.min(Math.max(captureFps, 15), 30) : 24;
+        const safeFps = Number.isFinite(captureFps) ? Math.min(Math.max(captureFps, 12), 30) : 24;
         const requestedStreamFps = options?.captureStreamFps;
         const streamFps = Number.isFinite(requestedStreamFps)
           ? Math.min(Math.max(requestedStreamFps as number, 1), 30)
           : safeFps;
         const canvasStream = canvas.captureStream(streamFps);
 
-        // Combine video + audio tracks.
         const tracks = [...canvasStream.getVideoTracks()];
         if (audioStream && audioStream.getAudioTracks().length) {
           tracks.push(...audioStream.getAudioTracks());
         } else if (audioElement) {
-          // Fallback: try capturing audio directly from the <audio> element if supported.
           const anyAudio = audioElement as unknown as { captureStream?: () => MediaStream; mozCaptureStream?: () => MediaStream };
           const elStream = anyAudio.captureStream?.() ?? anyAudio.mozCaptureStream?.();
           if (elStream?.getAudioTracks().length) {
@@ -108,114 +111,69 @@ export function useVideoRecorder() {
         const combinedStream = new MediaStream(tracks);
 
         const stopTracks = () => {
-          combinedStream.getTracks().forEach((track) => {
-            try {
-              track.stop();
-            } catch {
-              // ignore
-            }
-          });
+          combinedStream.getTracks().forEach((track) => { try { track.stop(); } catch {} });
         };
 
-        // Setup MediaRecorder with strategy-based codec fallback
+        // Prefer VP8 for lower CPU; VP9 only for quality strategy
         const defaultCandidates = strategy === 'quality'
           ? ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm']
-          : ['video/webm;codecs=vp8,opus', 'video/webm;codecs=vp9,opus', 'video/webm'];
+          : ['video/webm;codecs=vp8,opus', 'video/webm'];
         const mimeCandidates = options?.mimeTypeCandidates?.length ? options.mimeTypeCandidates : defaultCandidates;
-        const resolvedMime = mimeCandidates.find((candidate) => MediaRecorder.isTypeSupported(candidate));
+        const resolvedMime = mimeCandidates.find((c) => MediaRecorder.isTypeSupported(c));
         const mimeType = resolvedMime || 'video/webm';
 
-        const fpsFactor = safeFps <= 20 ? 0.82 : safeFps <= 24 ? 0.9 : 1;
-        const safeBitrate = Math.max(650000, Math.round(qualitySettings.bitrate * bitrateMultiplier * fpsFactor));
+        const fpsFactor = safeFps <= 20 ? 0.75 : safeFps <= 24 ? 0.85 : 1;
+        const safeBitrate = Math.max(500_000, Math.round(qualitySettings.bitrate * bitrateMultiplier * fpsFactor));
 
-        const recorderOptions: MediaRecorderOptions = {
-          videoBitsPerSecond: safeBitrate,
-        };
-
-        if (resolvedMime) {
-          recorderOptions.mimeType = resolvedMime;
-        }
+        const recorderOptions: MediaRecorderOptions = { videoBitsPerSecond: safeBitrate };
+        if (resolvedMime) recorderOptions.mimeType = resolvedMime;
 
         const mediaRecorder = new MediaRecorder(combinedStream, recorderOptions);
         mediaRecorderRef.current = mediaRecorder;
 
         mediaRecorder.ondataavailable = (e) => {
-          if (e.data && e.data.size > 0) {
-            chunksRef.current.push(e.data);
-          }
+          if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
         };
 
-        // Track recording start time for duration fix
         const startTime = Date.now();
         let progressIntervalId: number | null = null;
         let lastProgressStep = -1;
 
         mediaRecorder.onstop = async () => {
-          if (animationFrameRef.current) {
-            cancelAnimationFrame(animationFrameRef.current);
-          }
-          if (progressIntervalId !== null) {
-            window.clearInterval(progressIntervalId);
-            progressIntervalId = null;
-          }
+          if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+          if (progressIntervalId !== null) { window.clearInterval(progressIntervalId); progressIntervalId = null; }
 
           const rawBlob = new Blob(chunksRef.current, { type: mimeType });
-          
-          // Fix WebM duration metadata so platforms (Instagram, TikTok) don't show 0 seconds
           const elapsed = Date.now() - startTime;
           let blob: Blob;
-          try {
-            blob = await fixWebmDuration(rawBlob, elapsed, { logger: false });
-          } catch {
-            blob = rawBlob; // fallback to unfixed blob
-          }
+          try { blob = await fixWebmDuration(rawBlob, elapsed, { logger: false }); } catch { blob = rawBlob; }
 
           setState((prev) => ({
-            ...prev,
-            isRecording: false,
-            progress: 100,
-            videoBlob: blob,
-            mp4Blob: null,
-            isConverting: false,
-            convertProgress: 0,
-            error: null,
-            stage: 'جاهز للتحميل!',
+            ...prev, isRecording: false, progress: 100, videoBlob: blob,
+            mp4Blob: null, isConverting: false, convertProgress: 0, error: null, stage: 'جاهز للتحميل!',
           }));
-
           stopTracks();
           resolve(blob);
         };
 
         mediaRecorder.onerror = (e) => {
-          if (progressIntervalId !== null) {
-            window.clearInterval(progressIntervalId);
-            progressIntervalId = null;
-          }
+          if (progressIntervalId !== null) { window.clearInterval(progressIntervalId); progressIntervalId = null; }
           console.error('MediaRecorder error:', e);
           stopTracks();
-          setState((prev) => ({
-            ...prev,
-            isRecording: false,
-            error: 'حدث خطأ في التسجيل',
-          }));
+          setState((prev) => ({ ...prev, isRecording: false, error: 'حدث خطأ في التسجيل' }));
           reject(new Error('Recording failed'));
         };
 
-        // Start recording — use larger timeslice to reduce overhead
-        const chunkIntervalMs = Math.min(Math.max(options?.timesliceMs ?? 1500, 500), 4000);
+        // Larger timeslice = fewer interruptions = less jank
+        const chunkIntervalMs = Math.min(Math.max(options?.timesliceMs ?? 2000, 500), 5000);
         setState((prev) => ({ ...prev, stage: 'جاري بدء التسجيل...' }));
         mediaRecorder.start(chunkIntervalMs);
 
-        // Reset and play audio (if available)
         if (audioElement) {
-          try {
-            await audioElement.play();
-          } catch (err) {
-            console.warn('Audio play warning during recording:', err);
-          }
+          try { await audioElement.play(); } catch (err) { console.warn('Audio play warning:', err); }
         }
 
-        // Progress tracking (throttled to reduce React re-renders while recording)
+        // Throttled progress — update every 500ms to reduce React re-renders
         progressIntervalId = window.setInterval(() => {
           const elapsed = (Date.now() - startTime) / 1000;
           const progress = Math.min((elapsed / duration) * 100, 100);
@@ -233,26 +191,18 @@ export function useVideoRecorder() {
           }
 
           if (elapsed >= duration) {
-            if (progressIntervalId !== null) {
-              window.clearInterval(progressIntervalId);
-              progressIntervalId = null;
-            }
+            if (progressIntervalId !== null) { window.clearInterval(progressIntervalId); progressIntervalId = null; }
             mediaRecorder.stop();
             if (audioElement) audioElement.pause();
           }
-        }, 250);
+        }, 500); // was 250, now 500 to reduce render load
 
       } catch (error) {
         console.error('Recording error:', error);
         setState({
-          isRecording: false,
-          progress: 0,
-          videoBlob: null,
-          mp4Blob: null,
-          isConverting: false,
-          convertProgress: 0,
-          error: error instanceof Error ? error.message : 'حدث خطأ في التسجيل',
-          stage: '',
+          isRecording: false, progress: 0, videoBlob: null, mp4Blob: null,
+          isConverting: false, convertProgress: 0,
+          error: error instanceof Error ? error.message : 'حدث خطأ في التسجيل', stage: '',
         });
         reject(error);
       }
@@ -260,170 +210,87 @@ export function useVideoRecorder() {
   }, []);
 
   const convertToMp4 = useCallback(async (): Promise<Blob | null> => {
-    // If we already have MP4, return it (use ref to avoid stale closures).
     if (mp4BlobRef.current) return mp4BlobRef.current;
     if (state.mp4Blob) return state.mp4Blob;
     if (!state.videoBlob) return null;
 
     if (conversionInProgressRef.current) {
-      // Wait for existing conversion
       return new Promise((resolve) => {
         const checkInterval = setInterval(() => {
-          if (!conversionInProgressRef.current) {
-            clearInterval(checkInterval);
-            resolve(mp4BlobRef.current);
-          }
+          if (!conversionInProgressRef.current) { clearInterval(checkInterval); resolve(mp4BlobRef.current); }
         }, 300);
       });
     }
 
     try {
       conversionInProgressRef.current = true;
-      setState((prev) => ({
-        ...prev,
-        isConverting: true,
-        convertProgress: 0,
-        stage: 'جاري تحويل الفيديو إلى MP4...',
-        error: null,
-      }));
+      setState((prev) => ({ ...prev, isConverting: true, convertProgress: 0, stage: 'جاري تحويل الفيديو إلى MP4...', error: null }));
 
       const mp4 = await convertWebmToMp4(state.videoBlob, {
         onProgress: (ratio) => {
-          setState((prev) => ({
-            ...prev,
-            convertProgress: Math.round(Math.min(Math.max(ratio, 0), 1) * 100),
-          }));
+          setState((prev) => ({ ...prev, convertProgress: Math.round(Math.min(Math.max(ratio, 0), 1) * 100) }));
         },
       });
 
       conversionInProgressRef.current = false;
       mp4BlobRef.current = mp4;
-      setState((prev) => ({
-        ...prev,
-        isConverting: false,
-        mp4Blob: mp4,
-        error: null,
-        stage: 'جاهز للتحميل بصيغة MP4',
-      }));
-
+      setState((prev) => ({ ...prev, isConverting: false, mp4Blob: mp4, error: null, stage: 'جاهز للتحميل بصيغة MP4' }));
       return mp4;
     } catch (e) {
       console.error('MP4 conversion failed:', e);
       conversionInProgressRef.current = false;
-      setState((prev) => ({
-        ...prev,
-        isConverting: false,
-        error: 'فشل التحويل إلى MP4',
-        stage: 'فشل التحويل',
-      }));
+      setState((prev) => ({ ...prev, isConverting: false, error: 'فشل التحويل إلى MP4', stage: 'فشل التحويل' }));
       return null;
     }
   }, [state.videoBlob, state.mp4Blob]);
 
-  const downloadMp4 = useCallback(
-    async (filename: string = 'quran-reel.mp4') => {
-      // IMPORTANT: programmatic downloads can be blocked if they happen after an awaited async task.
-      // So we only download when MP4 is already ready.
-      const blob = mp4BlobRef.current ?? state.mp4Blob;
-
-      if (!blob) {
-        setState((prev) => ({
-          ...prev,
-          error: prev.isConverting || conversionInProgressRef.current ? null : 'ملف MP4 غير جاهز بعد',
-          stage:
-            prev.isConverting || conversionInProgressRef.current
-              ? 'جاري التحويل إلى MP4...'
-              : 'MP4 غير متوفر بعد',
-        }));
-        return;
-      }
-
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      const finalName = filename.endsWith('.mp4') ? filename : `${filename.replace(/\.[^/.]+$/, '')}.mp4`;
-      a.download = finalName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-
-      // Some browsers may cancel the download if we revoke immediately.
-      window.setTimeout(() => URL.revokeObjectURL(url), 1500);
-
+  const downloadMp4 = useCallback(async (filename: string = 'quran-reel.mp4') => {
+    const blob = mp4BlobRef.current ?? state.mp4Blob;
+    if (!blob) {
       setState((prev) => ({
         ...prev,
-        stage: 'تم بدء التحميل!',
-        error: null,
+        error: prev.isConverting || conversionInProgressRef.current ? null : 'ملف MP4 غير جاهز بعد',
+        stage: prev.isConverting || conversionInProgressRef.current ? 'جاري التحويل إلى MP4...' : 'MP4 غير متوفر بعد',
       }));
-    },
-    [state.mp4Blob]
-  );
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename.endsWith('.mp4') ? filename : `${filename.replace(/\.[^/.]+$/, '')}.mp4`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+    setState((prev) => ({ ...prev, stage: 'تم بدء التحميل!', error: null }));
+  }, [state.mp4Blob]);
 
-  const downloadWebm = useCallback(
-    (filename: string = 'quran-reel.webm') => {
-      const blob = state.videoBlob;
-
-      if (!blob) {
-        setState((prev) => ({
-          ...prev,
-          error: 'لا يوجد فيديو WebM للتحميل',
-        }));
-        return;
-      }
-
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      const finalName = filename.endsWith('.webm') ? filename : `${filename.replace(/\.[^/.]+$/, '')}.webm`;
-      a.download = finalName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-
-      window.setTimeout(() => URL.revokeObjectURL(url), 1500);
-
-      setState((prev) => ({
-        ...prev,
-        stage: 'تم تحميل WebM!',
-        error: null,
-      }));
-    },
-    [state.videoBlob]
-  );
+  const downloadWebm = useCallback((filename: string = 'quran-reel.webm') => {
+    const blob = state.videoBlob;
+    if (!blob) { setState((prev) => ({ ...prev, error: 'لا يوجد فيديو WebM للتحميل' })); return; }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename.endsWith('.webm') ? filename : `${filename.replace(/\.[^/.]+$/, '')}.webm`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+    setState((prev) => ({ ...prev, stage: 'تم تحميل WebM!', error: null }));
+  }, [state.videoBlob]);
 
   const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
-    }
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') mediaRecorderRef.current.stop();
+    if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
   }, []);
 
   const reset = useCallback(() => {
     stopRecording();
     conversionInProgressRef.current = false;
     mp4BlobRef.current = null;
-    setState({
-      isRecording: false,
-      progress: 0,
-      videoBlob: null,
-      mp4Blob: null,
-      isConverting: false,
-      convertProgress: 0,
-      error: null,
-      stage: '',
-    });
+    setState({ isRecording: false, progress: 0, videoBlob: null, mp4Blob: null, isConverting: false, convertProgress: 0, error: null, stage: '' });
     chunksRef.current = [];
   }, [stopRecording]);
 
-  return {
-    ...state,
-    startRecording,
-    stopRecording,
-    downloadMp4,
-    downloadWebm,
-    convertToMp4,
-    reset,
-  };
+  return { ...state, startRecording, stopRecording, downloadMp4, downloadWebm, convertToMp4, reset };
 }

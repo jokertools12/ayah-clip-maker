@@ -132,6 +132,16 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   // Floating particles state (golden dust)
   const particlesRef = useRef<Array<{ x: number; y: number; vx: number; vy: number; size: number; alpha: number; life: number }>>([]);
 
+  // ── Text layout cache ───────────────────────────────────────────────────
+  const textLayoutCacheRef = useRef<{
+    key: string;
+    lines: string[][];
+    spaceWidth: number;
+    totalHeight: number;
+    startY: number;
+    lineHeight: number;
+  } | null>(null);
+
   // Verse transition state
   const prevAyahRef = useRef<{ numberInSurah: number; text: string } | null>(null);
   const transitionStartRef = useRef<number>(0);
@@ -141,7 +151,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   const RANDOM_TRANSITIONS: Array<'fade' | 'slide' | 'zoom' | 'blur' | 'rise' | 'rotate' | 'cinematic' | 'elastic'> = ['fade', 'slide', 'zoom', 'blur', 'rise', 'rotate', 'cinematic', 'elastic'];
   const currentRandomTransitionRef = useRef<string>('fade');
 
-  // Base dimensions for final recording quality
+  // Base dimensions for final recording quality (used as reference for scaling)
   const getRecordingDimensions = useCallback(() => {
     if (aspectRatio === '9:16') {
       return { width: 1080, height: 1920 };
@@ -687,19 +697,30 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
 
     const base = getRecordingDimensions();
     const previewPerfMode = displaySettings.performanceMode || 'balanced';
-    const previewScale = previewPerfMode === 'economy' ? 0.34 : previewPerfMode === 'pro' ? 0.58 : 0.44;
+    const previewScale = previewPerfMode === 'economy' ? 0.3 : previewPerfMode === 'pro' ? 0.5 : 0.38;
     const isPreviewRender = renderMode === 'preview';
     const isLiteRecording = renderMode === 'recordingLite';
-    const recordingScale = isLiteRecording ? 0.78 : 1;
+    const recordingScale = isLiteRecording ? 0.67 : 1;
 
-    const width = isPreviewRender ? Math.round(base.width * previewScale) : Math.round(base.width * recordingScale);
-    const height = isPreviewRender ? Math.round(base.height * previewScale) : Math.round(base.height * recordingScale);
-
-    // Keep preview canvas light, keep recording canvas full-resolution.
-    if (canvas.width !== width || canvas.height !== height) {
-      canvas.width = width;
-      canvas.height = height;
+    // For recording: the canvas dimensions are set by the caller (PreviewPage)
+    // based on quality preset. We only resize for preview mode.
+    if (isPreviewRender) {
+      const width = Math.round(base.width * previewScale);
+      const height = Math.round(base.height * previewScale);
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+      }
+    } else if (isLiteRecording) {
+      // Lite recording: scale down whatever the caller set
+      const width = Math.round(canvas.width * recordingScale);
+      const height = Math.round(canvas.height * recordingScale);
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+      }
     }
+    // else: recording mode uses canvas dimensions as-is (set by caller)
 
     // Scale factor: all hardcoded sizes were designed for ~1080px width canvas.
     // Scale them relative to actual canvas width so they look right at all sizes.
@@ -809,13 +830,14 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     ctx.fillRect(0, canvas.height * 0.75, canvas.width, canvas.height * 0.25);
 
     // ── Floating golden particles ──────────────────────────────────────────
+    // Disable particles entirely during recording to save CPU
     const particleDensity = displaySettings.particleDensity || 'medium';
     const perfMode = displaySettings.performanceMode || 'balanced';
-    const previewParticleMultiplier = isPreviewRender ? (isPlaying ? 0.55 : 0) : 1;
-    const recordingParticleMultiplier = isLiteRecording ? 0 : 1;
-    const perfMultiplier = perfMode === 'economy' ? 0.45 : perfMode === 'pro' ? 1 : 0.7;
-    const baseParticles = particleDensity === 'off' ? 0 : particleDensity === 'low' ? 10 : particleDensity === 'high' ? 40 : 20;
-    const maxParticles = Math.round(baseParticles * perfMultiplier * previewParticleMultiplier * recordingParticleMultiplier);
+    const isAnyRecording = !isPreviewRender;
+    const previewParticleMultiplier = isPreviewRender ? (isPlaying ? 0.4 : 0) : 0;
+    const perfMultiplier = perfMode === 'economy' ? 0.3 : perfMode === 'pro' ? 0.8 : 0.5;
+    const baseParticles = particleDensity === 'off' ? 0 : particleDensity === 'low' ? 8 : particleDensity === 'high' ? 25 : 14;
+    const maxParticles = isAnyRecording ? 0 : Math.round(baseParticles * perfMultiplier * previewParticleMultiplier);
 
     if (maxParticles > 0) {
       if (particlesRef.current.length < maxParticles) {
@@ -860,8 +882,8 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       particlesRef.current = [];
     }
 
-    // ── Subtle vignette effect ────────────────────────────────────────────
-    if ((!isPreviewRender || isPlaying) && !isLiteRecording) {
+    // ── Subtle vignette effect (skip during recording to save GPU) ──────
+    if (isPreviewRender && isPlaying) {
       const vignetteGrad = ctx.createRadialGradient(
         canvas.width / 2, canvas.height / 2, canvas.width * 0.3,
         canvas.width / 2, canvas.height / 2, canvas.width * 0.9
@@ -875,14 +897,14 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     // Get the font family for canvas
     const fontName = getCanvasFontFamily(textSettings.fontFamily);
 
-    // Text settings
+    // Text settings — reduce shadow cost during recording
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    const shadowMultiplier = isLiteRecording ? 0.5 : 1;
-    ctx.shadowColor = `rgba(0, 0, 0, ${textSettings.shadowIntensity})`;
-    ctx.shadowBlur = textSettings.shadowIntensity * 20 * shadowMultiplier;
-    ctx.shadowOffsetX = isLiteRecording ? 1 : 2;
-    ctx.shadowOffsetY = isLiteRecording ? 1 : 2;
+    const shadowMultiplier = isAnyRecording ? 0.3 : 1;
+    ctx.shadowColor = `rgba(0, 0, 0, ${textSettings.shadowIntensity * shadowMultiplier})`;
+    ctx.shadowBlur = isAnyRecording ? 4 : textSettings.shadowIntensity * 20;
+    ctx.shadowOffsetX = isAnyRecording ? 1 : 2;
+    ctx.shadowOffsetY = isAnyRecording ? 1 : 2;
 
     // Draw surah name badge (if enabled) based on surahNameStyle
     if (displaySettings.showSurahName) {
@@ -1169,30 +1191,47 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       ctx.font = `${textSettings.fontSize * 2 * S}px "${fontName}", "Noto Naskh Arabic", serif`;
       ctx.fillStyle = textSettings.textColor;
       
-      // Word wrap
+      // Word wrap — with layout cache to avoid measureText every frame
       const words = (currentAyahWords?.length ? currentAyahWords : currentAyah.text.split(' ')).filter(Boolean);
+      const cacheKey = `${currentAyah.numberInSurah}|${canvas.width}|${textSettings.fontSize}|${fontName}|${words.length}`;
 
-      const spaceWidth = ctx.measureText(' ').width;
-      const lines: string[][] = [];
-      let line: string[] = [];
-      let lineWidth = 0;
+      let lines: string[][];
+      let spaceWidth: number;
+      let totalHeight: number;
+      let startY: number;
 
-      for (const word of words) {
-        const w = ctx.measureText(word).width;
-        const add = line.length ? spaceWidth + w : w;
-        if (lineWidth + add > maxWidth && line.length) {
-          lines.push(line);
-          line = [word];
-          lineWidth = w;
-        } else {
-          line.push(word);
-          lineWidth += add;
+      if (textLayoutCacheRef.current && textLayoutCacheRef.current.key === cacheKey) {
+        // Use cached layout
+        lines = textLayoutCacheRef.current.lines;
+        spaceWidth = textLayoutCacheRef.current.spaceWidth;
+        totalHeight = textLayoutCacheRef.current.totalHeight;
+        startY = textLayoutCacheRef.current.startY;
+      } else {
+        // Compute and cache
+        spaceWidth = ctx.measureText(' ').width;
+        lines = [];
+        let line: string[] = [];
+        let lw = 0;
+
+        for (const word of words) {
+          const w = ctx.measureText(word).width;
+          const add = line.length ? spaceWidth + w : w;
+          if (lw + add > maxWidth && line.length) {
+            lines.push(line);
+            line = [word];
+            lw = w;
+          } else {
+            line.push(word);
+            lw += add;
+          }
         }
-      }
-      if (line.length) lines.push(line);
+        if (line.length) lines.push(line);
 
-      const totalHeight = lines.length * lineHeight;
-      const startY = ayahY - totalHeight / 2;
+        totalHeight = lines.length * lineHeight;
+        startY = ayahY - totalHeight / 2;
+
+        textLayoutCacheRef.current = { key: cacheKey, lines, spaceWidth, totalHeight, startY, lineHeight };
+      }
 
       // Draw decoration (side borders or separator) based on decorationStyle
       const decoStyle = displaySettings.decorationStyle || 'none';
