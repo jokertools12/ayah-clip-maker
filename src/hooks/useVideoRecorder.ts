@@ -53,7 +53,8 @@ export function useVideoRecorder() {
     audioElement: HTMLAudioElement | null,
     duration: number = 30,
     audioStream?: MediaStream | null,
-    quality: ExportQuality = 'high'
+    quality: ExportQuality = 'high',
+    captureFps: number = 24
   ): Promise<Blob | null> => {
     return new Promise(async (resolve, reject) => {
       try {
@@ -72,8 +73,9 @@ export function useVideoRecorder() {
         chunksRef.current = [];
       conversionInProgressRef.current = false;
 
-        // Capture at 24fps — matches typical cinematic framerate and reduces CPU load
-        const canvasStream = canvas.captureStream(24);
+        // Capture at configurable FPS — lower values reduce CPU, higher values improve smoothness
+        const safeFps = Number.isFinite(captureFps) ? Math.min(Math.max(captureFps, 15), 30) : 24;
+        const canvasStream = canvas.captureStream(safeFps);
 
         // Combine video + audio tracks.
         const tracks = [...canvasStream.getVideoTracks()];

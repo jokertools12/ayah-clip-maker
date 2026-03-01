@@ -60,6 +60,7 @@ interface VideoPreviewProps {
     performanceMode?: 'economy' | 'balanced' | 'pro';
   };
   isPlaying: boolean;
+  isRecording?: boolean;
   onCanvasReady?: (canvas: HTMLCanvasElement) => void;
   onBackgroundLoadMethod?: (method: 'direct' | 'proxy' | 'fallback') => void;
   motionSpeed?: number; // 1-10, default 3
@@ -69,7 +70,9 @@ export interface VideoPreviewRef {
   getContainer: () => HTMLDivElement | null;
   getCanvas: () => HTMLCanvasElement | null;
   isBackgroundReady: () => boolean;
-  drawFrame: () => void;
+  getRecordingDimensions: () => { width: number; height: number };
+  getRecommendedRecordingFps: () => number;
+  drawFrame: (targetCanvas?: HTMLCanvasElement, renderMode?: 'preview' | 'recording') => void;
 }
 
 const DEFAULT_DISPLAY_SETTINGS = {
@@ -106,6 +109,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   textSettings,
   displaySettings = DEFAULT_DISPLAY_SETTINGS,
   isPlaying,
+  isRecording = false,
   onCanvasReady,
   onBackgroundLoadMethod,
   motionSpeed = 3,
@@ -115,6 +119,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   const imageRef = useRef<HTMLImageElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const drawFrameRuntimeRef = useRef<(targetCanvas?: HTMLCanvasElement, renderMode?: 'preview' | 'recording') => void>(() => {});
   const [imageLoaded, setImageLoaded] = useState(false);
   const [videoReady, setVideoReady] = useState(false);
 
@@ -135,15 +140,20 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   const RANDOM_TRANSITIONS: Array<'fade' | 'slide' | 'zoom' | 'blur' | 'rise' | 'rotate' | 'cinematic' | 'elastic'> = ['fade', 'slide', 'zoom', 'blur', 'rise', 'rotate', 'cinematic', 'elastic'];
   const currentRandomTransitionRef = useRef<string>('fade');
 
-  // Canvas renders at high resolution for sharp text, CSS scales it down for display
-  const getDimensions = () => {
+  // Base dimensions for final recording quality
+  const getRecordingDimensions = useCallback(() => {
     if (aspectRatio === '9:16') {
       return { width: 1080, height: 1920 };
     }
     return { width: 1920, height: 1080 };
-  };
+  }, [aspectRatio]);
 
-  const dimensions = getDimensions();
+  const getRecommendedRecordingFps = useCallback(() => {
+    const perfMode = displaySettings.performanceMode || 'balanced';
+    if (perfMode === 'economy') return 24;
+    if (perfMode === 'pro') return 30;
+    return 27;
+  }, [displaySettings.performanceMode]);
 
   // Get the actual font name for canvas
   const getCanvasFontFamily = useCallback((fontFamily: string): string => {
@@ -626,14 +636,19 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   };
 
   // Draw frame on canvas
-  const drawFrame = useCallback(() => {
-    const canvas = canvasRef.current;
+  const drawFrame = useCallback((targetCanvas?: HTMLCanvasElement, renderMode: 'preview' | 'recording' = 'preview') => {
+    const canvas = targetCanvas || canvasRef.current;
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
 
-    const { width, height } = dimensions;
+    const base = getRecordingDimensions();
+    const previewPerfMode = displaySettings.performanceMode || 'balanced';
+    const previewScale = previewPerfMode === 'economy' ? 0.42 : previewPerfMode === 'pro' ? 0.72 : 0.56;
 
-    // Use 1x resolution — retina 2x is unnecessary and doubles GPU/CPU cost
+    const width = renderMode === 'recording' ? base.width : Math.round(base.width * previewScale);
+    const height = renderMode === 'recording' ? base.height : Math.round(base.height * previewScale);
+
+    // Keep preview canvas light, keep recording canvas full-resolution.
     if (canvas.width !== width || canvas.height !== height) {
       canvas.width = width;
       canvas.height = height;
@@ -1410,28 +1425,39 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       ctx.fillText(wmText, wmX, wmY);
       ctx.restore();
     }
-  }, [background, customBackground, imageLoaded, videoReady, slideshowReady, surahName, reciterName, currentAyah, currentAyahWords, highlightedWordIndex, highlightWordProgress, textSettings, displaySettings, dimensions, getTokenHsl, drawAyahBadge, getCanvasFontFamily, drawIslamicFrame, motionSpeed]);
+  }, [background, customBackground, imageLoaded, videoReady, slideshowReady, surahName, reciterName, currentAyah, currentAyahWords, highlightedWordIndex, highlightWordProgress, textSettings, displaySettings, getRecordingDimensions, getTokenHsl, drawAyahBadge, getCanvasFontFamily, drawIslamicFrame, motionSpeed]);
 
-  // Animation loop for canvas — throttled based on performance mode
   useEffect(() => {
+    drawFrameRuntimeRef.current = drawFrame;
+  }, [drawFrame]);
+
+  // Animation loop for preview canvas — throttled and paused during recording isolation
+  useEffect(() => {
+    if (isRecording) {
+      drawFrameRuntimeRef.current(); // keep one latest still frame visible while recording runs on isolated canvas
+      return;
+    }
+
     const perfMode = displaySettings.performanceMode || 'balanced';
-    const targetFps = perfMode === 'economy' ? 20 : perfMode === 'pro' ? 30 : 25;
+    const targetFps = perfMode === 'economy' ? 14 : perfMode === 'pro' ? 22 : 18;
     const frameInterval = 1000 / targetFps;
     let lastFrameTime = 0;
+
     const animate = (now: number) => {
       animationFrameRef.current = requestAnimationFrame(animate);
       if (now - lastFrameTime < frameInterval) return;
       lastFrameTime = now;
-      drawFrame();
+      drawFrameRuntimeRef.current();
     };
+
     animationFrameRef.current = requestAnimationFrame(animate);
-    
+
     return () => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [drawFrame, displaySettings.performanceMode]);
+  }, [displaySettings.performanceMode, isRecording]);
 
   // Notify when canvas is ready
   useEffect(() => {
@@ -1448,6 +1474,8 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       if ((background?.type || 'image') === 'animated') return slideshowReady;
       return imageLoaded || Boolean(customBackground);
     },
+    getRecordingDimensions,
+    getRecommendedRecordingFps,
     drawFrame,
   }));
 
@@ -1460,7 +1488,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       ref={containerRef}
       className={`${containerClass} w-full mx-auto relative rounded-2xl overflow-hidden shadow-2xl bg-black`}
     >
-      {/* Main Canvas - This is what gets recorded */}
+      {/* Visible preview canvas (recording uses an isolated off-screen canvas) */}
       <canvas
         ref={canvasRef}
         className="w-full h-full"
