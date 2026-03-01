@@ -139,6 +139,8 @@ export default function PreviewPage() {
       thumbnail: backgroundThumbParam || backgroundUrlParam,
       name: 'خلفية مختارة',
       category: fallbackBackground.category,
+      // Carry over slideImages from the original background data for animated slideshows
+      slideImages: fallbackBackground.slideImages,
     };
   }, [backgroundUrlParam, fallbackBackground, backgroundId, backgroundType, backgroundThumbParam]);
   const totalAyahsInSurah = surah?.numberOfAyahs ?? endAyah;

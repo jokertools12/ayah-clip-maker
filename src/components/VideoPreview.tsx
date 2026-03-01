@@ -1564,7 +1564,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     getCanvas: () => canvasRef.current,
     isBackgroundReady: () => {
       if ((background?.type || 'image') === 'video') return videoReady;
-      if ((background?.type || 'image') === 'animated') return slideshowReady;
+      if ((background?.type || 'image') === 'animated') return slideshowReady || imageLoaded;
       return imageLoaded || Boolean(customBackground);
     },
     ensureBackgroundPlayback,
