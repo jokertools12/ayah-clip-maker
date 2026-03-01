@@ -838,11 +838,11 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     const particleDensity = displaySettings.particleDensity || 'medium';
     const perfMode = displaySettings.performanceMode || 'balanced';
     const isAnyRecording = !isPreviewRender;
-    const previewParticleMultiplier = isPreviewRender ? (isPlaying ? 0.4 : 0) : 0;
+    const previewParticleMultiplier = isPreviewRender ? (isPlaying ? 0.6 : 0.15) : 0;
     const perfMultiplier = perfMode === 'economy' ? 0.3 : perfMode === 'pro' ? 0.8 : 0.5;
     const baseParticles = particleDensity === 'off' ? 0 : particleDensity === 'low' ? 8 : particleDensity === 'high' ? 25 : 14;
-    // Allow particles during recording for ibtahalat (reduced count)
-    const recordingParticleMultiplier = ibtahalatLyricsMode ? 0.3 : 0;
+    // Allow particles during recording
+    const recordingParticleMultiplier = 0.3;
     const maxParticles = isAnyRecording
       ? Math.round(baseParticles * perfMultiplier * recordingParticleMultiplier)
       : Math.round(baseParticles * perfMultiplier * previewParticleMultiplier);
@@ -890,8 +890,8 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       particlesRef.current = [];
     }
 
-    // ── Twinkling stars effect (for ibtahalat mode) ──────────────────────
-    if (ibtahalatLyricsMode && isPlaying) {
+    // ── Twinkling stars effect (when playing) ──────────────────────
+    if (isPlaying && particleDensity !== 'off') {
       ctx.save();
       const starCount = isAnyRecording ? 6 : 12;
       const time = Date.now() / 1000;
