@@ -2,8 +2,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useAuth } from '@/hooks/useAuth';
-import { BookOpen, Video, Library, LogIn, LogOut, User, Music, Globe } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { BookOpen, Video, Library, LogIn, LogOut, User, Music, Menu, X } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useState } from 'react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,9 +12,16 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
+const navLinks = [
+  { to: '/create', label: 'إنشاء فيديو', icon: Video },
+  { to: '/surahs', label: 'تصفح السور', icon: BookOpen },
+  { to: '/ibtahalat', label: 'تصفح الابتهالات', icon: Music },
+];
+
 export function Navbar() {
   const { user, signOut, isAuthenticated } = useAuth();
   const navigate = useNavigate();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleSignOut = async () => {
     await signOut();
@@ -36,44 +44,23 @@ export function Navbar() {
             <span className="text-xl font-bold gradient-text">قرآن ريلز</span>
           </Link>
 
-          {/* Navigation Links */}
-          <div className="hidden md:flex items-center gap-6">
-            <Link
-              to="/surahs"
-              className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <BookOpen className="h-4 w-4" />
-              <span>السور</span>
-            </Link>
-            <Link
-              to="/create"
-              className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <Video className="h-4 w-4" />
-              <span>إنشاء فيديو</span>
-            </Link>
-            <Link
-              to="/ibtahalat"
-              className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <Music className="h-4 w-4" />
-              <span>ابتهالات</span>
-            </Link>
-            <Link
-              to="/browse"
-              className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <Globe className="h-4 w-4" />
-              <span>تصفح شامل</span>
-            </Link>
+          {/* Desktop Navigation Links */}
+          <div className="hidden md:flex items-center gap-1">
+            {navLinks.map((link) => (
+              <Button key={link.to} asChild variant="ghost" size="sm" className="gap-2">
+                <Link to={link.to}>
+                  <link.icon className="h-4 w-4" />
+                  {link.label}
+                </Link>
+              </Button>
+            ))}
             {isAuthenticated && (
-              <Link
-                to="/library"
-                className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <Library className="h-4 w-4" />
-                <span>مكتبتي</span>
-              </Link>
+              <Button asChild variant="ghost" size="sm" className="gap-2">
+                <Link to="/library">
+                  <Library className="h-4 w-4" />
+                  مكتبتي
+                </Link>
+              </Button>
             )}
           </div>
 
@@ -108,12 +95,58 @@ export function Navbar() {
               <Button asChild variant="default" size="sm">
                 <Link to="/auth" className="flex items-center gap-2">
                   <LogIn className="h-4 w-4" />
-                  <span>تسجيل الدخول</span>
+                  <span className="hidden sm:inline">تسجيل الدخول</span>
                 </Link>
               </Button>
             )}
+
+            {/* Mobile Menu Toggle */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="md:hidden"
+              onClick={() => setMobileOpen(!mobileOpen)}
+            >
+              {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </Button>
           </div>
         </div>
+
+        {/* Mobile Menu */}
+        <AnimatePresence>
+          {mobileOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="md:hidden overflow-hidden border-t border-border/50"
+            >
+              <div className="py-3 space-y-1">
+                {navLinks.map((link) => (
+                  <Link
+                    key={link.to}
+                    to={link.to}
+                    onClick={() => setMobileOpen(false)}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-foreground hover:bg-muted/50 transition-colors"
+                  >
+                    <link.icon className="h-5 w-5 text-primary" />
+                    <span className="font-medium">{link.label}</span>
+                  </Link>
+                ))}
+                {isAuthenticated && (
+                  <Link
+                    to="/library"
+                    onClick={() => setMobileOpen(false)}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-foreground hover:bg-muted/50 transition-colors"
+                  >
+                    <Library className="h-5 w-5 text-primary" />
+                    <span className="font-medium">مكتبتي</span>
+                  </Link>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </motion.nav>
   );

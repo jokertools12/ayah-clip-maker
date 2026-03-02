@@ -103,7 +103,7 @@ export default function Index() {
               <Button asChild size="lg" className="text-lg px-8">
                 <Link to="/create">
                   <Video className="h-5 w-5 ml-2" />
-                  ابدأ الإنشاء
+                  إنشاء فيديو
                 </Link>
               </Button>
               <Button asChild variant="outline" size="lg" className="text-lg px-8">
@@ -115,13 +115,7 @@ export default function Index() {
               <Button asChild variant="outline" size="lg" className="text-lg px-8">
                 <Link to="/ibtahalat">
                   <Music className="h-5 w-5 ml-2" />
-                  ابتهالات وتواشيح
-                </Link>
-              </Button>
-              <Button asChild variant="ghost" size="lg" className="text-lg px-8">
-                <Link to="/browse">
-                  <Globe className="h-5 w-5 ml-2" />
-                  تصفح شامل
+                  تصفح الابتهالات
                 </Link>
               </Button>
             </motion.div>
