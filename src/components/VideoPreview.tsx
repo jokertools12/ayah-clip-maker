@@ -142,6 +142,13 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   const [slideshowReady, setSlideshowReady] = useState(false);
   const slideshowStartTimeRef = useRef<number>(Date.now());
 
+  // Per-image Ken Burns motion presets for smooth, varied transitions
+  const kenBurnsPresetsRef = useRef<Array<{
+    zoomStart: number; zoomEnd: number;
+    panXStart: number; panXEnd: number;
+    panYStart: number; panYEnd: number;
+  }>>([]);
+
   // Floating particles state (golden dust)
   const particlesRef = useRef<Array<{ x: number; y: number; vx: number; vy: number; size: number; alpha: number; life: number }>>([]);
 
@@ -260,6 +267,21 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
           if (loadedCount === slideImages.length) {
             slideshowImagesRef.current = loadedImages;
             slideshowStartTimeRef.current = Date.now();
+            // Generate unique Ken Burns presets per image for variety
+            kenBurnsPresetsRef.current = loadedImages.map(() => {
+              const zoomIn = Math.random() > 0.5;
+              const zoomStart = zoomIn ? 1.0 : 1.15;
+              const zoomEnd = zoomIn ? 1.15 : 1.0;
+              const angle = Math.random() * Math.PI * 2;
+              const panRange = 25 + Math.random() * 15;
+              return {
+                zoomStart, zoomEnd,
+                panXStart: Math.cos(angle) * panRange,
+                panXEnd: -Math.cos(angle) * panRange,
+                panYStart: Math.sin(angle) * panRange * 0.6,
+                panYEnd: -Math.sin(angle) * panRange * 0.6,
+              };
+            });
             setSlideshowReady(true);
           }
         };
@@ -382,6 +404,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         URL.revokeObjectURL(localBlobUrl);
       }
       slideshowImagesRef.current = [];
+      kenBurnsPresetsRef.current = [];
     };
   }, [customBackground, background?.url, background?.type, background?.thumbnail, background?.slideImages]);
 
@@ -748,8 +771,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     // Handle slideshow backgrounds
     if (slideshowReady && slideshowImagesRef.current.length > 1) {
       const images = slideshowImagesRef.current;
-      // Don't multiply elapsed by motionSpeed for slideshow timing — it makes transitions jerky.
-      // motionSpeed only affects the Ken Burns pan/zoom intensity.
+      const presets = kenBurnsPresetsRef.current;
       const elapsed = Date.now() - slideshowStartTimeRef.current;
       const cycleDuration = SLIDESHOW_DISPLAY_DURATION + SLIDESHOW_TRANSITION_DURATION;
       const totalCycle = cycleDuration * images.length;
@@ -759,39 +781,49 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       const nextIndex = (currentIndex + 1) % images.length;
       const positionInCycle = cyclePosition % cycleDuration;
       
-      // Smooth ease-in-out for crossfade
+      // Smooth ease functions
       const easeInOut = (p: number) => p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
-      
-      // Draw current image with Ken Burns
+
+      // Calculate per-image Ken Burns using its preset and progress through display
+      const getKenBurns = (imgIndex: number, progress: number) => {
+        const preset = presets[imgIndex] || { zoomStart: 1.0, zoomEnd: 1.1, panXStart: 0, panXEnd: 0, panYStart: 0, panYEnd: 0 };
+        const easedP = easeInOut(Math.min(Math.max(progress, 0), 1));
+        const speedFactor = motionSpeed / 3; // normalize around default 3
+        const zoom = preset.zoomStart + (preset.zoomEnd - preset.zoomStart) * easedP * speedFactor;
+        const panX = (preset.panXStart + (preset.panXEnd - preset.panXStart) * easedP) * speedFactor;
+        const panY = (preset.panYStart + (preset.panYEnd - preset.panYStart) * easedP) * speedFactor;
+        return { zoom: Math.max(zoom, 1.0), panX, panY };
+      };
+
+      // Current image progress: 0→1 over the full cycle (display + transition)
+      const currentProgress = positionInCycle / cycleDuration;
+      const curKB = getKenBurns(currentIndex, currentProgress);
+
+      // Draw current image
       ctx.save();
       ctx.translate(canvas.width / 2, canvas.height / 2);
-      ctx.scale(scale, scale);
-      ctx.translate(-canvas.width / 2 + offsetX, -canvas.height / 2 + offsetY);
-      
+      ctx.scale(curKB.zoom, curKB.zoom);
+      ctx.translate(-canvas.width / 2 + curKB.panX, -canvas.height / 2 + curKB.panY);
       const currentImg = images[currentIndex];
       if (currentImg) {
         ctx.drawImage(currentImg, 0, 0, canvas.width, canvas.height);
       }
       ctx.restore();
       
-      // Pure smooth crossfade (no jarring slide)
+      // Crossfade to next image
       if (positionInCycle > SLIDESHOW_DISPLAY_DURATION) {
         const rawProgress = (positionInCycle - SLIDESHOW_DISPLAY_DURATION) / SLIDESHOW_TRANSITION_DURATION;
         const fadeProgress = easeInOut(Math.min(rawProgress, 1));
         
+        // Next image starts its Ken Burns from 0
+        const nextProgress = rawProgress * (SLIDESHOW_TRANSITION_DURATION / cycleDuration);
+        const nextKB = getKenBurns(nextIndex, nextProgress);
+
         ctx.save();
         ctx.globalAlpha = fadeProgress;
-        
-        // Gentle independent Ken Burns for next image
-        const nextT = t + 3; // offset so it looks different
-        const nextScale = 1.06 + Math.sin(nextT * 0.18) * 0.04;
-        const nextOffsetX = Math.cos(nextT * 0.14) * 18;
-        const nextOffsetY = Math.sin(nextT * 0.11) * 14;
-        
         ctx.translate(canvas.width / 2, canvas.height / 2);
-        ctx.scale(nextScale, nextScale);
-        ctx.translate(-canvas.width / 2 + nextOffsetX, -canvas.height / 2 + nextOffsetY);
-        
+        ctx.scale(nextKB.zoom, nextKB.zoom);
+        ctx.translate(-canvas.width / 2 + nextKB.panX, -canvas.height / 2 + nextKB.panY);
         const nextImg = images[nextIndex];
         if (nextImg) {
           ctx.drawImage(nextImg, 0, 0, canvas.width, canvas.height);
