@@ -787,94 +787,92 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       const nextIndex = (currentIndex + 1) % images.length;
       const positionInCycle = cyclePosition % cycleDuration;
       
-      // Smooth ease functions
+      // Smooth ease function
       const easeInOut = (p: number) => p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
 
-      // Calculate per-image Ken Burns using its preset and progress through display
-      const getKenBurns = (imgIndex: number, progress: number) => {
+      // Cover-fit: draw image filling canvas without black bars
+      const drawImageCover = (img: HTMLImageElement, cw: number, ch: number) => {
+        const imgRatio = img.naturalWidth / img.naturalHeight;
+        const canvasRatio = cw / ch;
+        let sw = img.naturalWidth, sh = img.naturalHeight, sx = 0, sy = 0;
+        if (imgRatio > canvasRatio) {
+          sw = img.naturalHeight * canvasRatio;
+          sx = (img.naturalWidth - sw) / 2;
+        } else {
+          sh = img.naturalWidth / canvasRatio;
+          sy = (img.naturalHeight - sh) / 2;
+        }
+        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, cw, ch);
+      };
+
+      // Use absolute elapsed time for Ken Burns so motion is continuous
+      const elapsedSec = elapsed / 1000;
+      const getKenBurns = (imgIndex: number) => {
         const preset = presets[imgIndex] || { zoomStart: 1.0, zoomEnd: 1.1, panXStart: 0, panXEnd: 0, panYStart: 0, panYEnd: 0 };
-        const easedP = easeInOut(Math.min(Math.max(progress, 0), 1));
-        const speedFactor = motionSpeed / 3; // normalize around default 3
-        const zoom = preset.zoomStart + (preset.zoomEnd - preset.zoomStart) * easedP * speedFactor;
-        const panX = (preset.panXStart + (preset.panXEnd - preset.panXStart) * easedP) * speedFactor;
-        const panY = (preset.panYStart + (preset.panYEnd - preset.panYStart) * easedP) * speedFactor;
+        const speedFactor = motionSpeed / 3;
+        // Continuous slow oscillation based on absolute time + per-image phase offset
+        const phase = imgIndex * 1.7; // unique phase per image
+        const period = 12 / speedFactor; // full cycle in seconds
+        const p = ((elapsedSec + phase) % period) / period; // 0→1 continuous
+        const wave = 0.5 - 0.5 * Math.cos(p * Math.PI * 2); // smooth 0→1→0
+        const zoom = preset.zoomStart + (preset.zoomEnd - preset.zoomStart) * wave;
+        const panX = preset.panXStart + (preset.panXEnd - preset.panXStart) * wave;
+        const panY = preset.panYStart + (preset.panYEnd - preset.panYStart) * wave;
         return { zoom: Math.max(zoom, 1.0), panX, panY };
       };
 
-      // Current image progress: 0→1 over the full cycle (display + transition)
-      const currentProgress = positionInCycle / cycleDuration;
-      const curKB = getKenBurns(currentIndex, currentProgress);
+      const curKB = getKenBurns(currentIndex);
       const currentImg = images[currentIndex];
 
-      // Check if we're in a slide/wipe transition that replaces the base draw
+      // Check transition type
       const isInTransition = positionInCycle > SLIDESHOW_DISPLAY_DURATION;
       const transType = (presets[currentIndex] || {}).transition || 'crossfade';
       const isOverlayTransition = !isInTransition || transType === 'crossfade' || transType === 'zoomThrough';
 
-      // For overlay transitions (crossfade, zoomThrough), draw base image normally
-      // For geometric transitions (slide*, wipe), the transition block handles both images
+      // Draw with Ken Burns helper
+      const drawWithKB = (img: HTMLImageElement | undefined, kb: { zoom: number; panX: number; panY: number }) => {
+        if (!img) return;
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.scale(kb.zoom, kb.zoom);
+        ctx.translate(-canvas.width / 2 + kb.panX, -canvas.height / 2 + kb.panY);
+        drawImageCover(img, canvas.width, canvas.height);
+      };
+
       if (isOverlayTransition) {
         ctx.save();
-        ctx.translate(canvas.width / 2, canvas.height / 2);
-        ctx.scale(curKB.zoom, curKB.zoom);
-        ctx.translate(-canvas.width / 2 + curKB.panX, -canvas.height / 2 + curKB.panY);
-        if (currentImg) {
-          ctx.drawImage(currentImg, 0, 0, canvas.width, canvas.height);
-        }
+        drawWithKB(currentImg, curKB);
         ctx.restore();
       }
-      
-      // Transition to next image with varied effects
-      if (positionInCycle > SLIDESHOW_DISPLAY_DURATION) {
+
+      // Transition to next image
+      if (isInTransition) {
         const rawProgress = (positionInCycle - SLIDESHOW_DISPLAY_DURATION) / SLIDESHOW_TRANSITION_DURATION;
         const fadeProgress = easeInOut(Math.min(rawProgress, 1));
-        const nextProgress = rawProgress * (SLIDESHOW_TRANSITION_DURATION / cycleDuration);
-        const nextKB = getKenBurns(nextIndex, nextProgress);
-        const transType = (presets[currentIndex] || {}).transition || 'crossfade';
-
-        const drawNextWithKB = () => {
-          ctx.translate(canvas.width / 2, canvas.height / 2);
-          ctx.scale(nextKB.zoom, nextKB.zoom);
-          ctx.translate(-canvas.width / 2 + nextKB.panX, -canvas.height / 2 + nextKB.panY);
-          const nextImg = images[nextIndex];
-          if (nextImg) ctx.drawImage(nextImg, 0, 0, canvas.width, canvas.height);
-        };
+        const nextKB = getKenBurns(nextIndex);
+        const nextImg = images[nextIndex];
 
         switch (transType) {
           case 'slideLeft': {
-            // Current slides out left, next slides in from right
             const offset = canvas.width * fadeProgress;
-            // Redraw current shifted left
             ctx.save();
             ctx.translate(-offset, 0);
-            ctx.translate(canvas.width / 2, canvas.height / 2);
-            ctx.scale(curKB.zoom, curKB.zoom);
-            ctx.translate(-canvas.width / 2 + curKB.panX, -canvas.height / 2 + curKB.panY);
-            if (currentImg) ctx.drawImage(currentImg, 0, 0, canvas.width, canvas.height);
+            drawWithKB(currentImg, curKB);
             ctx.restore();
-            // Draw next sliding in from right
             ctx.save();
             ctx.translate(canvas.width - offset, 0);
-            drawNextWithKB();
+            drawWithKB(nextImg, nextKB);
             ctx.restore();
-            // Overdraw current on base to avoid double (clear-redraw approach)
-            // We already drew current above in shifted position; need to clear base
-            // Actually: we drew the static current earlier. Let's overlay:
-            // Clear and redraw both properly
             break;
           }
           case 'slideRight': {
             const offset = canvas.width * fadeProgress;
             ctx.save();
             ctx.translate(offset, 0);
-            ctx.translate(canvas.width / 2, canvas.height / 2);
-            ctx.scale(curKB.zoom, curKB.zoom);
-            ctx.translate(-canvas.width / 2 + curKB.panX, -canvas.height / 2 + curKB.panY);
-            if (currentImg) ctx.drawImage(currentImg, 0, 0, canvas.width, canvas.height);
+            drawWithKB(currentImg, curKB);
             ctx.restore();
             ctx.save();
             ctx.translate(-canvas.width + offset, 0);
-            drawNextWithKB();
+            drawWithKB(nextImg, nextKB);
             ctx.restore();
             break;
           }
@@ -882,54 +880,47 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
             const offset = canvas.height * fadeProgress;
             ctx.save();
             ctx.translate(0, -offset);
-            ctx.translate(canvas.width / 2, canvas.height / 2);
-            ctx.scale(curKB.zoom, curKB.zoom);
-            ctx.translate(-canvas.width / 2 + curKB.panX, -canvas.height / 2 + curKB.panY);
-            if (currentImg) ctx.drawImage(currentImg, 0, 0, canvas.width, canvas.height);
+            drawWithKB(currentImg, curKB);
             ctx.restore();
             ctx.save();
             ctx.translate(0, canvas.height - offset);
-            drawNextWithKB();
+            drawWithKB(nextImg, nextKB);
             ctx.restore();
             break;
           }
           case 'zoomThrough': {
-            // Current zooms in and fades out, next fades in from slight zoom out
-            const zoomOut = 1 + fadeProgress * 0.3;
+            const zoomMul = 1 + fadeProgress * 0.3;
             ctx.save();
             ctx.globalAlpha = 1 - fadeProgress;
             ctx.translate(canvas.width / 2, canvas.height / 2);
-            ctx.scale(curKB.zoom * zoomOut, curKB.zoom * zoomOut);
+            ctx.scale(curKB.zoom * zoomMul, curKB.zoom * zoomMul);
             ctx.translate(-canvas.width / 2 + curKB.panX, -canvas.height / 2 + curKB.panY);
-            if (currentImg) ctx.drawImage(currentImg, 0, 0, canvas.width, canvas.height);
+            if (currentImg) drawImageCover(currentImg, canvas.width, canvas.height);
             ctx.restore();
             ctx.save();
             ctx.globalAlpha = fadeProgress;
-            const nextZoom = 1.2 - fadeProgress * 0.2;
+            const nextZoomMul = 1.2 - fadeProgress * 0.2;
             ctx.translate(canvas.width / 2, canvas.height / 2);
-            ctx.scale(nextKB.zoom * nextZoom, nextKB.zoom * nextZoom);
+            ctx.scale(nextKB.zoom * nextZoomMul, nextKB.zoom * nextZoomMul);
             ctx.translate(-canvas.width / 2 + nextKB.panX, -canvas.height / 2 + nextKB.panY);
-            const nextImg = images[nextIndex];
-            if (nextImg) ctx.drawImage(nextImg, 0, 0, canvas.width, canvas.height);
+            if (nextImg) drawImageCover(nextImg, canvas.width, canvas.height);
             ctx.restore();
             break;
           }
           case 'wipe': {
-            // Horizontal wipe reveal
             const wipeX = canvas.width * fadeProgress;
             ctx.save();
             ctx.beginPath();
             ctx.rect(0, 0, wipeX, canvas.height);
             ctx.clip();
-            drawNextWithKB();
+            drawWithKB(nextImg, nextKB);
             ctx.restore();
             break;
           }
           default: {
-            // crossfade (original)
             ctx.save();
             ctx.globalAlpha = fadeProgress;
-            drawNextWithKB();
+            drawWithKB(nextImg, nextKB);
             ctx.restore();
             break;
           }
@@ -939,12 +930,23 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       // Draw video frame — NO Ken Burns for video backgrounds to prevent lag
       ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
     } else if (imageRef.current && imageLoaded) {
-      // Draw image with Ken Burns
+      // Draw single image with Ken Burns + cover-fit
+      const img = imageRef.current;
+      const imgRatio = img.naturalWidth / img.naturalHeight;
+      const canvasRatio = canvas.width / canvas.height;
+      let sw = img.naturalWidth, sh = img.naturalHeight, sx = 0, sy = 0;
+      if (imgRatio > canvasRatio) {
+        sw = img.naturalHeight * canvasRatio;
+        sx = (img.naturalWidth - sw) / 2;
+      } else {
+        sh = img.naturalWidth / canvasRatio;
+        sy = (img.naturalHeight - sh) / 2;
+      }
       ctx.save();
       ctx.translate(canvas.width / 2, canvas.height / 2);
       ctx.scale(scale, scale);
       ctx.translate(-canvas.width / 2 + offsetX, -canvas.height / 2 + offsetY);
-      ctx.drawImage(imageRef.current, 0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
       ctx.restore();
     } else {
       // Gradient fallback
