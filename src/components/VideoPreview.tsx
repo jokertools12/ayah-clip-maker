@@ -58,6 +58,8 @@ interface VideoPreviewProps {
     watermarkText?: string;
     watermarkPosition?: 'bottomLeft' | 'bottomRight' | 'topLeft' | 'topRight' | 'bottomCenter';
     performanceMode?: 'economy' | 'balanced' | 'pro';
+    glowStyle?: 'none' | 'golden' | 'soft' | 'neon' | 'pulse';
+    lyricsDisplayStyle?: 'scroll' | 'single' | 'karaoke' | 'fade';
   };
   isPlaying: boolean;
   isRecording?: boolean;
@@ -96,11 +98,13 @@ const DEFAULT_DISPLAY_SETTINGS = {
   textShadowStyle: 'soft' as const,
   decorationStyle: 'separator' as const,
   ayahTransition: 'fade' as const,
-  particleDensity: 'medium' as const,
+  particleDensity: 'off' as const,
   watermarkEnabled: false,
   watermarkText: '',
   watermarkPosition: 'bottomRight' as const,
   performanceMode: 'balanced' as const,
+  glowStyle: 'golden' as const,
+  lyricsDisplayStyle: 'scroll' as const,
 };
 
 export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
@@ -1223,181 +1227,256 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       const centerY = canvas.height * 0.52;
       const lyricsFontSize = textSettings.fontSize * 1.6 * S;
       const lyricsLineHeight = lyricsFontSize * 2.2;
-      const maxVisibleLines = Math.min(7, allLyricsLines.length);
-      const halfVisible = Math.floor(maxVisibleLines / 2);
-      
-      // Calculate which lines to show (centered on current)
-      let startLine = Math.max(0, currentLyricsIndex - halfVisible);
-      let endLine = Math.min(allLyricsLines.length, startLine + maxVisibleLines);
-      if (endLine - startLine < maxVisibleLines) {
-        startLine = Math.max(0, endLine - maxVisibleLines);
-      }
-      
-      const totalVisibleHeight = (endLine - startLine) * lyricsLineHeight;
-      const baseY = centerY - totalVisibleHeight / 2 + lyricsLineHeight / 2;
+      const lyricsStyle = displaySettings.lyricsDisplayStyle || 'scroll';
+      const glowStyle = displaySettings.glowStyle || 'golden';
+      const fontName = getCanvasFontFamily(textSettings.fontFamily);
 
-      // ── Animated Islamic decorative frame ──────────────────────────────
-      const frameTime = Date.now() / 1000;
-      const framePad = 40 * S;
-      const frameX = canvas.width * 0.06;
-      const frameY = baseY - lyricsLineHeight / 2 - framePad;
-      const frameW = canvas.width * 0.88;
-      const frameH = totalVisibleHeight + framePad * 2;
-      const cornerR = 20 * S;
-      const glowPulse = 0.4 + Math.sin(frameTime * 1.2) * 0.2;
-
-      ctx.save();
-      // Outer glow
-      ctx.shadowColor = `rgba(212, 175, 55, ${glowPulse * 0.4})`;
-      ctx.shadowBlur = 20 * S;
-      ctx.strokeStyle = `rgba(212, 175, 55, ${0.3 + glowPulse * 0.2})`;
-      ctx.lineWidth = 2.5 * S;
-      ctx.beginPath();
-      ctx.roundRect(frameX, frameY, frameW, frameH, cornerR);
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-
-      // Inner decorative line (dashed)
-      ctx.strokeStyle = `rgba(212, 175, 55, ${0.15 + glowPulse * 0.1})`;
-      ctx.lineWidth = 1 * S;
-      ctx.setLineDash([8 * S, 4 * S]);
-      ctx.beginPath();
-      ctx.roundRect(frameX + 8 * S, frameY + 8 * S, frameW - 16 * S, frameH - 16 * S, cornerR - 4 * S);
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      // Corner Islamic ornaments (animated rotation)
-      const drawIslamicCornerOrnament = (cx: number, cy: number, size: number) => {
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.rotate(frameTime * 0.15);
-        // 8-pointed star
-        const points = 8;
-        const outerR = size;
-        const innerR = size * 0.45;
-        ctx.beginPath();
-        for (let p = 0; p < points * 2; p++) {
-          const r = p % 2 === 0 ? outerR : innerR;
-          const angle = (p * Math.PI) / points - Math.PI / 2;
-          if (p === 0) ctx.moveTo(r * Math.cos(angle), r * Math.sin(angle));
-          else ctx.lineTo(r * Math.cos(angle), r * Math.sin(angle));
-        }
-        ctx.closePath();
-        ctx.fillStyle = `rgba(212, 175, 55, ${0.2 + glowPulse * 0.15})`;
-        ctx.fill();
-        ctx.strokeStyle = `rgba(212, 175, 55, ${0.5 + glowPulse * 0.2})`;
-        ctx.lineWidth = 1.5 * S;
-        ctx.stroke();
-        ctx.restore();
-      };
-
-      const ornamentSize = 14 * S;
-      drawIslamicCornerOrnament(frameX, frameY, ornamentSize);
-      drawIslamicCornerOrnament(frameX + frameW, frameY, ornamentSize);
-      drawIslamicCornerOrnament(frameX + frameW, frameY + frameH, ornamentSize);
-      drawIslamicCornerOrnament(frameX, frameY + frameH, ornamentSize);
-
-      // Top/bottom center diamond ornaments
-      const drawDiamondOrnament = (cx: number, cy: number, size: number) => {
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.fillStyle = `rgba(212, 175, 55, ${0.35 + glowPulse * 0.15})`;
-        ctx.beginPath();
-        ctx.moveTo(0, -size);
-        ctx.lineTo(size * 0.6, 0);
-        ctx.lineTo(0, size);
-        ctx.lineTo(-size * 0.6, 0);
-        ctx.closePath();
-        ctx.fill();
-        ctx.restore();
-      };
-      drawDiamondOrnament(frameX + frameW / 2, frameY, 8 * S);
-      drawDiamondOrnament(frameX + frameW / 2, frameY + frameH, 8 * S);
-
-      ctx.restore();
-
-      // ── Draw lyrics lines ──────────────────────────────────────────────
-      ctx.save();
-      ctx.direction = 'rtl';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      
-      for (let i = startLine; i < endLine; i++) {
-        const line = allLyricsLines[i];
-        const y = baseY + (i - startLine) * lyricsLineHeight;
-        const isCurrent = i === currentLyricsIndex;
-        const distFromCurrent = Math.abs(i - currentLyricsIndex);
-        
-        ctx.save();
-        
-        if (isCurrent) {
-          // Golden glow effect for current line
-          const textGlowPulse = 0.6 + Math.sin(Date.now() / 400) * 0.4;
-          ctx.shadowColor = '#FFD700';
-          ctx.shadowBlur = (20 + textGlowPulse * 15) * S;
-          ctx.font = `bold ${lyricsFontSize * 1.15}px "${fontName}", "Noto Naskh Arabic", serif`;
-          ctx.fillStyle = '#FFD700';
-          
-          // Draw glow background
-          const tw = ctx.measureText(line).width;
-          const padX = 30 * S;
-          const padY = 14 * S;
-          ctx.save();
-          ctx.shadowBlur = 0;
-          const gradient = ctx.createLinearGradient(
-            canvas.width / 2 - tw / 2 - padX, y,
-            canvas.width / 2 + tw / 2 + padX, y
-          );
-          gradient.addColorStop(0, 'rgba(212, 175, 55, 0)');
-          gradient.addColorStop(0.15, 'rgba(212, 175, 55, 0.12)');
-          gradient.addColorStop(0.5, 'rgba(212, 175, 55, 0.18)');
-          gradient.addColorStop(0.85, 'rgba(212, 175, 55, 0.12)');
-          gradient.addColorStop(1, 'rgba(212, 175, 55, 0)');
-          ctx.fillStyle = gradient;
-          ctx.fillRect(canvas.width / 2 - tw / 2 - padX, y - padY - lyricsFontSize * 0.5, tw + padX * 2, lyricsFontSize + padY * 2);
-          ctx.restore();
-          
-          // Draw the text with glow
-          ctx.fillStyle = '#FFD700';
-          ctx.fillText(line, canvas.width / 2, y);
-          // Double pass for stronger glow
-          ctx.shadowBlur = (10 + textGlowPulse * 8) * S;
-          ctx.fillText(line, canvas.width / 2, y);
-        } else {
-          // Faded neighboring lines
-          const alpha = Math.max(0.2, 0.7 - distFromCurrent * 0.2);
-          ctx.globalAlpha = alpha;
-          ctx.font = `${lyricsFontSize}px "${fontName}", "Noto Naskh Arabic", serif`;
+      // ── Helper: draw glow for current line based on glowStyle ──
+      const drawCurrentLineGlow = (ctx: CanvasRenderingContext2D, line: string, x: number, y: number, fontSize: number) => {
+        if (glowStyle === 'none') {
+          // No glow - just draw text in normal color
+          ctx.font = `bold ${fontSize * 1.1}px "${fontName}", "Noto Naskh Arabic", serif`;
           ctx.fillStyle = textSettings.textColor;
-          ctx.shadowColor = `rgba(0, 0, 0, ${textSettings.shadowIntensity * 0.5})`;
-          ctx.shadowBlur = 4 * S;
-          ctx.fillText(line, canvas.width / 2, y);
+          ctx.shadowColor = `rgba(0, 0, 0, ${textSettings.shadowIntensity})`;
+          ctx.shadowBlur = 6 * S;
+          ctx.fillText(line, x, y);
+          return;
         }
-        
-        ctx.restore();
-      }
-      
-      // Draw scroll indicator dots
-      if (allLyricsLines.length > maxVisibleLines) {
-        const dotY = centerY + totalVisibleHeight / 2 + 30 * S;
-        const dotSpacing = 8 * S;
-        const numDots = Math.min(allLyricsLines.length, 15);
-        const dotsWidth = numDots * dotSpacing;
-        
+
+        const pulse = 0.6 + Math.sin(Date.now() / 400) * 0.4;
+        let glowColor: string;
+        let glowBlur: number;
+        let textColor: string;
+
+        switch (glowStyle) {
+          case 'soft':
+            glowColor = 'rgba(255, 255, 255, 0.6)';
+            glowBlur = (12 + pulse * 8) * S;
+            textColor = '#FFFFFF';
+            break;
+          case 'neon':
+            glowColor = '#00FFFF';
+            glowBlur = (20 + pulse * 20) * S;
+            textColor = '#00FFFF';
+            break;
+          case 'pulse':
+            glowColor = `rgba(212, 175, 55, ${0.3 + pulse * 0.7})`;
+            glowBlur = (8 + pulse * 30) * S;
+            textColor = `rgba(255, 215, 0, ${0.7 + pulse * 0.3})`;
+            break;
+          default: // golden
+            glowColor = '#FFD700';
+            glowBlur = (20 + pulse * 15) * S;
+            textColor = '#FFD700';
+            break;
+        }
+
+        // Background highlight for current line
         ctx.save();
-        for (let i = 0; i < numDots; i++) {
-          const dotX = canvas.width / 2 - dotsWidth / 2 + i * dotSpacing + dotSpacing / 2;
-          const mappedIndex = Math.round((i / numDots) * allLyricsLines.length);
-          const isCurrDot = Math.abs(mappedIndex - currentLyricsIndex) <= 1;
-          ctx.beginPath();
-          ctx.arc(dotX, dotY, isCurrDot ? 3 * S : 1.5 * S, 0, Math.PI * 2);
-          ctx.fillStyle = isCurrDot ? 'rgba(212, 175, 55, 0.8)' : 'rgba(255, 255, 255, 0.3)';
-          ctx.fill();
+        ctx.shadowBlur = 0;
+        const tw = ctx.measureText(line).width;
+        const padX = 30 * S;
+        const padY = 14 * S;
+        const gradient = ctx.createLinearGradient(x - tw / 2 - padX, y, x + tw / 2 + padX, y);
+        const baseAlpha = glowStyle === 'neon' ? 0.1 : 0.15;
+        gradient.addColorStop(0, `rgba(212, 175, 55, 0)`);
+        gradient.addColorStop(0.15, `rgba(212, 175, 55, ${baseAlpha * 0.8})`);
+        gradient.addColorStop(0.5, `rgba(212, 175, 55, ${baseAlpha})`);
+        gradient.addColorStop(0.85, `rgba(212, 175, 55, ${baseAlpha * 0.8})`);
+        gradient.addColorStop(1, `rgba(212, 175, 55, 0)`);
+        ctx.fillStyle = gradient;
+        ctx.fillRect(x - tw / 2 - padX, y - padY - fontSize * 0.5, tw + padX * 2, fontSize + padY * 2);
+        ctx.restore();
+
+        // Draw text with glow
+        ctx.font = `bold ${fontSize * 1.15}px "${fontName}", "Noto Naskh Arabic", serif`;
+        ctx.shadowColor = glowColor;
+        ctx.shadowBlur = glowBlur;
+        ctx.fillStyle = textColor;
+        ctx.fillText(line, x, y);
+        // Double pass for stronger glow
+        ctx.shadowBlur = glowBlur * 0.5;
+        ctx.fillText(line, x, y);
+      };
+
+      // ── SCROLL mode (default): multiple lines, scrolling ──
+      if (lyricsStyle === 'scroll') {
+        const maxVisibleLines = Math.min(7, allLyricsLines.length);
+        const halfVisible = Math.floor(maxVisibleLines / 2);
+        
+        let startLine = Math.max(0, currentLyricsIndex - halfVisible);
+        let endLine = Math.min(allLyricsLines.length, startLine + maxVisibleLines);
+        if (endLine - startLine < maxVisibleLines) {
+          startLine = Math.max(0, endLine - maxVisibleLines);
+        }
+        
+        const totalVisibleHeight = (endLine - startLine) * lyricsLineHeight;
+        const baseY = centerY - totalVisibleHeight / 2 + lyricsLineHeight / 2;
+
+        // Draw frame if user selected one (not hardcoded)
+        if (displaySettings.frameStyle !== 'none') {
+          const framePad = 40 * S;
+          const frameX = canvas.width * 0.06;
+          const frameY2 = baseY - lyricsLineHeight / 2 - framePad;
+          const frameW = canvas.width * 0.88;
+          const frameH = totalVisibleHeight + framePad * 2;
+          drawIslamicFrame(ctx, frameX, frameY2, frameW, frameH, displaySettings.frameStyle);
+        }
+
+        // Draw lyrics lines
+        ctx.save();
+        ctx.direction = 'rtl';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        
+        for (let i = startLine; i < endLine; i++) {
+          const line = allLyricsLines[i];
+          const y = baseY + (i - startLine) * lyricsLineHeight;
+          const isCurrent = i === currentLyricsIndex;
+          const distFromCurrent = Math.abs(i - currentLyricsIndex);
+          
+          ctx.save();
+          
+          if (isCurrent) {
+            drawCurrentLineGlow(ctx, line, canvas.width / 2, y, lyricsFontSize);
+          } else {
+            const alpha = Math.max(0.2, 0.7 - distFromCurrent * 0.2);
+            ctx.globalAlpha = alpha;
+            ctx.font = `${lyricsFontSize}px "${fontName}", "Noto Naskh Arabic", serif`;
+            ctx.fillStyle = textSettings.textColor;
+            ctx.shadowColor = `rgba(0, 0, 0, ${textSettings.shadowIntensity * 0.5})`;
+            ctx.shadowBlur = 4 * S;
+            ctx.fillText(line, canvas.width / 2, y);
+          }
+          
+          ctx.restore();
+        }
+        
+        // Scroll indicator dots
+        if (allLyricsLines.length > maxVisibleLines) {
+          const dotY = centerY + totalVisibleHeight / 2 + 30 * S;
+          const dotSpacing = 8 * S;
+          const numDots = Math.min(allLyricsLines.length, 15);
+          const dotsWidth = numDots * dotSpacing;
+          
+          ctx.save();
+          for (let i = 0; i < numDots; i++) {
+            const dotX = canvas.width / 2 - dotsWidth / 2 + i * dotSpacing + dotSpacing / 2;
+            const mappedIndex = Math.round((i / numDots) * allLyricsLines.length);
+            const isCurrDot = Math.abs(mappedIndex - currentLyricsIndex) <= 1;
+            ctx.beginPath();
+            ctx.arc(dotX, dotY, isCurrDot ? 3 * S : 1.5 * S, 0, Math.PI * 2);
+            ctx.fillStyle = isCurrDot ? 'rgba(212, 175, 55, 0.8)' : 'rgba(255, 255, 255, 0.3)';
+            ctx.fill();
+          }
+          ctx.restore();
+        }
+        
+        ctx.restore();
+      }
+      // ── SINGLE mode: only current line, large and centered ──
+      else if (lyricsStyle === 'single') {
+        const singleFontSize = lyricsFontSize * 1.3;
+
+        // Draw frame if selected
+        if (displaySettings.frameStyle !== 'none') {
+          const framePad = 50 * S;
+          const maxW = canvas.width * 0.85;
+          const frameX = (canvas.width - maxW) / 2;
+          const frameY2 = centerY - singleFontSize - framePad;
+          const frameH = singleFontSize * 2 + framePad * 2;
+          drawIslamicFrame(ctx, frameX, frameY2, maxW, frameH, displaySettings.frameStyle);
+        }
+
+        ctx.save();
+        ctx.direction = 'rtl';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        
+        const line = allLyricsLines[currentLyricsIndex] || '';
+        drawCurrentLineGlow(ctx, line, canvas.width / 2, centerY, singleFontSize);
+        
+        // Line counter
+        ctx.save();
+        ctx.font = `${14 * S}px "${fontName}", sans-serif`;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.shadowBlur = 0;
+        ctx.fillText(`${currentLyricsIndex + 1} / ${allLyricsLines.length}`, canvas.width / 2, centerY + singleFontSize * 1.5);
+        ctx.restore();
+        
+        ctx.restore();
+      }
+      // ── KARAOKE mode: 3 lines visible, current bold and highlighted ──
+      else if (lyricsStyle === 'karaoke') {
+        const visibleCount = 3;
+        const startIdx = Math.max(0, Math.min(currentLyricsIndex - 1, allLyricsLines.length - visibleCount));
+        const endIdx = Math.min(allLyricsLines.length, startIdx + visibleCount);
+        
+        const totalH = (endIdx - startIdx) * lyricsLineHeight;
+        const baseY = centerY - totalH / 2 + lyricsLineHeight / 2;
+
+        if (displaySettings.frameStyle !== 'none') {
+          const framePad = 40 * S;
+          const frameX = canvas.width * 0.08;
+          const frameY2 = baseY - lyricsLineHeight / 2 - framePad;
+          const frameW = canvas.width * 0.84;
+          const frameH = totalH + framePad * 2;
+          drawIslamicFrame(ctx, frameX, frameY2, frameW, frameH, displaySettings.frameStyle);
+        }
+
+        ctx.save();
+        ctx.direction = 'rtl';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        
+        for (let i = startIdx; i < endIdx; i++) {
+          const line = allLyricsLines[i];
+          const y = baseY + (i - startIdx) * lyricsLineHeight;
+          const isCurrent = i === currentLyricsIndex;
+          
+          ctx.save();
+          if (isCurrent) {
+            drawCurrentLineGlow(ctx, line, canvas.width / 2, y, lyricsFontSize);
+          } else {
+            ctx.globalAlpha = 0.35;
+            ctx.font = `${lyricsFontSize * 0.9}px "${fontName}", "Noto Naskh Arabic", serif`;
+            ctx.fillStyle = textSettings.textColor;
+            ctx.shadowColor = `rgba(0, 0, 0, 0.4)`;
+            ctx.shadowBlur = 3 * S;
+            ctx.fillText(line, canvas.width / 2, y);
+          }
+          ctx.restore();
         }
         ctx.restore();
       }
-      
-      ctx.restore();
+      // ── FADE mode: only current line with fade transition ──
+      else if (lyricsStyle === 'fade') {
+        const fadeFontSize = lyricsFontSize * 1.2;
+
+        if (displaySettings.frameStyle !== 'none') {
+          const framePad = 50 * S;
+          const maxW = canvas.width * 0.85;
+          const frameX = (canvas.width - maxW) / 2;
+          const frameY2 = centerY - fadeFontSize - framePad;
+          const frameH = fadeFontSize * 2 + framePad * 2;
+          drawIslamicFrame(ctx, frameX, frameY2, maxW, frameH, displaySettings.frameStyle);
+        }
+
+        ctx.save();
+        ctx.direction = 'rtl';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        
+        // Apply transition effect
+        if (isTransitioningRef.current) {
+          ctx.globalAlpha = easedProgress;
+        }
+        
+        const line = allLyricsLines[currentLyricsIndex] || '';
+        drawCurrentLineGlow(ctx, line, canvas.width / 2, centerY, fadeFontSize);
+        
+        ctx.restore();
+      }
     }
     // Draw current ayah (if enabled) — standard Quran mode
     else if (currentAyah && displaySettings.showAyahText) {

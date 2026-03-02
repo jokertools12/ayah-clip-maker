@@ -27,6 +27,8 @@ export interface DisplaySettings {
   watermarkText: string;
   watermarkPosition: 'bottomLeft' | 'bottomRight' | 'topLeft' | 'topRight' | 'bottomCenter';
   performanceMode: 'economy' | 'balanced' | 'pro';
+  glowStyle: 'none' | 'golden' | 'soft' | 'neon' | 'pulse';
+  lyricsDisplayStyle: 'scroll' | 'single' | 'karaoke' | 'fade';
 }
 
 interface DisplaySettingsPanelProps {
@@ -118,6 +120,21 @@ const particleDensityOptions = [
   { value: 'low', label: 'قليل', description: '10 جزيئات' },
   { value: 'medium', label: 'متوسط', description: '20 جزيئة' },
   { value: 'high', label: 'كثيف', description: '40 جزيئة' },
+];
+
+const glowStyleOptions = [
+  { value: 'none', label: 'بدون توهج', description: 'نص عادي' },
+  { value: 'golden', label: 'ذهبي', description: 'توهج ذهبي كلاسيكي' },
+  { value: 'soft', label: 'ناعم', description: 'إضاءة بيضاء هادئة' },
+  { value: 'neon', label: 'نيون', description: 'توهج سماوي ساطع' },
+  { value: 'pulse', label: 'نابض', description: 'توهج متموج' },
+];
+
+const lyricsDisplayOptions = [
+  { value: 'scroll', label: 'تمرير', description: 'عرض عدة أسطر مع تمرير' },
+  { value: 'single', label: 'سطر واحد', description: 'عرض السطر الحالي فقط كبير' },
+  { value: 'karaoke', label: 'كاريوكي', description: '3 أسطر مع تمييز الحالي' },
+  { value: 'fade', label: 'تلاشي', description: 'سطر واحد مع تأثير ظهور' },
 ];
 
 const watermarkPositionOptions = [
@@ -328,7 +345,7 @@ export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPane
             كثافة الجزيئات الذهبية
           </Label>
           <RadioGroup
-            value={settings.particleDensity || 'medium'}
+            value={settings.particleDensity || 'off'}
             onValueChange={(value) => updateSetting('particleDensity', value as DisplaySettings['particleDensity'])}
             className="grid grid-cols-4 gap-2"
           >
@@ -337,6 +354,58 @@ export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPane
                 <RadioGroupItem value={option.value} id={`particle-${option.value}`} className="peer sr-only" />
                 <Label
                   htmlFor={`particle-${option.value}`}
+                  className="flex flex-col items-center rounded-lg border-2 border-muted p-2 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all text-center"
+                >
+                  <span className="font-medium text-sm">{option.label}</span>
+                  <span className="text-xs text-muted-foreground">{option.description}</span>
+                </Label>
+              </div>
+            ))}
+          </RadioGroup>
+        </div>
+
+        {/* Glow Style */}
+        <div className="space-y-3 pt-2 border-t">
+          <Label className="text-sm flex items-center gap-2">
+            <Sparkles className="h-4 w-4" />
+            نمط التوهج (الابتهالات)
+          </Label>
+          <RadioGroup
+            value={settings.glowStyle || 'golden'}
+            onValueChange={(value) => updateSetting('glowStyle', value as DisplaySettings['glowStyle'])}
+            className="grid grid-cols-3 gap-2"
+          >
+            {glowStyleOptions.map((option) => (
+              <div key={option.value} className="relative">
+                <RadioGroupItem value={option.value} id={`glow-${option.value}`} className="peer sr-only" />
+                <Label
+                  htmlFor={`glow-${option.value}`}
+                  className="flex flex-col items-center rounded-lg border-2 border-muted p-2 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all text-center"
+                >
+                  <span className="font-medium text-sm">{option.label}</span>
+                  <span className="text-xs text-muted-foreground">{option.description}</span>
+                </Label>
+              </div>
+            ))}
+          </RadioGroup>
+        </div>
+
+        {/* Lyrics Display Style */}
+        <div className="space-y-3 pt-2 border-t">
+          <Label className="text-sm flex items-center gap-2">
+            <Wand2 className="h-4 w-4" />
+            طريقة عرض الكلمات (الابتهالات)
+          </Label>
+          <RadioGroup
+            value={settings.lyricsDisplayStyle || 'scroll'}
+            onValueChange={(value) => updateSetting('lyricsDisplayStyle', value as DisplaySettings['lyricsDisplayStyle'])}
+            className="grid grid-cols-2 gap-2"
+          >
+            {lyricsDisplayOptions.map((option) => (
+              <div key={option.value} className="relative">
+                <RadioGroupItem value={option.value} id={`lyrics-${option.value}`} className="peer sr-only" />
+                <Label
+                  htmlFor={`lyrics-${option.value}`}
                   className="flex flex-col items-center rounded-lg border-2 border-muted p-2 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all text-center"
                 >
                   <span className="font-medium text-sm">{option.label}</span>

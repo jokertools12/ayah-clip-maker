@@ -81,11 +81,13 @@ const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
   textShadowStyle: 'soft',
   decorationStyle: 'none',
   ayahTransition: 'fade',
-  particleDensity: 'medium',
+  particleDensity: 'off',
   watermarkEnabled: false,
   watermarkText: '',
   watermarkPosition: 'bottomRight',
   performanceMode: 'balanced',
+  glowStyle: 'golden',
+  lyricsDisplayStyle: 'scroll',
 };
 
 // Note: frameStyle defaults to 'none' — user must explicitly select a frame
@@ -1277,30 +1279,30 @@ export default function PreviewPage() {
 
             {/* Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="w-full grid grid-cols-6">
-                <TabsTrigger value="presets" className="gap-1">
-                  <Palette className="h-4 w-4" />
-                  <span className="hidden sm:inline text-xs">قوالب</span>
+              <TabsList className="w-full grid grid-cols-3 sm:grid-cols-6 gap-0.5 h-auto p-1">
+                <TabsTrigger value="presets" className="gap-1 text-xs px-2 py-2">
+                  <Palette className="h-3.5 w-3.5" />
+                  قوالب
                 </TabsTrigger>
-                <TabsTrigger value="controls" className="gap-1">
-                  <Settings className="h-4 w-4" />
-                  <span className="hidden sm:inline text-xs">التحكم</span>
+                <TabsTrigger value="controls" className="gap-1 text-xs px-2 py-2">
+                  <Settings className="h-3.5 w-3.5" />
+                  التحكم
                 </TabsTrigger>
-                <TabsTrigger value="display" className="gap-1">
-                  <Eye className="h-4 w-4" />
-                  <span className="hidden sm:inline text-xs">العرض</span>
+                <TabsTrigger value="display" className="gap-1 text-xs px-2 py-2">
+                  <Eye className="h-3.5 w-3.5" />
+                  العرض
                 </TabsTrigger>
-                <TabsTrigger value="effects" className="gap-1">
-                  <Music className="h-4 w-4" />
-                  <span className="hidden sm:inline text-xs">الصوت</span>
+                <TabsTrigger value="effects" className="gap-1 text-xs px-2 py-2">
+                  <Music className="h-3.5 w-3.5" />
+                  الصوت
                 </TabsTrigger>
-                <TabsTrigger value="background" className="gap-1">
-                  <Upload className="h-4 w-4" />
-                  <span className="hidden sm:inline text-xs">خلفية</span>
+                <TabsTrigger value="background" className="gap-1 text-xs px-2 py-2">
+                  <Upload className="h-3.5 w-3.5" />
+                  خلفية
                 </TabsTrigger>
-                <TabsTrigger value="quality" className="gap-1">
-                  <Video className="h-4 w-4" />
-                  <span className="hidden sm:inline text-xs">جودة</span>
+                <TabsTrigger value="quality" className="gap-1 text-xs px-2 py-2">
+                  <Video className="h-3.5 w-3.5" />
+                  جودة
                 </TabsTrigger>
               </TabsList>
 
