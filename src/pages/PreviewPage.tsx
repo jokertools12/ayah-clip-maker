@@ -56,6 +56,7 @@ import {
   Gauge,
   Scissors,
   Trash2,
+  RefreshCw,
   Pencil,
   X,
   Clock,
@@ -202,6 +203,7 @@ export default function PreviewPage() {
   const transcribedLinesRef = useRef<{ text: string; start: number; end: number }[]>([]);
   const [isEditingLyrics, setIsEditingLyrics] = useState(false);
   const [editingLyricsText, setEditingLyricsText] = useState('');
+  const [retranscribeTrigger, setRetranscribeTrigger] = useState(0);
   const [isEditingTiming, setIsEditingTiming] = useState(false);
 
   // ── Playback state ──────────────────────────────────────────────────────────
@@ -327,7 +329,7 @@ export default function PreviewPage() {
       }
     };
     loadData();
-  }, [isIbtahalatMode, ibtTrackTitle, ibtAudioUrl, surahNumber, startAyah, endAyah, fetchAyahs]);
+  }, [isIbtahalatMode, ibtTrackTitle, ibtAudioUrl, surahNumber, startAyah, endAyah, fetchAyahs, retranscribeTrigger]);
 
   useEffect(() => {
     currentAyahIndexRef.current = currentAyahIndex;
@@ -1302,7 +1304,7 @@ export default function PreviewPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 text-xs gap-1 text-destructive hover:text-destructive"
+                        className="h-7 text-xs gap-1"
                         onClick={() => {
                           const cacheKey = `transcription_cache_${btoa(ibtAudioUrl).slice(0, 64)}`;
                           localStorage.removeItem(cacheKey);
@@ -1310,10 +1312,11 @@ export default function PreviewPage() {
                           transcribedLinesRef.current = [];
                           setTranscriptionError(false);
                           setAyahs([{ numberInSurah: 1, text: ibtTrackTitle }]);
-                          toast.success('تم مسح الكاش، سيتم إعادة النسخ تلقائياً');
+                          setRetranscribeTrigger(prev => prev + 1);
+                          toast.info('جارٍ إعادة نسخ الكلمات...');
                         }}
                       >
-                        <Trash2 className="h-3 w-3" />
+                        <RefreshCw className="h-3 w-3" />
                         إعادة النسخ
                       </Button>
                     </div>
