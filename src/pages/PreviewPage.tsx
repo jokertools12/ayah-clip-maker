@@ -32,6 +32,7 @@ import {
 import { concatenateAudioUrls } from '@/lib/audioConcat';
 import { supabase } from '@/integrations/supabase/client';
 import { TextSettings } from '@/components/TextSettingsPanel';
+import { TimingEditor } from '@/components/TimingEditor';
 import {
   Download,
   RotateCcw,
@@ -57,6 +58,7 @@ import {
   Trash2,
   Pencil,
   X,
+  Clock,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -200,6 +202,7 @@ export default function PreviewPage() {
   const transcribedLinesRef = useRef<{ text: string; start: number; end: number }[]>([]);
   const [isEditingLyrics, setIsEditingLyrics] = useState(false);
   const [editingLyricsText, setEditingLyricsText] = useState('');
+  const [isEditingTiming, setIsEditingTiming] = useState(false);
 
   // ── Playback state ──────────────────────────────────────────────────────────
   const [isPlaying, setIsPlaying] = useState(false);
@@ -1269,12 +1272,12 @@ export default function PreviewPage() {
                     )}
                   </div>
                 )}
-                {isIbtahalatMode && transcribedLines.length > 0 && !isEditingLyrics && (
+                {isIbtahalatMode && transcribedLines.length > 0 && !isEditingLyrics && !isEditingTiming && (
                   <div className="mt-2 space-y-2">
                     <p className="text-xs text-green-600 dark:text-green-400">
                       ✅ تم نسخ {transcribedLines.length} سطر — مزامنة دقيقة مع الصوت
                     </p>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
                       <Button
                         variant="ghost"
                         size="sm"
@@ -1286,6 +1289,15 @@ export default function PreviewPage() {
                       >
                         <Pencil className="h-3 w-3" />
                         تعديل الكلمات
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs gap-1"
+                        onClick={() => setIsEditingTiming(true)}
+                      >
+                        <Clock className="h-3 w-3" />
+                        تعديل التوقيت
                       </Button>
                       <Button
                         variant="ghost"
@@ -1305,6 +1317,22 @@ export default function PreviewPage() {
                         إعادة النسخ
                       </Button>
                     </div>
+                  </div>
+                )}
+                {isIbtahalatMode && isEditingTiming && transcribedLines.length > 0 && (
+                  <div className="mt-2">
+                    <TimingEditor
+                      lines={transcribedLines}
+                      onSave={(updated) => {
+                        setTranscribedLines(updated);
+                        transcribedLinesRef.current = updated;
+                        setAyahs(updated.map((l, i) => ({ numberInSurah: i + 1, text: l.text })));
+                        const cacheKey = `transcription_cache_${btoa(ibtAudioUrl).slice(0, 64)}`;
+                        try { localStorage.setItem(cacheKey, JSON.stringify({ lines: updated })); } catch {}
+                        setIsEditingTiming(false);
+                      }}
+                      onCancel={() => setIsEditingTiming(false)}
+                    />
                   </div>
                 )}
                 {isIbtahalatMode && isEditingLyrics && (
