@@ -54,6 +54,9 @@ import {
   Palette,
   Gauge,
   Scissors,
+  Trash2,
+  Pencil,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -195,6 +198,8 @@ export default function PreviewPage() {
   const [transcriptionError, setTranscriptionError] = useState(false);
   const [transcriptionProgress, setTranscriptionProgress] = useState<{ completed: number; total: number } | null>(null);
   const transcribedLinesRef = useRef<{ text: string; start: number; end: number }[]>([]);
+  const [isEditingLyrics, setIsEditingLyrics] = useState(false);
+  const [editingLyricsText, setEditingLyricsText] = useState('');
 
   // ── Playback state ──────────────────────────────────────────────────────────
   const [isPlaying, setIsPlaying] = useState(false);
@@ -1264,10 +1269,97 @@ export default function PreviewPage() {
                     )}
                   </div>
                 )}
-                {isIbtahalatMode && transcribedLines.length > 0 && (
-                  <p className="text-xs mt-1 text-green-600 dark:text-green-400">
-                    ✅ تم نسخ {transcribedLines.length} سطر — مزامنة دقيقة مع الصوت
-                  </p>
+                {isIbtahalatMode && transcribedLines.length > 0 && !isEditingLyrics && (
+                  <div className="mt-2 space-y-2">
+                    <p className="text-xs text-green-600 dark:text-green-400">
+                      ✅ تم نسخ {transcribedLines.length} سطر — مزامنة دقيقة مع الصوت
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs gap-1"
+                        onClick={() => {
+                          setIsEditingLyrics(true);
+                          setEditingLyricsText(transcribedLines.map(l => l.text).join('\n'));
+                        }}
+                      >
+                        <Pencil className="h-3 w-3" />
+                        تعديل الكلمات
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs gap-1 text-destructive hover:text-destructive"
+                        onClick={() => {
+                          const cacheKey = `transcription_cache_${btoa(ibtAudioUrl).slice(0, 64)}`;
+                          localStorage.removeItem(cacheKey);
+                          setTranscribedLines([]);
+                          transcribedLinesRef.current = [];
+                          setTranscriptionError(false);
+                          setAyahs([{ numberInSurah: 1, text: ibtTrackTitle }]);
+                          toast.success('تم مسح الكاش، سيتم إعادة النسخ تلقائياً');
+                        }}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                        إعادة النسخ
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                {isIbtahalatMode && isEditingLyrics && (
+                  <div className="mt-2 space-y-2">
+                    <p className="text-xs font-medium">تعديل الكلمات يدوياً (سطر لكل جملة):</p>
+                    <textarea
+                      className="w-full min-h-[120px] text-sm rounded-md border border-input bg-background px-3 py-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      dir="rtl"
+                      value={editingLyricsText}
+                      onChange={(e) => setEditingLyricsText(e.target.value)}
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        className="h-7 text-xs gap-1"
+                        onClick={() => {
+                          const newLines = editingLyricsText.split('\n').filter(l => l.trim());
+                          if (newLines.length === 0) {
+                            toast.error('لا يمكن حفظ كلمات فارغة');
+                            return;
+                          }
+                          // Redistribute timings evenly across new lines
+                          const totalDur = transcribedLines.length > 0
+                            ? transcribedLines[transcribedLines.length - 1].end
+                            : duration || 60;
+                          const segDur = totalDur / newLines.length;
+                          const updated = newLines.map((text, i) => ({
+                            text: text.trim(),
+                            start: i * segDur,
+                            end: (i + 1) * segDur,
+                          }));
+                          setTranscribedLines(updated);
+                          transcribedLinesRef.current = updated;
+                          setAyahs(updated.map((l, i) => ({ numberInSurah: i + 1, text: l.text })));
+                          // Update cache
+                          const cacheKey = `transcription_cache_${btoa(ibtAudioUrl).slice(0, 64)}`;
+                          try { localStorage.setItem(cacheKey, JSON.stringify({ lines: updated })); } catch {}
+                          setIsEditingLyrics(false);
+                          toast.success(`تم حفظ ${updated.length} سطر`);
+                        }}
+                      >
+                        <Check className="h-3 w-3" />
+                        حفظ
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs gap-1"
+                        onClick={() => setIsEditingLyrics(false)}
+                      >
+                        <X className="h-3 w-3" />
+                        إلغاء
+                      </Button>
+                    </div>
+                  </div>
                 )}
                 {isIbtahalatMode && transcriptionError && (
                   <p className="text-xs mt-1 text-muted-foreground">
