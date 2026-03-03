@@ -62,6 +62,7 @@ interface VideoPreviewProps {
     performanceMode?: 'economy' | 'balanced' | 'pro';
     glowStyle?: 'none' | 'golden' | 'soft' | 'neon' | 'pulse';
     lyricsDisplayStyle?: 'scroll' | 'single' | 'karaoke' | 'fade';
+    slideshowTransition?: 'crossfade' | 'slideLeft' | 'slideRight' | 'slideUp' | 'zoomThrough' | 'wipe' | 'mixed';
   };
   isPlaying: boolean;
   isRecording?: boolean;
@@ -107,6 +108,7 @@ const DEFAULT_DISPLAY_SETTINGS = {
   performanceMode: 'balanced' as const,
   glowStyle: 'golden' as const,
   lyricsDisplayStyle: 'scroll' as const,
+  slideshowTransition: 'crossfade' as const,
 };
 
 export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
@@ -277,8 +279,11 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
               const zoomEnd = zoomIn ? 1.15 : 1.0;
               const angle = Math.random() * Math.PI * 2;
               const panRange = 25 + Math.random() * 15;
-              // Pick a random transition style for each image change
-              const transition = SLIDESHOW_TRANSITIONS[i % SLIDESHOW_TRANSITIONS.length];
+              // Pick transition based on user setting
+              const userTransitionPref = displaySettings.slideshowTransition || 'crossfade';
+              const transition: SlideshowTransition = userTransitionPref === 'mixed'
+                ? SLIDESHOW_TRANSITIONS[Math.floor(Math.random() * SLIDESHOW_TRANSITIONS.length)]
+                : (userTransitionPref as SlideshowTransition);
               return {
                 zoomStart, zoomEnd,
                 panXStart: Math.cos(angle) * panRange,

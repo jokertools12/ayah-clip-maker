@@ -29,6 +29,7 @@ export interface DisplaySettings {
   performanceMode: 'economy' | 'balanced' | 'pro';
   glowStyle: 'none' | 'golden' | 'soft' | 'neon' | 'pulse';
   lyricsDisplayStyle: 'scroll' | 'single' | 'karaoke' | 'fade';
+  slideshowTransition: 'crossfade' | 'slideLeft' | 'slideRight' | 'slideUp' | 'zoomThrough' | 'wipe' | 'mixed';
 }
 
 interface DisplaySettingsPanelProps {
@@ -135,6 +136,16 @@ const lyricsDisplayOptions = [
   { value: 'single', label: 'سطر واحد', description: 'عرض السطر الحالي فقط كبير' },
   { value: 'karaoke', label: 'كاريوكي', description: '3 أسطر مع تمييز الحالي' },
   { value: 'fade', label: 'تلاشي', description: 'سطر واحد مع تأثير ظهور' },
+];
+
+const slideshowTransitionOptions = [
+  { value: 'crossfade', label: 'تلاشي سلس', description: 'انتقال ناعم وهادئ' },
+  { value: 'slideLeft', label: 'انزلاق يسار', description: 'دخول من اليمين' },
+  { value: 'slideRight', label: 'انزلاق يمين', description: 'دخول من اليسار' },
+  { value: 'slideUp', label: 'انزلاق للأعلى', description: 'دخول من الأسفل' },
+  { value: 'zoomThrough', label: 'تكبير عابر', description: 'تكبير درامي سينمائي' },
+  { value: 'wipe', label: 'مسح أفقي', description: 'كشف تدريجي أفقي' },
+  { value: 'mixed', label: '🎲 متنوع', description: 'انتقال مختلف لكل صورة' },
 ];
 
 const watermarkPositionOptions = [
@@ -337,6 +348,31 @@ export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPane
             </RadioGroup>
           </div>
         )}
+
+        {/* Slideshow Transition */}
+        <div className="space-y-3 pt-2 border-t">
+          <Label className="text-sm flex items-center gap-2">
+            🎬 نمط الانتقال بين الصور
+          </Label>
+          <RadioGroup
+            value={settings.slideshowTransition || 'crossfade'}
+            onValueChange={(value) => updateSetting('slideshowTransition', value as DisplaySettings['slideshowTransition'])}
+            className="grid grid-cols-2 gap-2"
+          >
+            {slideshowTransitionOptions.map((option) => (
+              <div key={option.value} className="relative">
+                <RadioGroupItem value={option.value} id={`slt-${option.value}`} className="peer sr-only" />
+                <Label
+                  htmlFor={`slt-${option.value}`}
+                  className="flex flex-col items-center rounded-lg border-2 border-muted p-2 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all text-center"
+                >
+                  <span className="font-medium text-sm">{option.label}</span>
+                  <span className="text-xs text-muted-foreground">{option.description}</span>
+                </Label>
+              </div>
+            ))}
+          </RadioGroup>
+        </div>
 
         {/* Particle Density */}
         <div className="space-y-3 pt-2 border-t">
