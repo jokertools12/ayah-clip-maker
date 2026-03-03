@@ -242,6 +242,21 @@ export default function PreviewPage() {
   const ayahsRef = useRef<{ numberInSurah: number; text: string }[]>([]);
   const recordingUiLastUpdateRef = useRef(0);
 
+  // ── Reset transcription state when switching ibtahalat tracks ────────────────
+  const prevIbtAudioUrlRef = useRef(ibtAudioUrl);
+  useEffect(() => {
+    if (isIbtahalatMode && ibtAudioUrl && ibtAudioUrl !== prevIbtAudioUrlRef.current) {
+      prevIbtAudioUrlRef.current = ibtAudioUrl;
+      // Reset old transcription so new track gets transcribed
+      setTranscribedLines([]);
+      transcribedLinesRef.current = [];
+      setTranscriptionError(false);
+      setIsTranscribing(false);
+      setTranscriptionProgress(null);
+      setCurrentAyahIndex(0);
+    }
+  }, [ibtAudioUrl, isIbtahalatMode]);
+
   // ── Load ayah texts (Quran mode) / Transcribe audio (Ibtahalat mode) ───────
   useEffect(() => {
     if (isIbtahalatMode) {
