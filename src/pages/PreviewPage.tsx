@@ -94,6 +94,7 @@ const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
   performanceMode: 'balanced',
   glowStyle: 'golden',
   lyricsDisplayStyle: 'scroll',
+  slideshowTransition: 'crossfade',
 };
 
 // Note: frameStyle defaults to 'none' — user must explicitly select a frame
