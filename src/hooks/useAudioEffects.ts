@@ -43,6 +43,8 @@ export function useAudioEffects() {
   const masterGainRef = useRef<GainNode | null>(null);
   const recordingDestRef = useRef<MediaStreamAudioDestinationNode | null>(null);
   const biquadFilterRef = useRef<BiquadFilterNode | null>(null);
+  const highShelfRef = useRef<BiquadFilterNode | null>(null);
+  const lowShelfRef = useRef<BiquadFilterNode | null>(null);
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
 
   // Create impulse response for reverb (simulates mosque acoustics)
@@ -94,6 +96,8 @@ export function useAudioEffects() {
       const masterGain = ctx.createGain();
       const recordingDest = ctx.createMediaStreamDestination();
       const biquadFilter = ctx.createBiquadFilter();
+      const highShelf = ctx.createBiquadFilter();
+      const lowShelf = ctx.createBiquadFilter();
 
       // Store refs
       convolverRef.current = convolver;
@@ -105,6 +109,8 @@ export function useAudioEffects() {
       masterGainRef.current = masterGain;
       recordingDestRef.current = recordingDest;
       biquadFilterRef.current = biquadFilter;
+      highShelfRef.current = highShelf;
+      lowShelfRef.current = lowShelf;
 
       // Create mosque-like reverb impulse response
       const impulse = createImpulseResponse(3, 2);
@@ -112,11 +118,22 @@ export function useAudioEffects() {
         convolver.buffer = impulse;
       }
 
-      // Configure biquad filter for subtle frequency adjustment (copyright protection)
+      // Configure multi-band EQ for copyright fingerprint uniqueness
+      // Mid-range subtle boost
       biquadFilter.type = 'peaking';
-      biquadFilter.frequency.value = 1000;
-      biquadFilter.Q.value = 0.5;
-      biquadFilter.gain.value = enableCopyrightProtection ? 1.5 : 0;
+      biquadFilter.frequency.value = 1200;
+      biquadFilter.Q.value = 0.7;
+      biquadFilter.gain.value = enableCopyrightProtection ? 1.2 : 0;
+
+      // High shelf - subtle warmth reduction
+      highShelf.type = 'highshelf';
+      highShelf.frequency.value = 8000;
+      highShelf.gain.value = enableCopyrightProtection ? -0.8 : 0;
+
+      // Low shelf - very subtle bass adjustment
+      lowShelf.type = 'lowshelf';
+      lowShelf.frequency.value = 200;
+      lowShelf.gain.value = enableCopyrightProtection ? 0.6 : 0;
 
       // Set initial values
       dryGain.gain.value = 1;
@@ -130,9 +147,11 @@ export function useAudioEffects() {
       masterGain.connect(ctx.destination);
       masterGain.connect(recordingDest);
 
-      // Dry path with optional filter for copyright protection
+      // Dry path with multi-band fingerprint filter chain
       sourceNodeRef.current.connect(biquadFilter);
-      biquadFilter.connect(dryGain);
+      biquadFilter.connect(highShelf);
+      highShelf.connect(lowShelf);
+      lowShelf.connect(dryGain);
       dryGain.connect(masterGain);
 
       // Reverb path
@@ -176,9 +195,15 @@ export function useAudioEffects() {
       echoGainRef.current.gain.value = effects.echoEnabled ? 0.6 : 0;
     }
 
-    // Update copyright protection
+    // Update copyright protection (multi-band fingerprint)
     if (biquadFilterRef.current) {
-      biquadFilterRef.current.gain.value = effects.copyrightProtectionEnabled ? 1.5 : 0;
+      biquadFilterRef.current.gain.value = effects.copyrightProtectionEnabled ? 1.2 : 0;
+    }
+    if (highShelfRef.current) {
+      highShelfRef.current.gain.value = effects.copyrightProtectionEnabled ? -0.8 : 0;
+    }
+    if (lowShelfRef.current) {
+      lowShelfRef.current.gain.value = effects.copyrightProtectionEnabled ? 0.6 : 0;
     }
 
     if (audioElementRef.current) {
@@ -213,7 +238,6 @@ export function useAudioEffects() {
   // Cleanup
   const cleanup = useCallback(() => {
     if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-      // Don't close the context, just disconnect nodes
       try {
         sourceNodeRef.current?.disconnect();
         convolverRef.current?.disconnect();
@@ -225,6 +249,8 @@ export function useAudioEffects() {
         masterGainRef.current?.disconnect();
         recordingDestRef.current?.disconnect();
         biquadFilterRef.current?.disconnect();
+        highShelfRef.current?.disconnect();
+        lowShelfRef.current?.disconnect();
       } catch (e) {
         // Ignore disconnect errors
       }
