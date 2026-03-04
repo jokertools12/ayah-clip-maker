@@ -2,7 +2,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useAuth } from '@/hooks/useAuth';
-import { BookOpen, Video, Library, LogIn, LogOut, User, Music, Menu, X } from 'lucide-react';
+import { BookOpen, Video, Library, LogIn, LogOut, User, Music, Menu, X, Crown, Settings, Shield } from 'lucide-react';
+import { useAdmin } from '@/hooks/useAdmin';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
 import {
@@ -16,10 +17,12 @@ const navLinks = [
   { to: '/create', label: 'إنشاء فيديو', icon: Video },
   { to: '/surahs', label: 'تصفح السور', icon: BookOpen },
   { to: '/ibtahalat', label: 'تصفح الابتهالات', icon: Music },
+  { to: '/pricing', label: 'الأسعار', icon: Crown },
 ];
 
 export function Navbar() {
   const { user, signOut, isAuthenticated } = useAuth();
+  const { isAdmin } = useAdmin();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -85,6 +88,20 @@ export function Navbar() {
                       <span>مكتبتي</span>
                     </Link>
                   </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/settings" className="flex items-center gap-2">
+                      <Settings className="h-4 w-4" />
+                      <span>الإعدادات</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  {isAdmin && (
+                    <DropdownMenuItem asChild>
+                      <Link to="/admin" className="flex items-center gap-2">
+                        <Shield className="h-4 w-4" />
+                        <span>لوحة التحكم</span>
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem onClick={handleSignOut} className="text-destructive">
                     <LogOut className="h-4 w-4 ml-2" />
                     <span>تسجيل الخروج</span>
@@ -134,14 +151,34 @@ export function Navbar() {
                   </Link>
                 ))}
                 {isAuthenticated && (
-                  <Link
-                    to="/library"
-                    onClick={() => setMobileOpen(false)}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-foreground hover:bg-muted/50 transition-colors"
-                  >
-                    <Library className="h-5 w-5 text-primary" />
-                    <span className="font-medium">مكتبتي</span>
-                  </Link>
+                  <>
+                    <Link
+                      to="/library"
+                      onClick={() => setMobileOpen(false)}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-foreground hover:bg-muted/50 transition-colors"
+                    >
+                      <Library className="h-5 w-5 text-primary" />
+                      <span className="font-medium">مكتبتي</span>
+                    </Link>
+                    <Link
+                      to="/settings"
+                      onClick={() => setMobileOpen(false)}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-foreground hover:bg-muted/50 transition-colors"
+                    >
+                      <Settings className="h-5 w-5 text-primary" />
+                      <span className="font-medium">الإعدادات</span>
+                    </Link>
+                    {isAdmin && (
+                      <Link
+                        to="/admin"
+                        onClick={() => setMobileOpen(false)}
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-foreground hover:bg-muted/50 transition-colors"
+                      >
+                        <Shield className="h-5 w-5 text-primary" />
+                        <span className="font-medium">لوحة التحكم</span>
+                      </Link>
+                    )}
+                  </>
                 )}
               </div>
             </motion.div>

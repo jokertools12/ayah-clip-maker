@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Check, Image as ImageIcon, Sparkles, Upload, Video } from 'lucide-react';
+import { Check, Image as ImageIcon, Sparkles, Upload, Video, Lock } from 'lucide-react';
 import { BackgroundItem, backgroundImages, slideshowBackgrounds } from '@/data/backgrounds';
 import { CustomBackgroundUploader } from '@/components/CustomBackgroundUploader';
 import { PexelsVideoSelector } from '@/components/PexelsVideoSelector';
+import { PremiumBadge } from '@/components/PremiumBadge';
+import { useSubscription } from '@/hooks/useSubscription';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { toast } from 'sonner';
 
 interface BackgroundSelectorProps {
   selectedBackground: BackgroundItem | null;
@@ -21,6 +24,7 @@ export function BackgroundSelector({
   onCustomBackgroundChange 
 }: BackgroundSelectorProps) {
   const [activeTab, setActiveTab] = useState<'custom' | 'image' | 'slideshow' | 'pexels'>('image');
+  const { canUseFeature, isPremium } = useSubscription();
 
   const renderBackgroundCard = (bg: BackgroundItem) => {
     const isSelected = selectedBackground?.id === bg.id && !customBackground;
@@ -123,10 +127,12 @@ export function BackgroundSelector({
           <TabsTrigger value="slideshow" className="gap-1 text-xs sm:text-sm">
             <Sparkles className="h-4 w-4" />
             <span className="hidden sm:inline">متغيرة</span>
+            {!isPremium && <Lock className="h-3 w-3 opacity-60" />}
           </TabsTrigger>
           <TabsTrigger value="pexels" className="gap-1 text-xs sm:text-sm">
             <Video className="h-4 w-4" />
             <span className="hidden sm:inline">فيديو</span>
+            {!isPremium && <Lock className="h-3 w-3 opacity-60" />}
           </TabsTrigger>
         </TabsList>
 
@@ -146,15 +152,31 @@ export function BackgroundSelector({
         </TabsContent>
 
         <TabsContent value="slideshow" className="mt-4">
-          <ScrollArea className="h-[300px] pr-4">
-            <div className="grid grid-cols-2 gap-3">
-              {slideshowBackgrounds.map(renderBackgroundCard)}
+          {!canUseFeature('slideshowBackgrounds') ? (
+            <div className="text-center py-8 space-y-3">
+              <Lock className="h-8 w-8 mx-auto text-muted-foreground" />
+              <p className="text-muted-foreground">الخلفيات المتغيرة متاحة للأعضاء المميزين فقط</p>
+              <PremiumBadge showLock />
             </div>
-          </ScrollArea>
+          ) : (
+            <ScrollArea className="h-[300px] pr-4">
+              <div className="grid grid-cols-2 gap-3">
+                {slideshowBackgrounds.map(renderBackgroundCard)}
+              </div>
+            </ScrollArea>
+          )}
         </TabsContent>
 
         <TabsContent value="pexels" className="mt-4">
-          <PexelsVideoSelector onSelect={handlePexelsVideoSelect} />
+          {!canUseFeature('pexelsVideos') ? (
+            <div className="text-center py-8 space-y-3">
+              <Lock className="h-8 w-8 mx-auto text-muted-foreground" />
+              <p className="text-muted-foreground">فيديوهات Pexels متاحة للأعضاء المميزين فقط</p>
+              <PremiumBadge showLock />
+            </div>
+          ) : (
+            <PexelsVideoSelector onSelect={handlePexelsVideoSelect} />
+          )}
         </TabsContent>
       </Tabs>
 
