@@ -11,6 +11,9 @@ import PreviewPage from "./pages/PreviewPage";
 import AuthPage from "./pages/AuthPage";
 import LibraryPage from "./pages/LibraryPage";
 import BrowsePage from "./pages/BrowsePage";
+import PricingPage from "./pages/PricingPage";
+import AdminPage from "./pages/AdminPage";
+import UserSettingsPage from "./pages/UserSettingsPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,6 +33,9 @@ const App = () => (
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/library" element={<LibraryPage />} />
           <Route path="/browse" element={<BrowsePage />} />
+          <Route path="/pricing" element={<PricingPage />} />
+          <Route path="/admin" element={<AdminPage />} />
+          <Route path="/settings" element={<UserSettingsPage />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

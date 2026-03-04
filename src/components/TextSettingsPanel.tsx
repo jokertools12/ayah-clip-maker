@@ -2,7 +2,10 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Type, Palette, Layers } from 'lucide-react';
+import { PremiumBadge } from '@/components/PremiumBadge';
+import { useSubscription, FREE_FONTS } from '@/hooks/useSubscription';
+import { Type, Palette, Layers, Lock } from 'lucide-react';
+import { toast } from 'sonner';
 
 export interface TextSettings {
   fontSize: number;
@@ -40,8 +43,18 @@ const colorOptions = [
 ];
 
 export function TextSettingsPanel({ settings, onChange }: TextSettingsPanelProps) {
+  const { isFreeFont, isPremium } = useSubscription();
+
   const updateSetting = <K extends keyof TextSettings>(key: K, value: TextSettings[K]) => {
     onChange({ ...settings, [key]: value });
+  };
+
+  const handleFontChange = (value: string) => {
+    if (!isFreeFont(value) && !isPremium) {
+      toast.error('هذا الخط متاح للأعضاء المميزين فقط');
+      return;
+    }
+    updateSetting('fontFamily', value);
   };
 
   return (
@@ -76,22 +89,28 @@ export function TextSettingsPanel({ settings, onChange }: TextSettingsPanelProps
           <Label className="text-sm">نوع الخط</Label>
           <RadioGroup
             value={settings.fontFamily}
-            onValueChange={(value) => updateSetting('fontFamily', value)}
+            onValueChange={handleFontChange}
             className="grid grid-cols-3 gap-2"
           >
-            {fontOptions.map((font) => (
-              <div key={font.value} className="relative">
-                <RadioGroupItem value={font.value} id={font.value} className="peer sr-only" />
-                <Label
-                  htmlFor={font.value}
-                  className="flex items-center justify-center rounded-lg border-2 border-muted p-3 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all"
-                  style={{ fontFamily: font.value }}
-                >
-                  {font.label}
-                </Label>
-              </div>
-            ))}
+            {fontOptions.map((font) => {
+              const isFree = isFreeFont(font.value);
+              const locked = !isFree && !isPremium;
+              return (
+                <div key={font.value} className="relative">
+                  <RadioGroupItem value={font.value} id={font.value} className="peer sr-only" />
+                  <Label
+                    htmlFor={font.value}
+                    className={`flex items-center justify-center rounded-lg border-2 border-muted p-3 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all ${locked ? 'opacity-60' : ''}`}
+                    style={{ fontFamily: font.value }}
+                  >
+                    {font.label}
+                    {locked && <Lock className="h-3 w-3 mr-1 inline-block" />}
+                  </Label>
+                </div>
+              );
+            })}
           </RadioGroup>
+          {!isPremium && <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1"><PremiumBadge size="sm" showLock /> بعض الخطوط للأعضاء المميزين</p>}
         </div>
 
         {/* Text Color */}
