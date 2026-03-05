@@ -3,8 +3,11 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
 import { AudioEffects } from '@/hooks/useAudioEffects';
-import { Music, Waves, Timer, Shield, AlertTriangle, Volume2 } from 'lucide-react';
+import { PremiumBadge } from '@/components/PremiumBadge';
+import { useSubscription } from '@/hooks/useSubscription';
+import { Music, Waves, Timer, Shield, AlertTriangle, Volume2, Lock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
 
 interface AudioEffectsPanelProps {
   effects: AudioEffects;
@@ -14,8 +17,18 @@ interface AudioEffectsPanelProps {
 }
 
 export function AudioEffectsPanel({ effects, onChange, disabled, onToggleCopyrightProtection }: AudioEffectsPanelProps) {
+  const { isPremium, canUseFeature } = useSubscription();
+  
   const updateEffect = <K extends keyof AudioEffects>(key: K, value: AudioEffects[K]) => {
     onChange({ ...effects, [key]: value });
+  };
+
+  const handlePremiumToggle = (key: keyof AudioEffects, checked: boolean) => {
+    if (!isPremium) {
+      toast.error('هذه الميزة متاحة للأعضاء المميزين فقط');
+      return;
+    }
+    updateEffect(key, checked as never);
   };
 
   return (
@@ -27,17 +40,22 @@ export function AudioEffectsPanel({ effects, onChange, disabled, onToggleCopyrig
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Copyright Protection */}
+        {/* Copyright Protection - Premium */}
         <div className="p-3 rounded-lg bg-primary/10 border border-primary/20 space-y-3">
           <div className="flex items-center justify-between">
             <Label htmlFor="copyrightProtection" className="flex items-center gap-2 cursor-pointer">
               <Shield className="h-4 w-4 text-primary" />
               <span className="text-primary font-medium text-sm">حماية حقوق النشر</span>
+              {!isPremium && <Lock className="h-3 w-3 text-muted-foreground" />}
             </Label>
             <Switch
               id="copyrightProtection"
               checked={effects.copyrightProtectionEnabled}
               onCheckedChange={(checked) => {
+                if (!isPremium) {
+                  toast.error('حماية حقوق النشر متاحة للأعضاء المميزين فقط');
+                  return;
+                }
                 updateEffect('copyrightProtectionEnabled', checked);
                 onToggleCopyrightProtection?.(checked);
               }}
@@ -50,7 +68,8 @@ export function AudioEffectsPanel({ effects, onChange, disabled, onToggleCopyrig
               يُطبق تعديلات صوتية طفيفة غير ملحوظة لتجنب اكتشاف الصوت تلقائياً على فيسبوك ويوتيوب
             </p>
           </div>
-          {effects.copyrightProtectionEnabled && (
+          {!isPremium && <PremiumBadge showLock />}
+          {effects.copyrightProtectionEnabled && isPremium && (
             <Badge variant="secondary" className="bg-primary/20 text-primary border-0">
               <Shield className="h-3 w-3 ml-1" />
               الحماية مُفعّلة
@@ -58,17 +77,18 @@ export function AudioEffectsPanel({ effects, onChange, disabled, onToggleCopyrig
           )}
         </div>
 
-        {/* Audio Normalization */}
+        {/* Audio Normalization - Premium */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <Label htmlFor="normalize" className="flex items-center gap-2 cursor-pointer">
               <Volume2 className="h-4 w-4 text-primary" />
-              <span>تسوية الصوت (Normalization)</span>
+              <span>تسوية الصوت</span>
+              {!isPremium && <Lock className="h-3 w-3 text-muted-foreground" />}
             </Label>
             <Switch
               id="normalize"
               checked={effects.normalizeEnabled ?? false}
-              onCheckedChange={(checked) => updateEffect('normalizeEnabled' as keyof AudioEffects, checked as never)}
+              onCheckedChange={(checked) => handlePremiumToggle('normalizeEnabled' as keyof AudioEffects, checked)}
               disabled={disabled}
             />
           </div>
@@ -77,7 +97,7 @@ export function AudioEffectsPanel({ effects, onChange, disabled, onToggleCopyrig
           </p>
         </div>
 
-        {/* EQ Enhancement */}
+        {/* EQ Enhancement - Premium */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <Label htmlFor="eq" className="flex items-center gap-2 cursor-pointer">
@@ -85,11 +105,12 @@ export function AudioEffectsPanel({ effects, onChange, disabled, onToggleCopyrig
                 <path d="M4 21v-8M8 21V9M12 21v-6M16 21v-10M20 21V5" />
               </svg>
               <span>تحسين EQ</span>
+              {!isPremium && <Lock className="h-3 w-3 text-muted-foreground" />}
             </Label>
             <Switch
               id="eq"
               checked={effects.eqEnabled ?? false}
-              onCheckedChange={(checked) => updateEffect('eqEnabled' as keyof AudioEffects, checked as never)}
+              onCheckedChange={(checked) => handlePremiumToggle('eqEnabled' as keyof AudioEffects, checked)}
               disabled={disabled}
             />
           </div>
@@ -98,7 +119,7 @@ export function AudioEffectsPanel({ effects, onChange, disabled, onToggleCopyrig
           </p>
         </div>
 
-        {/* Reverb (Mosque Effect) */}
+        {/* Reverb - Free */}
         <div className="space-y-4 pt-2 border-t">
           <div className="flex items-center justify-between">
             <Label htmlFor="reverb" className="flex items-center gap-2 cursor-pointer">
@@ -132,7 +153,7 @@ export function AudioEffectsPanel({ effects, onChange, disabled, onToggleCopyrig
           )}
         </div>
 
-        {/* Echo */}
+        {/* Echo - Free */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <Label htmlFor="echo" className="flex items-center gap-2 cursor-pointer">
@@ -185,9 +206,12 @@ export function AudioEffectsPanel({ effects, onChange, disabled, onToggleCopyrig
           )}
         </div>
 
-        <p className="text-xs text-muted-foreground text-center pt-2">
-          💡 المؤثرات تضيف أجواء روحانية للتلاوة
-        </p>
+        {!isPremium && (
+          <p className="text-xs text-muted-foreground text-center pt-2 flex items-center justify-center gap-1">
+            <Lock className="h-3 w-3" />
+            بعض المؤثرات متاحة للأعضاء المميزين فقط
+          </p>
+        )}
       </CardContent>
     </Card>
   );

@@ -2,7 +2,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useAuth } from '@/hooks/useAuth';
-import { BookOpen, Video, Library, LogIn, LogOut, User, Music, Menu, X, Crown, Settings, Shield } from 'lucide-react';
+import { BookOpen, Video, Library, LogIn, LogOut, User, Music, Menu, X, Crown, Settings, Shield, CreditCard } from 'lucide-react';
 import { useAdmin } from '@/hooks/useAdmin';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
@@ -92,6 +92,12 @@ export function Navbar() {
                     <Link to="/settings" className="flex items-center gap-2">
                       <Settings className="h-4 w-4" />
                       <span>الإعدادات</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/payment-history" className="flex items-center gap-2">
+                      <CreditCard className="h-4 w-4" />
+                      <span>سجل المدفوعات</span>
                     </Link>
                   </DropdownMenuItem>
                   {isAdmin && (

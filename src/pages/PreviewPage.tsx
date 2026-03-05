@@ -23,6 +23,7 @@ import { reciters, getAudioUrl, getEveryAyahUrl } from '@/data/reciters';
 import { backgroundVideos, backgroundImages, slideshowBackgrounds, BackgroundItem } from '@/data/backgrounds';
 import { useQuranApi } from '@/hooks/useQuranApi';
 import { useAuth } from '@/hooks/useAuth';
+import { useSubscription } from '@/hooks/useSubscription';
 import { useAudioEffects } from '@/hooks/useAudioEffects';
 import { useVideoRecorder, ExportQuality, getQualityDimensions } from '@/hooks/useVideoRecorder';
 import {
@@ -115,6 +116,7 @@ export default function PreviewPage() {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
   const { fetchAyahs } = useQuranApi();
+  const { incrementUsage, dailyUsage, videoLimit, isPremium, canUseFeature } = useSubscription();
   const audioEffects = useAudioEffects();
   const videoRecorder = useVideoRecorder();
 
@@ -910,6 +912,14 @@ export default function PreviewPage() {
       return;
     }
 
+    // Check daily usage limit
+    if (isAuthenticated && user) {
+      if (dailyUsage.count >= videoLimit) {
+        toast.error(`لقد وصلت للحد اليومي (${videoLimit} فيديو). ${!isPremium ? 'اشترك في العضوية المميزة لـ 100 فيديو يومياً' : ''}`);
+        return;
+      }
+    }
+
     try {
       await audioEffects.resumeContext();
       await previewApi.ensureBackgroundPlayback();
@@ -1097,6 +1107,10 @@ export default function PreviewPage() {
           );
 
           if (blob) {
+            // Increment daily usage count
+            if (isAuthenticated && user) {
+              await incrementUsage();
+            }
             toast.success('تم إنشاء الفيديو بنجاح!');
             return;
           }
