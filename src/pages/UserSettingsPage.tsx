@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { User, Crown, Video, Calendar, Mail, Edit2, Loader2, Check } from 'lucide-react';
+import { User, Crown, Video, Calendar, Mail, Edit2, Loader2, Check, History, CreditCard } from 'lucide-react';
 import { toast } from 'sonner';
 import { Link, Navigate } from 'react-router-dom';
 
@@ -100,6 +100,18 @@ export default function UserSettingsPage() {
                 <p className="text-xs text-muted-foreground">
                   {isPremium ? 'لديك 100 فيديو يومياً' : 'الخطة المجانية: 3 فيديوهات يومياً'}
                 </p>
+              </CardContent>
+            </Card>
+
+            {/* Payment History Link */}
+            <Card>
+              <CardContent className="p-4">
+                <Button asChild variant="outline" className="w-full gap-2">
+                  <Link to="/payment-history">
+                    <History className="h-4 w-4" />
+                    سجل المدفوعات
+                  </Link>
+                </Button>
               </CardContent>
             </Card>
 

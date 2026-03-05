@@ -14,6 +14,7 @@ import BrowsePage from "./pages/BrowsePage";
 import PricingPage from "./pages/PricingPage";
 import AdminPage from "./pages/AdminPage";
 import UserSettingsPage from "./pages/UserSettingsPage";
+import PaymentHistoryPage from "./pages/PaymentHistoryPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -36,6 +37,7 @@ const App = () => (
           <Route path="/pricing" element={<PricingPage />} />
           <Route path="/admin" element={<AdminPage />} />
           <Route path="/settings" element={<UserSettingsPage />} />
+          <Route path="/payment-history" element={<PaymentHistoryPage />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
