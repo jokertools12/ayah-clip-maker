@@ -22,10 +22,10 @@ const defaultEffects: AudioEffects = {
   echoDelay: 0.3,
   echoFeedback: 0.4,
   pitchShift: 0,
-  speedAdjust: 1.02,
-  copyrightProtectionEnabled: true,
-  normalizeEnabled: true,
-  eqEnabled: true,
+  speedAdjust: 1.0,
+  copyrightProtectionEnabled: false,
+  normalizeEnabled: false,
+  eqEnabled: false,
 };
 
 export function useAudioEffects() {

@@ -8,16 +8,31 @@ export function useAdmin() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    
     const checkAdmin = async () => {
-      if (!user) { setIsAdmin(false); setLoading(false); return; }
+      if (!user) { 
+        if (!cancelled) { setIsAdmin(false); setLoading(false); }
+        return; 
+      }
       
-      const { data, error } = await supabase
-        .rpc('has_role', { _user_id: user.id, _role: 'admin' });
+      try {
+        const { data, error } = await supabase
+          .rpc('has_role', { _user_id: user.id, _role: 'admin' });
 
-      setIsAdmin(data === true);
-      setLoading(false);
+        if (!cancelled) {
+          setIsAdmin(data === true);
+          setLoading(false);
+        }
+      } catch (e) {
+        console.error('Admin check error:', e);
+        if (!cancelled) { setIsAdmin(false); setLoading(false); }
+      }
     };
     checkAdmin();
+    
+    return () => { cancelled = true; };
   }, [user]);
 
   const fetchPaymentRequests = useCallback(async (status?: string) => {
