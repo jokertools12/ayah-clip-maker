@@ -4,9 +4,11 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Eye, EyeOff, Sparkles, Frame, Hash, Wand2, Droplets, Type, Save, FolderOpen, Trash2, User } from 'lucide-react';
+import { Eye, EyeOff, Sparkles, Frame, Hash, Wand2, Droplets, Type, Save, FolderOpen, Trash2, User, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { useState, useEffect } from 'react';
+import { useSubscription } from '@/hooks/useSubscription';
+import { PremiumBadge } from '@/components/PremiumBadge';
 
 export interface DisplaySettings {
   showSurahName: boolean;
@@ -184,6 +186,7 @@ function saveTemplates(templates: SavedTemplate[]) {
 }
 
 export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPanelProps) {
+  const { isPremium } = useSubscription();
   const [templates, setTemplates] = useState<SavedTemplate[]>(loadTemplates);
   const [templateName, setTemplateName] = useState('');
   const [showSaveInput, setShowSaveInput] = useState(false);
@@ -374,12 +377,18 @@ export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPane
           </RadioGroup>
         </div>
 
-        {/* Particle Density */}
+        {/* Particle Density - Premium */}
         <div className="space-y-3 pt-2 border-t">
           <Label className="text-sm flex items-center gap-2">
             <Droplets className="h-4 w-4" />
             كثافة الجزيئات الذهبية
+            {!isPremium && <Lock className="h-3 w-3 text-muted-foreground" />}
           </Label>
+          {!isPremium ? (
+            <div className="text-center py-3">
+              <PremiumBadge showLock />
+            </div>
+          ) : (
           <RadioGroup
             value={settings.particleDensity || 'off'}
             onValueChange={(value) => updateSetting('particleDensity', value as DisplaySettings['particleDensity'])}
@@ -398,14 +407,21 @@ export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPane
               </div>
             ))}
           </RadioGroup>
+          )}
         </div>
 
-        {/* Glow Style */}
+        {/* Glow Style - Premium */}
         <div className="space-y-3 pt-2 border-t">
           <Label className="text-sm flex items-center gap-2">
             <Sparkles className="h-4 w-4" />
             نمط التوهج (الابتهالات)
+            {!isPremium && <Lock className="h-3 w-3 text-muted-foreground" />}
           </Label>
+          {!isPremium ? (
+            <div className="text-center py-3">
+              <PremiumBadge showLock />
+            </div>
+          ) : (
           <RadioGroup
             value={settings.glowStyle || 'golden'}
             onValueChange={(value) => updateSetting('glowStyle', value as DisplaySettings['glowStyle'])}
@@ -424,6 +440,7 @@ export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPane
               </div>
             ))}
           </RadioGroup>
+          )}
         </div>
 
         {/* Lyrics Display Style */}
@@ -452,20 +469,28 @@ export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPane
           </RadioGroup>
         </div>
 
-        {/* Watermark */}
+        {/* Watermark - Premium */}
         <div className="space-y-3 pt-2 border-t">
           <div className="flex items-center justify-between">
             <Label htmlFor="watermarkEnabled" className="flex items-center gap-2 cursor-pointer">
               <Type className="h-4 w-4" />
               علامة مائية
+              {!isPremium && <Lock className="h-3 w-3 text-muted-foreground" />}
             </Label>
             <Switch
               id="watermarkEnabled"
               checked={settings.watermarkEnabled || false}
-              onCheckedChange={(checked) => updateSetting('watermarkEnabled', checked)}
+              onCheckedChange={(checked) => {
+                if (!isPremium) {
+                  toast.error('العلامة المائية متاحة للأعضاء المميزين فقط');
+                  return;
+                }
+                updateSetting('watermarkEnabled', checked);
+              }}
             />
           </div>
-          {settings.watermarkEnabled && (
+          {!isPremium && <PremiumBadge showLock />}
+          {settings.watermarkEnabled && isPremium && (
             <div className="space-y-3 pl-2">
               <div>
                 <Label className="text-xs text-muted-foreground mb-1 block">نص العلامة المائية</Label>
