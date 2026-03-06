@@ -3,8 +3,7 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Slider } from '@/components/ui/slider';
-import { Download, FileVideo, Settings2, Gauge, Loader2, Cpu } from 'lucide-react';
+import { Download, FileVideo, Settings2, Loader2, Cpu } from 'lucide-react';
 import { ExportQuality, QUALITY_PRESETS } from '@/hooks/useVideoRecorder';
 
 export type ExportFormat = 'mp4' | 'webm' | 'gif';
@@ -162,25 +161,6 @@ export function ExportFormatSelector({
           </RadioGroup>
         </div>
 
-        {/* Motion Speed */}
-        <div className="space-y-3 pt-2 border-t">
-          <Label className="text-sm flex items-center gap-2">
-            <Gauge className="h-4 w-4" />
-            سرعة حركة الخلفية
-          </Label>
-          <Slider
-            value={[settings.motionSpeed]}
-            onValueChange={([value]) => updateSetting('motionSpeed', value)}
-            min={1}
-            max={10}
-            step={0.5}
-          />
-          <div className="flex justify-between text-xs text-muted-foreground">
-            <span>بطيء (x1)</span>
-            <span className="font-medium text-primary">x{settings.motionSpeed}</span>
-            <span>سريع (x10)</span>
-          </div>
-        </div>
 
         {/* Status */}
         {isRecording && (

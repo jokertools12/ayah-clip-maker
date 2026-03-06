@@ -11,14 +11,10 @@ export function useAdmin() {
     const checkAdmin = async () => {
       if (!user) { setIsAdmin(false); setLoading(false); return; }
       
-      const { data } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', user.id)
-        .eq('role', 'admin')
-        .maybeSingle();
+      const { data, error } = await supabase
+        .rpc('has_role', { _user_id: user.id, _role: 'admin' });
 
-      setIsAdmin(!!data);
+      setIsAdmin(data === true);
       setLoading(false);
     };
     checkAdmin();
@@ -62,14 +58,41 @@ export function useAdmin() {
         expires_at: expiresAt.toISOString(),
       });
 
+    // Send email notification
+    try {
+      await supabase.functions.invoke('notify-subscription', {
+        body: { userId, status: 'approved', plan },
+      });
+    } catch (e) {
+      console.error('Failed to send notification:', e);
+    }
+
     return { success: true };
   }, []);
 
   const rejectPayment = useCallback(async (requestId: string, note?: string) => {
+    const { data: reqData } = await supabase
+      .from('payment_requests')
+      .select('user_id, plan')
+      .eq('id', requestId)
+      .single();
+
     await supabase
       .from('payment_requests')
       .update({ status: 'rejected', admin_note: note || 'تم الرفض', updated_at: new Date().toISOString() })
       .eq('id', requestId);
+
+    // Send email notification
+    if (reqData) {
+      try {
+        await supabase.functions.invoke('notify-subscription', {
+          body: { userId: reqData.user_id, status: 'rejected', plan: reqData.plan, adminNote: note || 'تم الرفض' },
+        });
+      } catch (e) {
+        console.error('Failed to send notification:', e);
+      }
+    }
+
     return { success: true };
   }, []);
 
