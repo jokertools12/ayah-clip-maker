@@ -37,11 +37,12 @@ interface Stats {
 
 export default function AdminPage() {
   const { user, loading: authLoading } = useAuth();
-  const { isAdmin, loading: adminLoading, fetchPaymentRequests, approvePayment, rejectPayment, fetchAllUsers, fetchStats } = useAdmin();
+  const { isAdmin, loading: adminLoading, fetchPaymentRequests, approvePayment, rejectPayment, fetchAllUsers, fetchStats, fetchDailyVideoStats } = useAdmin();
 
   const [requests, setRequests] = useState<PaymentRequest[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [stats, setStats] = useState<Stats>({ totalUsers: 0, totalVideos: 0, premiumUsers: 0, pendingRequests: 0 });
+  const [dailyVideoData, setDailyVideoData] = useState<any[]>([]);
   const [filter, setFilter] = useState('pending');
   const [userSearch, setUserSearch] = useState('');
   const [loadingData, setLoadingData] = useState(true);
