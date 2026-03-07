@@ -46,7 +46,7 @@ export function useAdmin() {
     checkAdmin();
     
     return () => { cancelled = true; };
-  }, [user, authLoading, checkedUserId]);
+  }, [user, authLoading]);
 
   const fetchPaymentRequests = useCallback(async (status?: string) => {
     let query = supabase.from('payment_requests').select('*').order('created_at', { ascending: false });
