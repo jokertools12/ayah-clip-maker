@@ -58,8 +58,13 @@ export default function AdminPage() {
 
   const loadAll = async () => {
     setLoadingData(true);
-    await Promise.all([loadRequests(), loadUsers(), loadStats()]);
+    await Promise.all([loadRequests(), loadUsers(), loadStats(), loadDailyVideoStats()]);
     setLoadingData(false);
+  };
+
+  const loadDailyVideoStats = async () => {
+    const data = await fetchDailyVideoStats();
+    setDailyVideoData(data);
   };
 
   const loadRequests = async () => {
