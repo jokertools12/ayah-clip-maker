@@ -3,26 +3,39 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 
 export function useAdmin() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [checkedUserId, setCheckedUserId] = useState<string | null>(null);
 
   useEffect(() => {
+    // Don't do anything while auth is still loading
+    if (authLoading) {
+      setLoading(true);
+      return;
+    }
+
+    // No user = not admin
+    if (!user) {
+      setIsAdmin(false);
+      setLoading(false);
+      return;
+    }
+
+    // Already checked this user
+    if (checkedUserId === user.id) return;
+
     let cancelled = false;
     setLoading(true);
     
     const checkAdmin = async () => {
-      if (!user) { 
-        if (!cancelled) { setIsAdmin(false); setLoading(false); }
-        return; 
-      }
-      
       try {
-        const { data, error } = await supabase
+        const { data } = await supabase
           .rpc('has_role', { _user_id: user.id, _role: 'admin' });
 
         if (!cancelled) {
           setIsAdmin(data === true);
+          setCheckedUserId(user.id);
           setLoading(false);
         }
       } catch (e) {
@@ -33,7 +46,7 @@ export function useAdmin() {
     checkAdmin();
     
     return () => { cancelled = true; };
-  }, [user]);
+  }, [user, authLoading, checkedUserId]);
 
   const fetchPaymentRequests = useCallback(async (status?: string) => {
     let query = supabase.from('payment_requests').select('*').order('created_at', { ascending: false });
