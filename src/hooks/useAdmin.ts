@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 
@@ -6,7 +6,7 @@ export function useAdmin() {
   const { user, loading: authLoading } = useAuth();
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [checkedUserId, setCheckedUserId] = useState<string | null>(null);
+  const checkedUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     // Don't do anything while auth is still loading
@@ -23,7 +23,7 @@ export function useAdmin() {
     }
 
     // Already checked this user
-    if (checkedUserId === user.id) return;
+    if (checkedUserIdRef.current === user.id) return;
 
     let cancelled = false;
     setLoading(true);
@@ -35,7 +35,7 @@ export function useAdmin() {
 
         if (!cancelled) {
           setIsAdmin(data === true);
-          setCheckedUserId(user.id);
+          checkedUserIdRef.current = user.id;
           setLoading(false);
         }
       } catch (e) {
@@ -46,7 +46,7 @@ export function useAdmin() {
     checkAdmin();
     
     return () => { cancelled = true; };
-  }, [user, authLoading, checkedUserId]);
+  }, [user, authLoading]);
 
   const fetchPaymentRequests = useCallback(async (status?: string) => {
     let query = supabase.from('payment_requests').select('*').order('created_at', { ascending: false });
