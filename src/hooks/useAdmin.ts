@@ -35,7 +35,7 @@ export function useAdmin() {
 
         if (!cancelled) {
           setIsAdmin(data === true);
-          setCheckedUserId(user.id);
+          checkedUserIdRef.current = user.id;
           setLoading(false);
         }
       } catch (e) {
