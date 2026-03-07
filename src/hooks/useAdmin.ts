@@ -130,7 +130,7 @@ export function useAdmin() {
   }, []);
 
   const fetchStats = useCallback(async () => {
-    const [{ count: totalUsers }, { count: totalVideos }, { data: subs }, { data: pendingReqs }] = await Promise.all([
+    const [{ count: totalUsers }, { count: totalVideos }, { data: subs }, { count: pendingCount }] = await Promise.all([
       supabase.from('profiles').select('*', { count: 'exact', head: true }),
       supabase.from('saved_videos').select('*', { count: 'exact', head: true }),
       supabase.from('subscriptions').select('plan').eq('status', 'active'),
@@ -143,7 +143,7 @@ export function useAdmin() {
       totalUsers: totalUsers || 0,
       totalVideos: totalVideos || 0,
       premiumUsers: premiumCount,
-      pendingRequests: pendingReqs?.length || 0,
+      pendingRequests: pendingCount || 0,
     };
   }, []);
 
