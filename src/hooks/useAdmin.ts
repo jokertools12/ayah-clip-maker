@@ -147,5 +147,30 @@ export function useAdmin() {
     };
   }, []);
 
-  return { isAdmin, loading, fetchPaymentRequests, approvePayment, rejectPayment, fetchAllUsers, fetchStats };
+  const fetchDailyVideoStats = useCallback(async () => {
+    // Get videos created in last 7 days grouped by date
+    const { data } = await supabase
+      .from('daily_video_usage')
+      .select('date, count')
+      .order('date', { ascending: true })
+      .gte('date', new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0]);
+    
+    // Aggregate by date
+    const map: Record<string, number> = {};
+    (data || []).forEach((row: any) => {
+      map[row.date] = (map[row.date] || 0) + row.count;
+    });
+
+    // Fill in missing days
+    const result = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(Date.now() - i * 86400000);
+      const dateStr = d.toISOString().split('T')[0];
+      const dayName = d.toLocaleDateString('ar-EG', { weekday: 'short' });
+      result.push({ date: dayName, videos: map[dateStr] || 0 });
+    }
+    return result;
+  }, []);
+
+  return { isAdmin, loading, fetchPaymentRequests, approvePayment, rejectPayment, fetchAllUsers, fetchStats, fetchDailyVideoStats };
 }

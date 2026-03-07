@@ -6,6 +6,8 @@ import { BookOpen, Video, Library, LogIn, LogOut, User, Music, Menu, X, Crown, S
 import { useAdmin } from '@/hooks/useAdmin';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
+import { NotificationBell } from '@/components/NotificationBell';
+import { UsageQuotaBar } from '@/components/UsageQuotaBar';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -68,7 +70,11 @@ export function Navbar() {
           </div>
 
           {/* Actions */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <div className="hidden sm:block">
+              <UsageQuotaBar />
+            </div>
+            <NotificationBell />
             <ThemeToggle />
 
             {isAuthenticated ? (

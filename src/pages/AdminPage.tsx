@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Navigate } from 'react-router-dom';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 interface PaymentRequest {
   id: string;
@@ -36,11 +37,12 @@ interface Stats {
 
 export default function AdminPage() {
   const { user, loading: authLoading } = useAuth();
-  const { isAdmin, loading: adminLoading, fetchPaymentRequests, approvePayment, rejectPayment, fetchAllUsers, fetchStats } = useAdmin();
+  const { isAdmin, loading: adminLoading, fetchPaymentRequests, approvePayment, rejectPayment, fetchAllUsers, fetchStats, fetchDailyVideoStats } = useAdmin();
 
   const [requests, setRequests] = useState<PaymentRequest[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [stats, setStats] = useState<Stats>({ totalUsers: 0, totalVideos: 0, premiumUsers: 0, pendingRequests: 0 });
+  const [dailyVideoData, setDailyVideoData] = useState<any[]>([]);
   const [filter, setFilter] = useState('pending');
   const [userSearch, setUserSearch] = useState('');
   const [loadingData, setLoadingData] = useState(true);
@@ -56,8 +58,13 @@ export default function AdminPage() {
 
   const loadAll = async () => {
     setLoadingData(true);
-    await Promise.all([loadRequests(), loadUsers(), loadStats()]);
+    await Promise.all([loadRequests(), loadUsers(), loadStats(), loadDailyVideoStats()]);
     setLoadingData(false);
+  };
+
+  const loadDailyVideoStats = async () => {
+    const data = await fetchDailyVideoStats();
+    setDailyVideoData(data);
   };
 
   const loadRequests = async () => {
@@ -252,6 +259,61 @@ export default function AdminPage() {
 
           {/* Stats */}
           <TabsContent value="stats">
+            <div className="grid md:grid-cols-2 gap-6 mb-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2"><Video className="h-5 w-5" /> الفيديوهات المنشأة (آخر 7 أيام)</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-64" dir="ltr">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={dailyVideoData}>
+                        <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                        <XAxis dataKey="date" className="text-xs" />
+                        <YAxis allowDecimals={false} className="text-xs" />
+                        <Tooltip 
+                          contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', color: 'hsl(var(--foreground))' }}
+                          labelStyle={{ color: 'hsl(var(--foreground))' }}
+                        />
+                        <Bar dataKey="videos" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} name="فيديوهات" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2"><Users className="h-5 w-5" /> توزيع الأعضاء</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-64" dir="ltr">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={[
+                            { name: 'مجاني', value: Math.max(stats.totalUsers - stats.premiumUsers, 0) },
+                            { name: 'مميز', value: stats.premiumUsers },
+                          ]}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={50}
+                          outerRadius={80}
+                          dataKey="value"
+                          label={({ name, value }) => `${name}: ${value}`}
+                        >
+                          <Cell fill="hsl(var(--muted-foreground))" />
+                          <Cell fill="hsl(var(--primary))" />
+                        </Pie>
+                        <Tooltip 
+                          contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', color: 'hsl(var(--foreground))' }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
             <div className="grid md:grid-cols-2 gap-6">
               <Card>
                 <CardHeader>
