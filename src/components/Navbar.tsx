@@ -6,6 +6,8 @@ import { BookOpen, Video, Library, LogIn, LogOut, User, Music, Menu, X, Crown, S
 import { useAdmin } from '@/hooks/useAdmin';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
+import { NotificationBell } from '@/components/NotificationBell';
+import { UsageQuotaBar } from '@/components/UsageQuotaBar';
 import {
   DropdownMenu,
   DropdownMenuContent,
