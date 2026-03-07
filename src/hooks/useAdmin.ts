@@ -23,7 +23,7 @@ export function useAdmin() {
     }
 
     // Already checked this user
-    if (checkedUserId === user.id) return;
+    if (checkedUserIdRef.current === user.id) return;
 
     let cancelled = false;
     setLoading(true);
