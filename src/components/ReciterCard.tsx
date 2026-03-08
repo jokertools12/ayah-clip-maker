@@ -1,8 +1,11 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { Play, Pause, Volume2 } from 'lucide-react';
+import { Play, Pause, Volume2, Heart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import { toast } from 'sonner';
 import type { Reciter } from '@/data/reciters';
 import { getPreviewAudioUrl } from '@/data/reciters';
 
@@ -13,8 +16,45 @@ interface ReciterCardProps {
 }
 
 export function ReciterCard({ reciter, isSelected, onClick }: ReciterCardProps) {
+  const { user, isAuthenticated } = useAuth();
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
+  const [isFavorite, setIsFavorite] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('favorite_reciters' as any)
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('reciter_id', reciter.id)
+      .maybeSingle()
+      .then(({ data }) => setIsFavorite(!!data));
+  }, [user, reciter.id]);
+
+  const toggleFavorite = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!isAuthenticated || !user) {
+      toast.error('سجل دخول أولاً');
+      return;
+    }
+
+    if (isFavorite) {
+      await supabase
+        .from('favorite_reciters' as any)
+        .delete()
+        .eq('user_id', user.id)
+        .eq('reciter_id', reciter.id);
+      setIsFavorite(false);
+      toast.success('تم الإزالة من المفضلة');
+    } else {
+      await supabase
+        .from('favorite_reciters' as any)
+        .insert({ user_id: user.id, reciter_id: reciter.id });
+      setIsFavorite(true);
+      toast.success('تم الإضافة للمفضلة');
+    }
+  }, [isFavorite, user, isAuthenticated, reciter.id]);
 
   const togglePreview = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -26,7 +66,6 @@ export function ReciterCard({ reciter, isSelected, onClick }: ReciterCardProps) 
       return;
     }
 
-    // Stop any existing audio
     if (audioRef.current) {
       audioRef.current.pause();
     }
@@ -38,7 +77,6 @@ export function ReciterCard({ reciter, isSelected, onClick }: ReciterCardProps) 
     audio.onended = () => setIsPreviewPlaying(false);
     audio.onerror = () => setIsPreviewPlaying(false);
 
-    // Play only 15 seconds as preview
     audio.play().then(() => {
       setIsPreviewPlaying(true);
       setTimeout(() => {
@@ -73,6 +111,16 @@ export function ReciterCard({ reciter, isSelected, onClick }: ReciterCardProps) 
           <h3 className="font-bold text-sm leading-tight truncate">{reciter.name}</h3>
           <p className="text-xs text-muted-foreground truncate">{reciter.description}</p>
         </div>
+
+        {/* Favorite Button */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 rounded-full shrink-0"
+          onClick={toggleFavorite}
+        >
+          <Heart className={cn("h-4 w-4", isFavorite && "fill-red-500 text-red-500")} />
+        </Button>
 
         {/* Preview Button */}
         <Button
