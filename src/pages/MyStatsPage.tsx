@@ -59,7 +59,7 @@ export default function MyStatsPage() {
   if (!isAuthenticated) return <Navigate to="/auth" replace />;
 
   // ── Stats calculations ──
-  const totalVideos = videos.length;
+  const totalVideos = totalCreated;
 
   // Top reciters
   const reciterCounts: Record<string, number> = {};
