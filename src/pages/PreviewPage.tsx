@@ -216,6 +216,7 @@ export default function PreviewPage() {
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
+  const [isPublicVideo, setIsPublicVideo] = useState(false);
   const [audioLoaded, setAudioLoaded] = useState(false);
   const [audioError, setAudioError] = useState(false);
   const [activeTab, setActiveTab] = useState('controls');
@@ -1192,6 +1193,7 @@ export default function PreviewPage() {
         end_ayah: isIbtahalatMode ? 0 : endAyah,
         background_type: backgroundType,
         aspect_ratio: aspectRatio,
+        is_public: isPublicVideo,
       });
       if (error) throw error;
       toast.success('تم حفظ الفيديو في مكتبتك!');
@@ -1638,6 +1640,17 @@ export default function PreviewPage() {
                           text={`استمع لتلاوة ${surah?.name} بصوت ${reciter?.name}`}
                           filename={downloadFilename}
                         />
+
+                        {/* Public toggle */}
+                        <label className="flex items-center gap-2 px-1 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={isPublicVideo}
+                            onChange={(e) => setIsPublicVideo(e.target.checked)}
+                            className="rounded border-border"
+                          />
+                          <span className="text-sm text-muted-foreground">مشاركة في صفحة اكتشف</span>
+                        </label>
 
                         <Button
                           onClick={handleSave}

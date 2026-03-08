@@ -21,6 +21,7 @@ const navLinks = [
   { to: '/ibtahalat', label: 'تصفح الابتهالات', icon: Music },
   { to: '/pricing', label: 'الأسعار', icon: Crown },
   { to: '/discover', label: 'اكتشف', icon: Compass },
+  { to: '/leaderboard', label: 'المتصدرين', icon: Trophy },
 ];
 
 export function Navbar() {

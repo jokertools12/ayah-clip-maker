@@ -18,6 +18,7 @@ import PaymentHistoryPage from "./pages/PaymentHistoryPage";
 import MyStatsPage from "./pages/MyStatsPage";
 import AchievementsPage from "./pages/AchievementsPage";
 import DiscoverPage from "./pages/DiscoverPage";
+import LeaderboardPage from "./pages/LeaderboardPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -44,6 +45,7 @@ const App = () => (
           <Route path="/my-stats" element={<MyStatsPage />} />
           <Route path="/achievements" element={<AchievementsPage />} />
           <Route path="/discover" element={<DiscoverPage />} />
+          <Route path="/leaderboard" element={<LeaderboardPage />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
