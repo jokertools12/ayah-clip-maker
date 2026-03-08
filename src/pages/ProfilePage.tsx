@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Layout } from '@/components/Layout';
 import { supabase } from '@/integrations/supabase/client';
@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
-  User, Trophy, Video, Star, Heart, BookOpen, Mic, Share2, Loader2,
+  User, Trophy, Video, Star, BookOpen, Mic, Share2, Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -16,6 +16,7 @@ interface ProfileData {
   user_id: string;
   display_name: string | null;
   avatar_url: string | null;
+  bio: string | null;
   created_at: string;
 }
 
@@ -26,16 +27,12 @@ interface PublicVideo {
   start_ayah: number;
   end_ayah: number;
   created_at: string;
-  aspect_ratio: string;
 }
 
-interface Achievement {
+interface AchievementData {
   id: string;
   title: string;
-  description: string;
-  icon: string;
   points: number;
-  unlocked_at: string;
 }
 
 export default function ProfilePage() {
@@ -44,36 +41,28 @@ export default function ProfilePage() {
   const { user: currentUser } = useAuth();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [videos, setVideos] = useState<PublicVideo[]>([]);
-  const [achievements, setAchievements] = useState<Achievement[]>([]);
+  const [achievements, setAchievements] = useState<AchievementData[]>([]);
   const [totalPoints, setTotalPoints] = useState(0);
   const [loading, setLoading] = useState(true);
-
-  const isOwnProfile = currentUser?.id === userId;
 
   useEffect(() => {
     if (!userId) return;
     const load = async () => {
       setLoading(true);
-
       const [{ data: profileData }, { data: videosData }, { data: userAch }, { data: allAch }] = await Promise.all([
-        supabase.from('profiles').select('*').eq('user_id', userId).maybeSingle(),
-        supabase.from('saved_videos').select('*').eq('user_id', userId).eq('is_public', true).order('created_at', { ascending: false }).limit(20),
-        supabase.from('user_achievements').select('achievement_id, unlocked_at').eq('user_id', userId),
-        supabase.from('achievements').select('*'),
+        supabase.from('profiles').select('user_id, display_name, avatar_url, bio, created_at').eq('user_id', userId).maybeSingle(),
+        supabase.from('saved_videos').select('id, surah_name, reciter_name, start_ayah, end_ayah, created_at').eq('user_id', userId).eq('is_public', true).order('created_at', { ascending: false }).limit(20),
+        supabase.from('user_achievements').select('achievement_id').eq('user_id', userId),
+        supabase.from('achievements').select('id, title, points'),
       ]);
 
       setProfile(profileData as ProfileData | null);
       setVideos((videosData || []) as PublicVideo[]);
 
-      // Map achievements
       const achMap = new Map((allAch || []).map((a: any) => [a.id, a]));
-      const mapped = (userAch || []).map((ua: any) => {
-        const ach = achMap.get(ua.achievement_id) as any;
-        return ach ? { ...ach, unlocked_at: ua.unlocked_at } : null;
-      }).filter(Boolean) as Achievement[];
-
+      const mapped = (userAch || []).map((ua: any) => achMap.get(ua.achievement_id)).filter(Boolean) as AchievementData[];
       setAchievements(mapped);
-      setTotalPoints(mapped.reduce((sum, a) => sum + a.points, 0));
+      setTotalPoints(mapped.reduce((s, a) => s + a.points, 0));
       setLoading(false);
     };
     load();
@@ -104,15 +93,16 @@ export default function ProfilePage() {
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
           <Card className="mb-8 overflow-hidden">
             <div className="bg-gradient-to-br from-primary/20 to-accent/10 p-8 text-center">
-              <div className="h-20 w-20 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-4 border-4 border-background">
+              <div className="h-20 w-20 rounded-full bg-muted flex items-center justify-center mx-auto mb-4 border-4 border-background shadow-lg overflow-hidden">
                 {profile.avatar_url ? (
-                  <img src={profile.avatar_url} alt="" className="h-full w-full rounded-full object-cover" />
+                  <img src={profile.avatar_url} alt="" className="h-full w-full object-cover" />
                 ) : (
-                  <User className="h-10 w-10 text-primary" />
+                  <User className="h-10 w-10 text-muted-foreground" />
                 )}
               </div>
               <h1 className="text-2xl font-bold">{profile.display_name || 'مستخدم'}</h1>
-              <p className="text-sm text-muted-foreground mt-1">
+              {profile.bio && <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">{profile.bio}</p>}
+              <p className="text-xs text-muted-foreground mt-1">
                 انضم {new Date(profile.created_at).toLocaleDateString('ar-EG', { year: 'numeric', month: 'long' })}
               </p>
 
