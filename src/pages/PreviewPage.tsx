@@ -912,9 +912,10 @@ export default function PreviewPage() {
       return;
     }
 
-    // Check daily usage limit
+    // Check daily usage limit - enforce strictly by pre-checking
     if (isAuthenticated && user) {
-      if (dailyUsage.count >= videoLimit) {
+      const canCreate = await incrementUsage();
+      if (!canCreate) {
         toast.error(`لقد وصلت للحد اليومي (${videoLimit} فيديو). ${!isPremium ? 'اشترك في العضوية المميزة لـ 100 فيديو يومياً' : ''}`);
         return;
       }
@@ -1107,10 +1108,6 @@ export default function PreviewPage() {
           );
 
           if (blob) {
-            // Increment daily usage count
-            if (isAuthenticated && user) {
-              await incrementUsage();
-            }
             toast.success('تم إنشاء الفيديو بنجاح!');
             return;
           }

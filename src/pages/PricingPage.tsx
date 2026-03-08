@@ -53,6 +53,10 @@ const PREMIUM_FEATURES_LIST = [
   { icon: Music, text: 'تأثيرات صوتية متقدمة' },
   { icon: Star, text: 'قوالب جاهزة احترافية' },
   { icon: Crown, text: 'علامة مائية مخصصة' },
+  { icon: Video, text: 'تصدير 1080p Full HD و Ultra' },
+  { icon: Sparkles, text: 'تصدير دفعات متعددة' },
+  { icon: Star, text: 'دعم أولوية سريع' },
+  { icon: Crown, text: 'براندنج وشعار مخصص' },
 ];
 
 const FREE_FEATURES = [
