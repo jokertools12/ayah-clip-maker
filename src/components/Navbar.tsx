@@ -2,7 +2,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useAuth } from '@/hooks/useAuth';
-import { BookOpen, Video, Library, LogIn, LogOut, User, Music, Menu, X, Crown, Settings, Shield, CreditCard } from 'lucide-react';
+import { BookOpen, Video, Library, LogIn, LogOut, User, Music, Menu, X, Crown, Settings, Shield, CreditCard, BarChart3 } from 'lucide-react';
 import { useAdmin } from '@/hooks/useAdmin';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
