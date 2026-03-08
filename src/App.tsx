@@ -21,6 +21,7 @@ import AchievementsPage from "./pages/AchievementsPage";
 import DiscoverPage from "./pages/DiscoverPage";
 import LeaderboardPage from "./pages/LeaderboardPage";
 import ProfilePage from "./pages/ProfilePage";
+import FavoritesPage from "./pages/FavoritesPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
