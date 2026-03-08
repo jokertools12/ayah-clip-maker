@@ -187,7 +187,6 @@ export default function LeaderboardPage() {
                               </Link>
                               {isMe && <Badge variant="secondary" className="mr-2 text-xs">أنت</Badge>}
                             </p>
-                            </p>
                             <p className="text-xs text-muted-foreground">
                               {entry.achievement_count} إنجاز • {entry.video_count} فيديو عام
                             </p>
