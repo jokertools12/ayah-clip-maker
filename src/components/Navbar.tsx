@@ -20,6 +20,7 @@ const navLinks = [
   { to: '/surahs', label: 'تصفح السور', icon: BookOpen },
   { to: '/ibtahalat', label: 'تصفح الابتهالات', icon: Music },
   { to: '/pricing', label: 'الأسعار', icon: Crown },
+  { to: '/discover', label: 'اكتشف', icon: Compass },
 ];
 
 export function Navbar() {
