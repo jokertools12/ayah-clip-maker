@@ -186,6 +186,14 @@ export function Navbar() {
                       <Settings className="h-5 w-5 text-primary" />
                       <span className="font-medium">الإعدادات</span>
                     </Link>
+                    <Link
+                      to="/my-stats"
+                      onClick={() => setMobileOpen(false)}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-foreground hover:bg-muted/50 transition-colors"
+                    >
+                      <BarChart3 className="h-5 w-5 text-primary" />
+                      <span className="font-medium">إحصائياتي</span>
+                    </Link>
                     {isAdmin && (
                       <Link
                         to="/admin"

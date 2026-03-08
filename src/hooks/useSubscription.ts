@@ -29,6 +29,12 @@ export const PREMIUM_FEATURES = {
   customWatermark: true,
   motionSpeed: true,
   presets: true,
+  hd1080Export: true,
+  ultraQuality: true,
+  batchExport: true,
+  prioritySupport: true,
+  noAds: true,
+  customBranding: true,
 } as const;
 
 export const FREE_FONTS = [
