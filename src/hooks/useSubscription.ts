@@ -85,30 +85,37 @@ export function useSubscription() {
     if (!user) return false;
     const today = new Date().toISOString().split('T')[0];
     
-    // Check limit
-    if (dailyUsage.count >= videoLimit) return false;
-
-    const { data: existing } = await supabase
+    // Re-fetch from DB to get the REAL current count (avoid stale state)
+    const { data: freshUsage } = await supabase
       .from('daily_video_usage')
       .select('id, count')
       .eq('user_id', user.id)
       .eq('date', today)
       .maybeSingle();
 
-    if (existing) {
+    const currentCount = (freshUsage as any)?.count || 0;
+
+    // Enforce limit strictly
+    if (currentCount >= videoLimit) {
+      // Update local state to reflect reality
+      setDailyUsage({ count: currentCount, limit: videoLimit });
+      return false;
+    }
+
+    if (freshUsage) {
       await supabase
         .from('daily_video_usage')
-        .update({ count: (existing as any).count + 1 })
-        .eq('id', (existing as any).id);
+        .update({ count: currentCount + 1 })
+        .eq('id', (freshUsage as any).id);
     } else {
       await supabase
         .from('daily_video_usage')
         .insert({ user_id: user.id, date: today, count: 1 });
     }
 
-    await fetchDailyUsage();
+    setDailyUsage({ count: currentCount + 1, limit: videoLimit });
     return true;
-  }, [user, dailyUsage.count, videoLimit, fetchDailyUsage]);
+  }, [user, videoLimit]);
 
   const canUseFeature = useCallback((feature: keyof typeof PREMIUM_FEATURES): boolean => {
     if (!PREMIUM_FEATURES[feature]) return true;
