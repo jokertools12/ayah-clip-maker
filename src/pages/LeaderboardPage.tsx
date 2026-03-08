@@ -182,8 +182,11 @@ export default function LeaderboardPage() {
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="font-medium text-sm truncate">
-                              {entry.display_name || 'مستخدم مجهول'}
+                              <Link to={`/profile?id=${entry.user_id}`} className="hover:text-primary transition-colors">
+                                {entry.display_name || 'مستخدم'}
+                              </Link>
                               {isMe && <Badge variant="secondary" className="mr-2 text-xs">أنت</Badge>}
+                            </p>
                             </p>
                             <p className="text-xs text-muted-foreground">
                               {entry.achievement_count} إنجاز • {entry.video_count} فيديو عام
