@@ -1641,6 +1641,17 @@ export default function PreviewPage() {
                           filename={downloadFilename}
                         />
 
+                        {/* Public toggle */}
+                        <label className="flex items-center gap-2 px-1 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={isPublicVideo}
+                            onChange={(e) => setIsPublicVideo(e.target.checked)}
+                            className="rounded border-border"
+                          />
+                          <span className="text-sm text-muted-foreground">مشاركة في صفحة اكتشف</span>
+                        </label>
+
                         <Button
                           onClick={handleSave}
                           disabled={isSaving}
