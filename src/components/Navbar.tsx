@@ -106,6 +106,12 @@ export function Navbar() {
                       <span>سجل المدفوعات</span>
                     </Link>
                   </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/my-stats" className="flex items-center gap-2">
+                      <BarChart3 className="h-4 w-4" />
+                      <span>إحصائياتي</span>
+                    </Link>
+                  </DropdownMenuItem>
                   {isAdmin && (
                     <DropdownMenuItem asChild>
                       <Link to="/admin" className="flex items-center gap-2">
