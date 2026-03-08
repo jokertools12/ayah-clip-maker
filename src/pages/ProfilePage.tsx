@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
-  User, Trophy, Video, Star, BookOpen, Mic, Share2, Loader2,
+  User, Trophy, Video, Star, BookOpen, Mic, Share2, Loader2, UserPlus, UserCheck, Users,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
