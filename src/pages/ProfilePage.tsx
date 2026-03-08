@@ -138,6 +138,14 @@ export default function ProfilePage() {
 
               <div className="flex items-center justify-center gap-6 mt-4">
                 <div className="text-center">
+                  <p className="text-2xl font-bold text-primary">{followersCount}</p>
+                  <p className="text-xs text-muted-foreground">متابِع</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold">{followingCount}</p>
+                  <p className="text-xs text-muted-foreground">يتابع</p>
+                </div>
+                <div className="text-center">
                   <p className="text-2xl font-bold text-primary">{totalPoints}</p>
                   <p className="text-xs text-muted-foreground">نقطة</p>
                 </div>
@@ -151,10 +159,18 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              <Button size="sm" variant="outline" onClick={shareProfile} className="mt-4 gap-1">
-                <Share2 className="h-4 w-4" />
-                مشاركة
-              </Button>
+              <div className="flex items-center justify-center gap-2 mt-4">
+                {currentUser && userId !== currentUser?.id && (
+                  <Button size="sm" variant={isFollowing ? 'secondary' : 'default'} onClick={toggleFollow} disabled={followLoading} className="gap-1">
+                    {isFollowing ? <UserCheck className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
+                    {isFollowing ? 'متابَع' : 'متابعة'}
+                  </Button>
+                )}
+                <Button size="sm" variant="outline" onClick={shareProfile} className="gap-1">
+                  <Share2 className="h-4 w-4" />
+                  مشاركة
+                </Button>
+              </div>
             </div>
           </Card>
         </motion.div>

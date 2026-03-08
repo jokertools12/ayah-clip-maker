@@ -120,6 +120,12 @@ export function Navbar() {
                       <span>الإنجازات</span>
                     </Link>
                   </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/favorites" className="flex items-center gap-2">
+                      <Heart className="h-4 w-4" />
+                      <span>المفضلة</span>
+                    </Link>
+                  </DropdownMenuItem>
                   {isAdmin && (
                     <DropdownMenuItem asChild>
                       <Link to="/admin" className="flex items-center gap-2">
