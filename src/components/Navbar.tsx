@@ -201,6 +201,14 @@ export function Navbar() {
                       <BarChart3 className="h-5 w-5 text-primary" />
                       <span className="font-medium">إحصائياتي</span>
                     </Link>
+                    <Link
+                      to="/achievements"
+                      onClick={() => setMobileOpen(false)}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-foreground hover:bg-muted/50 transition-colors"
+                    >
+                      <Trophy className="h-5 w-5 text-primary" />
+                      <span className="font-medium">الإنجازات</span>
+                    </Link>
                     {isAdmin && (
                       <Link
                         to="/admin"
