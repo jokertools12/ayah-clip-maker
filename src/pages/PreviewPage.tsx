@@ -1108,10 +1108,6 @@ export default function PreviewPage() {
           );
 
           if (blob) {
-            // Increment daily usage count
-            if (isAuthenticated && user) {
-              await incrementUsage();
-            }
             toast.success('تم إنشاء الفيديو بنجاح!');
             return;
           }
