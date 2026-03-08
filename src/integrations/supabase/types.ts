@@ -71,6 +71,27 @@ export type Database = {
         }
         Relationships: []
       }
+      favorite_reciters: {
+        Row: {
+          created_at: string
+          id: string
+          reciter_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          reciter_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          reciter_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       favorite_surahs: {
         Row: {
           created_at: string
@@ -321,6 +342,38 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      video_comments: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          user_id: string
+          video_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          user_id: string
+          video_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+          video_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "video_comments_video_id_fkey"
+            columns: ["video_id"]
+            isOneToOne: false
+            referencedRelation: "saved_videos"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       video_likes: {
         Row: {

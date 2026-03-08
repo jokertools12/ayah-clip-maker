@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Link } from 'react-router-dom';
 import { Layout } from '@/components/Layout';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Compass, Heart, Share2, Video, Mic, BookOpen, Loader2, Clock,
+  MessageCircle, Send, User, Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -24,6 +27,15 @@ interface PublicVideo {
   user_id: string;
   likes_count: number;
   is_liked: boolean;
+  comments_count: number;
+}
+
+interface Comment {
+  id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+  display_name: string | null;
 }
 
 export default function DiscoverPage() {
@@ -31,6 +43,11 @@ export default function DiscoverPage() {
   const [videos, setVideos] = useState<PublicVideo[]>([]);
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState<'latest' | 'popular'>('latest');
+  const [expandedComments, setExpandedComments] = useState<string | null>(null);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [commentText, setCommentText] = useState('');
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [submittingComment, setSubmittingComment] = useState(false);
 
   const fetchVideos = async () => {
     setLoading(true);
@@ -50,18 +67,22 @@ export default function DiscoverPage() {
 
     const videoIds = publicVideos.map(v => v.id);
 
-    // Fetch like counts
-    const { data: likesData } = await supabase
-      .from('video_likes')
-      .select('video_id')
-      .in('video_id', videoIds);
+    // Fetch like counts & comment counts
+    const [{ data: likesData }, { data: commentsData }] = await Promise.all([
+      supabase.from('video_likes').select('video_id').in('video_id', videoIds),
+      supabase.from('video_comments' as any).select('video_id').in('video_id', videoIds),
+    ]);
 
     const likeCounts: Record<string, number> = {};
     (likesData || []).forEach((l: any) => {
       likeCounts[l.video_id] = (likeCounts[l.video_id] || 0) + 1;
     });
 
-    // Fetch user's likes
+    const commentCounts: Record<string, number> = {};
+    ((commentsData as any[]) || []).forEach((c: any) => {
+      commentCounts[c.video_id] = (commentCounts[c.video_id] || 0) + 1;
+    });
+
     let userLikes = new Set<string>();
     if (user) {
       const { data: myLikes } = await supabase
@@ -76,6 +97,7 @@ export default function DiscoverPage() {
       ...v,
       likes_count: likeCounts[v.id] || 0,
       is_liked: userLikes.has(v.id),
+      comments_count: commentCounts[v.id] || 0,
     }));
 
     if (sortBy === 'popular') {
@@ -104,6 +126,72 @@ export default function DiscoverPage() {
       await supabase.from('video_likes').insert({ user_id: user.id, video_id: videoId });
       setVideos(prev => prev.map(v => v.id === videoId ? { ...v, is_liked: true, likes_count: v.likes_count + 1 } : v));
     }
+  };
+
+  const loadComments = async (videoId: string) => {
+    if (expandedComments === videoId) {
+      setExpandedComments(null);
+      return;
+    }
+    setExpandedComments(videoId);
+    setLoadingComments(true);
+    setCommentText('');
+
+    const { data } = await supabase
+      .from('video_comments' as any)
+      .select('id, user_id, content, created_at')
+      .eq('video_id', videoId)
+      .order('created_at', { ascending: true });
+
+    // Fetch display names
+    const userIds = [...new Set(((data as any[]) || []).map((c: any) => c.user_id))];
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('user_id, display_name')
+      .in('user_id', userIds);
+
+    const nameMap: Record<string, string | null> = {};
+    (profiles || []).forEach((p: any) => { nameMap[p.user_id] = p.display_name; });
+
+    setComments(((data as any[]) || []).map((c: any) => ({
+      ...c,
+      display_name: nameMap[c.user_id] || null,
+    })));
+    setLoadingComments(false);
+  };
+
+  const submitComment = async (videoId: string) => {
+    if (!isAuthenticated || !user) {
+      toast.error('سجل دخول أولاً للتعليق');
+      return;
+    }
+    if (!commentText.trim()) return;
+    setSubmittingComment(true);
+
+    const { data, error } = await supabase
+      .from('video_comments' as any)
+      .insert({ video_id: videoId, user_id: user.id, content: commentText.trim() })
+      .select('id, user_id, content, created_at')
+      .single();
+
+    if (!error && data) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('display_name')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      setComments(prev => [...prev, { ...(data as any), display_name: (profile as any)?.display_name || null }]);
+      setCommentText('');
+      setVideos(prev => prev.map(v => v.id === videoId ? { ...v, comments_count: v.comments_count + 1 } : v));
+    }
+    setSubmittingComment(false);
+  };
+
+  const deleteComment = async (commentId: string, videoId: string) => {
+    await supabase.from('video_comments' as any).delete().eq('id', commentId);
+    setComments(prev => prev.filter(c => c.id !== commentId));
+    setVideos(prev => prev.map(v => v.id === videoId ? { ...v, comments_count: Math.max(0, v.comments_count - 1) } : v));
   };
 
   const shareVideo = (video: PublicVideo) => {
@@ -175,9 +263,15 @@ export default function DiscoverPage() {
                   </div>
 
                   <CardContent className="p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Mic className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm font-medium">{video.reciter_name}</span>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Mic className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm font-medium">{video.reciter_name}</span>
+                      </div>
+                      <Link to={`/profile?id=${video.user_id}`} className="text-xs text-primary hover:underline flex items-center gap-1">
+                        <User className="h-3 w-3" />
+                        الملف الشخصي
+                      </Link>
                     </div>
 
                     <div className="flex items-center gap-2 mb-3 flex-wrap">
@@ -197,10 +291,86 @@ export default function DiscoverPage() {
                         <Heart className={`h-4 w-4 ${video.is_liked ? 'fill-current' : ''}`} />
                         {video.likes_count}
                       </Button>
+                      <Button
+                        size="sm"
+                        variant={expandedComments === video.id ? 'default' : 'outline'}
+                        onClick={() => loadComments(video.id)}
+                        className="gap-1 flex-1"
+                      >
+                        <MessageCircle className="h-4 w-4" />
+                        {video.comments_count}
+                      </Button>
                       <Button size="sm" variant="outline" onClick={() => shareVideo(video)} className="gap-1">
                         <Share2 className="h-4 w-4" />
                       </Button>
                     </div>
+
+                    {/* Comments Section */}
+                    <AnimatePresence>
+                      {expandedComments === video.id && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          className="overflow-hidden mt-4 border-t border-border pt-3"
+                        >
+                          {loadingComments ? (
+                            <div className="flex justify-center py-4">
+                              <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                            </div>
+                          ) : (
+                            <>
+                              <div className="space-y-2 max-h-48 overflow-y-auto mb-3">
+                                {comments.length === 0 ? (
+                                  <p className="text-xs text-muted-foreground text-center py-2">لا توجد تعليقات بعد</p>
+                                ) : comments.map(c => (
+                                  <div key={c.id} className="flex items-start gap-2 text-sm">
+                                    <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center shrink-0">
+                                      <User className="h-3 w-3 text-muted-foreground" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <span className="font-medium text-xs">{c.display_name || 'مستخدم'}</span>
+                                      <p className="text-xs text-foreground">{c.content}</p>
+                                      <p className="text-[10px] text-muted-foreground">{timeAgo(c.created_at)}</p>
+                                    </div>
+                                    {c.user_id === user?.id && (
+                                      <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => deleteComment(c.id, video.id)}>
+                                        <Trash2 className="h-3 w-3 text-destructive" />
+                                      </Button>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+
+                              {/* Comment Input */}
+                              {isAuthenticated ? (
+                                <div className="flex gap-2">
+                                  <Input
+                                    placeholder="أضف تعليقاً..."
+                                    value={commentText}
+                                    onChange={(e) => setCommentText(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && submitComment(video.id)}
+                                    className="text-sm h-8"
+                                  />
+                                  <Button
+                                    size="icon"
+                                    className="h-8 w-8 shrink-0"
+                                    onClick={() => submitComment(video.id)}
+                                    disabled={submittingComment || !commentText.trim()}
+                                  >
+                                    <Send className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
+                              ) : (
+                                <p className="text-xs text-center text-muted-foreground">
+                                  <Link to="/auth" className="text-primary hover:underline">سجل دخول</Link> للتعليق
+                                </p>
+                              )}
+                            </>
+                          )}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </CardContent>
                 </Card>
               </motion.div>
