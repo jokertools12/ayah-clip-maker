@@ -16,6 +16,8 @@ import AdminPage from "./pages/AdminPage";
 import UserSettingsPage from "./pages/UserSettingsPage";
 import PaymentHistoryPage from "./pages/PaymentHistoryPage";
 import MyStatsPage from "./pages/MyStatsPage";
+import AchievementsPage from "./pages/AchievementsPage";
+import DiscoverPage from "./pages/DiscoverPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
