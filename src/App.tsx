@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { AchievementUnlockOverlay } from "@/components/AchievementUnlockNotification";
 import Index from "./pages/Index";
 import SurahsPage from "./pages/SurahsPage";
 import CreatePage from "./pages/CreatePage";
@@ -19,6 +20,7 @@ import MyStatsPage from "./pages/MyStatsPage";
 import AchievementsPage from "./pages/AchievementsPage";
 import DiscoverPage from "./pages/DiscoverPage";
 import LeaderboardPage from "./pages/LeaderboardPage";
+import ProfilePage from "./pages/ProfilePage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,6 +30,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
+      <AchievementUnlockOverlay />
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
@@ -46,6 +49,7 @@ const App = () => (
           <Route path="/achievements" element={<AchievementsPage />} />
           <Route path="/discover" element={<DiscoverPage />} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

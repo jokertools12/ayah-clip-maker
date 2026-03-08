@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
-import { toast } from 'sonner';
+import { triggerAchievementNotification } from '@/components/AchievementUnlockNotification';
 
 interface Achievement {
   id: string;
@@ -61,12 +61,22 @@ export function useAchievements() {
       .eq('status', 'active')
       .maybeSingle();
 
+    // Also count from daily_video_usage for total created videos (not just saved)
+    const { data: usageData } = await supabase
+      .from('daily_video_usage')
+      .select('count')
+      .eq('user_id', user.id);
+    const totalCreated = (usageData || []).reduce((s: number, r: any) => s + (r.count || 0), 0);
+
+    // Use max of saved and usage-tracked counts
+    const effectiveVideoCount = Math.max(videoCount || 0, totalCreated);
+
     const statsMap: Record<string, number> = {
-      first_video: videoCount || 0,
-      five_videos: videoCount || 0,
-      twenty_videos: videoCount || 0,
-      fifty_videos: videoCount || 0,
-      hundred_videos: videoCount || 0,
+      first_video: effectiveVideoCount,
+      five_videos: effectiveVideoCount,
+      twenty_videos: effectiveVideoCount,
+      fifty_videos: effectiveVideoCount,
+      hundred_videos: effectiveVideoCount,
       first_favorite: favCount || 0,
       five_favorites: favCount || 0,
       five_reciters: uniqueReciters,
@@ -86,7 +96,13 @@ export function useAchievements() {
           .insert({ user_id: user.id, achievement_id: ach.id });
 
         if (!error) {
-          toast.success(`🏆 إنجاز جديد: ${ach.title}!`, { description: ach.description, duration: 5000 });
+          // Trigger animated notification
+          triggerAchievementNotification({
+            id: ach.id,
+            title: ach.title,
+            description: ach.description,
+            points: ach.points,
+          });
           setUnlocked(prev => [...prev, { achievement_id: ach.id, unlocked_at: new Date().toISOString() }]);
         }
       }

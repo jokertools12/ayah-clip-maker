@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { Link } from 'react-router-dom';
 import { Layout } from '@/components/Layout';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -181,7 +182,9 @@ export default function LeaderboardPage() {
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="font-medium text-sm truncate">
-                              {entry.display_name || 'مستخدم مجهول'}
+                              <Link to={`/profile?id=${entry.user_id}`} className="hover:text-primary transition-colors">
+                                {entry.display_name || 'مستخدم'}
+                              </Link>
                               {isMe && <Badge variant="secondary" className="mr-2 text-xs">أنت</Badge>}
                             </p>
                             <p className="text-xs text-muted-foreground">
