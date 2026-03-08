@@ -216,6 +216,7 @@ export default function PreviewPage() {
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
+  const [isPublicVideo, setIsPublicVideo] = useState(false);
   const [audioLoaded, setAudioLoaded] = useState(false);
   const [audioError, setAudioError] = useState(false);
   const [activeTab, setActiveTab] = useState('controls');
