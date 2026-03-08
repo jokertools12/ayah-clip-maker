@@ -16,6 +16,8 @@ import AdminPage from "./pages/AdminPage";
 import UserSettingsPage from "./pages/UserSettingsPage";
 import PaymentHistoryPage from "./pages/PaymentHistoryPage";
 import MyStatsPage from "./pages/MyStatsPage";
+import AchievementsPage from "./pages/AchievementsPage";
+import DiscoverPage from "./pages/DiscoverPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -40,6 +42,8 @@ const App = () => (
           <Route path="/settings" element={<UserSettingsPage />} />
           <Route path="/payment-history" element={<PaymentHistoryPage />} />
           <Route path="/my-stats" element={<MyStatsPage />} />
+          <Route path="/achievements" element={<AchievementsPage />} />
+          <Route path="/discover" element={<DiscoverPage />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
