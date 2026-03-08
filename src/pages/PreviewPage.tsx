@@ -1193,6 +1193,7 @@ export default function PreviewPage() {
         end_ayah: isIbtahalatMode ? 0 : endAyah,
         background_type: backgroundType,
         aspect_ratio: aspectRatio,
+        is_public: isPublicVideo,
       });
       if (error) throw error;
       toast.success('تم حفظ الفيديو في مكتبتك!');
