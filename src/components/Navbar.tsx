@@ -113,6 +113,12 @@ export function Navbar() {
                       <span>إحصائياتي</span>
                     </Link>
                   </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/achievements" className="flex items-center gap-2">
+                      <Trophy className="h-4 w-4" />
+                      <span>الإنجازات</span>
+                    </Link>
+                  </DropdownMenuItem>
                   {isAdmin && (
                     <DropdownMenuItem asChild>
                       <Link to="/admin" className="flex items-center gap-2">
