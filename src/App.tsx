@@ -18,6 +18,7 @@ import PaymentHistoryPage from "./pages/PaymentHistoryPage";
 import MyStatsPage from "./pages/MyStatsPage";
 import AchievementsPage from "./pages/AchievementsPage";
 import DiscoverPage from "./pages/DiscoverPage";
+import LeaderboardPage from "./pages/LeaderboardPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
