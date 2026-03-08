@@ -44,20 +44,34 @@ export default function ProfilePage() {
   const [achievements, setAchievements] = useState<AchievementData[]>([]);
   const [totalPoints, setTotalPoints] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [followersCount, setFollowersCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
+  const [followLoading, setFollowLoading] = useState(false);
 
   useEffect(() => {
     if (!userId) return;
     const load = async () => {
       setLoading(true);
-      const [{ data: profileData }, { data: videosData }, { data: userAch }, { data: allAch }] = await Promise.all([
+      const [{ data: profileData }, { data: videosData }, { data: userAch }, { data: allAch }, { data: followers }, { data: following }] = await Promise.all([
         supabase.from('profiles').select('user_id, display_name, avatar_url, bio, created_at').eq('user_id', userId).maybeSingle(),
         supabase.from('saved_videos').select('id, surah_name, reciter_name, start_ayah, end_ayah, created_at').eq('user_id', userId).eq('is_public', true).order('created_at', { ascending: false }).limit(20),
         supabase.from('user_achievements').select('achievement_id').eq('user_id', userId),
         supabase.from('achievements').select('id, title, points'),
+        supabase.from('user_follows' as any).select('id').eq('following_id', userId),
+        supabase.from('user_follows' as any).select('id').eq('follower_id', userId),
       ]);
 
       setProfile(profileData as ProfileData | null);
       setVideos((videosData || []) as PublicVideo[]);
+      setFollowersCount((followers as any[] || []).length);
+      setFollowingCount((following as any[] || []).length);
+
+      // Check if current user follows this profile
+      if (currentUser && userId !== currentUser.id) {
+        const { data: followCheck } = await supabase.from('user_follows' as any).select('id').eq('follower_id', currentUser.id).eq('following_id', userId).maybeSingle();
+        setIsFollowing(!!followCheck);
+      }
 
       const achMap = new Map((allAch || []).map((a: any) => [a.id, a]));
       const mapped = (userAch || []).map((ua: any) => achMap.get(ua.achievement_id)).filter(Boolean) as AchievementData[];
@@ -66,7 +80,23 @@ export default function ProfilePage() {
       setLoading(false);
     };
     load();
-  }, [userId]);
+  }, [userId, currentUser]);
+
+  const toggleFollow = async () => {
+    if (!currentUser || !userId) { toast.error('سجل دخول أولاً'); return; }
+    if (userId === currentUser.id) return;
+    setFollowLoading(true);
+    if (isFollowing) {
+      await supabase.from('user_follows' as any).delete().eq('follower_id', currentUser.id).eq('following_id', userId);
+      setIsFollowing(false);
+      setFollowersCount(prev => prev - 1);
+    } else {
+      await supabase.from('user_follows' as any).insert({ follower_id: currentUser.id, following_id: userId });
+      setIsFollowing(true);
+      setFollowersCount(prev => prev + 1);
+    }
+    setFollowLoading(false);
+  };
 
   const shareProfile = () => {
     const url = `${window.location.origin}/profile?id=${userId}`;
