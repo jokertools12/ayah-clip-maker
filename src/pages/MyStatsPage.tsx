@@ -31,15 +31,22 @@ export default function MyStatsPage() {
   const [favorites, setFavorites] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [totalCreated, setTotalCreated] = useState(0);
+  const [favReciters, setFavReciters] = useState<string[]>([]);
+
   useEffect(() => {
     if (!user) return;
     const load = async () => {
-      const [{ data: vids }, { data: favs }] = await Promise.all([
+      const [{ data: vids }, { data: favs }, { data: usageData }, { data: favRecs }] = await Promise.all([
         supabase.from('saved_videos').select('reciter_name, surah_name, created_at').eq('user_id', user.id).order('created_at', { ascending: false }),
         supabase.from('favorite_surahs').select('surah_number').eq('user_id', user.id),
+        supabase.from('daily_video_usage').select('count').eq('user_id', user.id),
+        supabase.from('favorite_reciters').select('reciter_id').eq('user_id', user.id),
       ]);
       setVideos((vids as VideoRecord[]) || []);
       setFavorites((favs || []).map((f: any) => f.surah_number));
+      setTotalCreated((usageData || []).reduce((sum: number, r: any) => sum + (r.count || 0), 0));
+      setFavReciters((favRecs || []).map((f: any) => f.reciter_id));
       setLoading(false);
     };
     load();
@@ -52,7 +59,7 @@ export default function MyStatsPage() {
   if (!isAuthenticated) return <Navigate to="/auth" replace />;
 
   // ── Stats calculations ──
-  const totalVideos = videos.length;
+  const totalVideos = totalCreated;
 
   // Top reciters
   const reciterCounts: Record<string, number> = {};
@@ -112,10 +119,10 @@ export default function MyStatsPage() {
         {/* Quick Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           {[
-            { label: 'فيديوهاتي', value: totalVideos, icon: Video, color: 'text-primary' },
-            { label: 'القراء المستخدمون', value: Object.keys(reciterCounts).length, icon: Mic, color: 'text-accent' },
+            { label: 'إجمالي الفيديوهات المنشأة', value: totalVideos, icon: Video, color: 'text-primary' },
+            { label: 'الفيديوهات المحفوظة', value: videos.length, icon: Video, color: 'text-accent' },
+            { label: 'القراء المفضلون', value: favReciters.length, icon: Mic, color: 'text-accent' },
             { label: 'السور المفضلة', value: favorites.length, icon: Heart, color: 'text-destructive' },
-            { label: 'الحصة المتبقية', value: `${Math.max(dailyUsage.limit - dailyUsage.count, 0)}/${dailyUsage.limit}`, icon: Clock, color: 'text-muted-foreground' },
           ].map((stat, i) => (
             <motion.div key={i} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}>
               <Card>

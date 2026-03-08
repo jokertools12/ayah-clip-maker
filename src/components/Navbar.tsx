@@ -2,7 +2,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useAuth } from '@/hooks/useAuth';
-import { BookOpen, Video, Library, LogIn, LogOut, User, Music, Menu, X, Crown, Settings, Shield, CreditCard, BarChart3, Trophy, Compass } from 'lucide-react';
+import { BookOpen, Video, Library, LogIn, LogOut, User, Music, Menu, X, Crown, Settings, Shield, CreditCard, BarChart3, Trophy, Compass, Heart } from 'lucide-react';
 import { useAdmin } from '@/hooks/useAdmin';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
@@ -118,6 +118,12 @@ export function Navbar() {
                     <Link to="/achievements" className="flex items-center gap-2">
                       <Trophy className="h-4 w-4" />
                       <span>الإنجازات</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/favorites" className="flex items-center gap-2">
+                      <Heart className="h-4 w-4" />
+                      <span>المفضلة</span>
                     </Link>
                   </DropdownMenuItem>
                   {isAdmin && (
