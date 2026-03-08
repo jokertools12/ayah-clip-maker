@@ -31,15 +31,22 @@ export default function MyStatsPage() {
   const [favorites, setFavorites] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [totalCreated, setTotalCreated] = useState(0);
+  const [favReciters, setFavReciters] = useState<string[]>([]);
+
   useEffect(() => {
     if (!user) return;
     const load = async () => {
-      const [{ data: vids }, { data: favs }] = await Promise.all([
+      const [{ data: vids }, { data: favs }, { data: usageData }, { data: favRecs }] = await Promise.all([
         supabase.from('saved_videos').select('reciter_name, surah_name, created_at').eq('user_id', user.id).order('created_at', { ascending: false }),
         supabase.from('favorite_surahs').select('surah_number').eq('user_id', user.id),
+        supabase.from('daily_video_usage').select('count').eq('user_id', user.id),
+        supabase.from('favorite_reciters').select('reciter_id').eq('user_id', user.id),
       ]);
       setVideos((vids as VideoRecord[]) || []);
       setFavorites((favs || []).map((f: any) => f.surah_number));
+      setTotalCreated((usageData || []).reduce((sum: number, r: any) => sum + (r.count || 0), 0));
+      setFavReciters((favRecs || []).map((f: any) => f.reciter_id));
       setLoading(false);
     };
     load();
