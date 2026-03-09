@@ -439,8 +439,18 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   };
 
   // Draw decorative ayah number badge with different styles
-  const drawAyahBadge = useCallback((ctx: CanvasRenderingContext2D, x: number, y: number, num: number, size: number, style: string) => {
+  const drawAyahBadge = useCallback((ctx: CanvasRenderingContext2D, x: number, y: number, num: number, size: number, style: string, colorScheme?: string) => {
     const arabicNum = toArabicNumber(num);
+    
+    // Color map based on ayahNumberColor setting
+    const colorMap: Record<string, { main: string; glow: string; fill: string }> = {
+      gold: { main: 'rgba(212, 175, 55, 0.7)', glow: 'rgba(212, 175, 55, 0.4)', fill: '#D4AF37' },
+      white: { main: 'rgba(255, 255, 255, 0.7)', glow: 'rgba(255, 255, 255, 0.3)', fill: '#FFFFFF' },
+      silver: { main: 'rgba(192, 192, 192, 0.7)', glow: 'rgba(192, 192, 192, 0.3)', fill: '#C0C0C0' },
+      emerald: { main: 'rgba(80, 200, 120, 0.7)', glow: 'rgba(80, 200, 120, 0.3)', fill: '#50C878' },
+      royal: { main: 'rgba(123, 104, 238, 0.7)', glow: 'rgba(123, 104, 238, 0.3)', fill: '#7B68EE' },
+    };
+    const colors = colorMap[colorScheme || 'gold'] || colorMap.gold;
     
     ctx.save();
     
@@ -458,6 +468,13 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       case 'flower':
         drawFlower(ctx, x, y, size);
         break;
+      case 'hexagon':
+        drawPolygon(ctx, x, y, size, 6);
+        break;
+      case 'square':
+        ctx.beginPath();
+        ctx.roundRect(x - size, y - size, size * 2, size * 2, size * 0.2);
+        break;
       default: // circle
         ctx.beginPath();
         ctx.arc(x, y, size, 0, Math.PI * 2);
@@ -465,14 +482,14 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     
     // Fill with gradient
     const gradient = ctx.createRadialGradient(x, y, 0, x, y, size);
-    gradient.addColorStop(0, 'rgba(212, 175, 55, 0.4)');
-    gradient.addColorStop(0.7, 'rgba(212, 175, 55, 0.2)');
-    gradient.addColorStop(1, 'rgba(212, 175, 55, 0.1)');
+    gradient.addColorStop(0, colors.glow);
+    gradient.addColorStop(0.7, colors.glow.replace('0.4', '0.2').replace('0.3', '0.15'));
+    gradient.addColorStop(1, 'rgba(0, 0, 0, 0.1)');
     ctx.fillStyle = gradient;
     ctx.fill();
     
     // Draw border
-    ctx.strokeStyle = 'rgba(212, 175, 55, 0.7)';
+    ctx.strokeStyle = colors.main;
     ctx.lineWidth = 2;
     ctx.stroke();
     
@@ -480,14 +497,14 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     if (style === 'circle') {
       ctx.beginPath();
       ctx.arc(x, y, size * 0.75, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(212, 175, 55, 0.4)';
+      ctx.strokeStyle = colors.main.replace('0.7', '0.4');
       ctx.lineWidth = 1;
       ctx.stroke();
     }
     
     // Draw number
     ctx.font = `bold ${size * 1.1}px "Noto Naskh Arabic", "Amiri", serif`;
-    ctx.fillStyle = '#D4AF37';
+    ctx.fillStyle = colors.fill;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
