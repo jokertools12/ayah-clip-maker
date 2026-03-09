@@ -2117,8 +2117,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       return;
     }
 
-    const perfMode = displaySettings.performanceMode || 'balanced';
-    const targetFps = perfMode === 'economy' ? 10 : perfMode === 'pro' ? 18 : 14;
+    const targetFps = 14;
     const frameInterval = 1000 / targetFps;
     let lastFrameTime = 0;
 
@@ -2136,7 +2135,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [background?.type, displaySettings.performanceMode, isPlaying, isRecording, videoReady, slideshowReady]);
+  }, [background?.type, isPlaying, isRecording, videoReady, slideshowReady]);
 
   // Notify when canvas is ready
   useEffect(() => {
