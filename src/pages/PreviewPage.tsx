@@ -530,6 +530,12 @@ export default function PreviewPage() {
       const nowMs = nowSec * 1000;
       const isRecordingNow = videoRecorder.isRecording;
 
+      if (isRecordingNow) {
+        const syncTs = performance.now();
+        if (syncTs - recordingSyncLastUpdateRef.current < 120) return;
+        recordingSyncLastUpdateRef.current = syncTs;
+      }
+
       const updateTimeline = (timeSec: number, percent: number) => {
         if (isRecordingNow) {
           const ts = performance.now();
