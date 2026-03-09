@@ -1255,11 +1255,11 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         case 'glow': {
           ctx.font = `${textSettings.fontSize * 1.0 * S}px "${fontName}", "Noto Naskh Arabic", serif`;
           ctx.shadowColor = '#D4AF37';
-          ctx.shadowBlur = isAnyRecording ? 4 * S : 18 * S;
+          ctx.shadowBlur = !isPreviewRender ? 4 * S : 18 * S;
           ctx.fillStyle = '#FFD700';
           ctx.fillText(reciterText, canvas.width / 2, reciterY);
           // Second pass for stronger glow — skip during recording
-          if (!isAnyRecording) {
+          if (isPreviewRender) {
             ctx.shadowBlur = 8 * S;
             ctx.fillText(reciterText, canvas.width / 2, reciterY);
           }
