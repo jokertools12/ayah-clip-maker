@@ -4,9 +4,10 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Eye, EyeOff, Sparkles, Frame, Hash, Wand2, Droplets, Type, Save, FolderOpen, Trash2, User, Lock } from 'lucide-react';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Eye, EyeOff, Sparkles, Frame, Hash, Wand2, Type, Save, Trash2, User, Lock, Settings2, Palette, LayoutGrid, Film, Star } from 'lucide-react';
 import { toast } from 'sonner';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useSubscription } from '@/hooks/useSubscription';
 import { PremiumBadge } from '@/components/PremiumBadge';
 
@@ -169,12 +170,11 @@ const watermarkPositionOptions = [
 ];
 
 const performanceModeOptions = [
-  { value: 'economy', label: '🔋 اقتصادي', description: 'أخف أداء، جزيئات أقل، 20 FPS' },
-  { value: 'balanced', label: '⚖️ متوازن', description: 'توازن بين الجودة والأداء' },
-  { value: 'pro', label: '🎬 احترافي', description: 'أعلى جودة، 30 FPS' },
+  { value: 'economy', label: '🔋 اقتصادي', description: 'أداء أخف وأسرع' },
+  { value: 'balanced', label: '⚖️ متوازن', description: 'توازن جودة وأداء' },
+  { value: 'pro', label: '🎬 احترافي', description: 'أعلى جودة بصرية' },
 ];
 
-// Template storage
 const TEMPLATES_KEY = 'ayah-clip-display-templates';
 
 interface SavedTemplate {
@@ -193,6 +193,41 @@ function loadTemplates(): SavedTemplate[] {
 
 function saveTemplates(templates: SavedTemplate[]) {
   localStorage.setItem(TEMPLATES_KEY, JSON.stringify(templates));
+}
+
+// Reusable radio grid component
+function RadioOptionGrid({ options, value, onChange, idPrefix, columns = 2 }: {
+  options: { value: string; label: string; description: string; color?: string }[];
+  value: string;
+  onChange: (val: string) => void;
+  idPrefix: string;
+  columns?: number;
+}) {
+  const gridCols = columns === 3 ? 'grid-cols-3' : columns === 4 ? 'grid-cols-4' : 'grid-cols-2';
+  return (
+    <RadioGroup value={value} onValueChange={onChange} className={`grid ${gridCols} gap-2`}>
+      {options.map((option) => (
+        <div key={option.value} className="relative">
+          <RadioGroupItem value={option.value} id={`${idPrefix}-${option.value}`} className="peer sr-only" />
+          <Label
+            htmlFor={`${idPrefix}-${option.value}`}
+            className="flex flex-col items-center rounded-lg border-2 border-muted p-2 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all text-center"
+          >
+            {option.color ? (
+              <span className="text-lg" style={{ color: option.color }}>{option.description}</span>
+            ) : (
+              <span className="font-medium text-sm">{option.label}</span>
+            )}
+            {option.color ? (
+              <span className="text-xs">{option.label}</span>
+            ) : (
+              <span className="text-xs text-muted-foreground">{option.description}</span>
+            )}
+          </Label>
+        </div>
+      ))}
+    </RadioGroup>
+  );
 }
 
 export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPanelProps) {
@@ -237,558 +272,425 @@ export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPane
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-lg flex items-center gap-2">
-          <Eye className="h-5 w-5" />
+          <Settings2 className="h-5 w-5" />
           إعدادات العرض
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-5">
-        {/* Save / Load Templates */}
-        <div className="space-y-3 pb-2 border-b">
-          <Label className="text-sm flex items-center gap-2">
-            <Save className="h-4 w-4" />
-            القوالب المحفوظة
-          </Label>
-          {templates.length > 0 && (
-            <div className="space-y-1.5 max-h-32 overflow-y-auto">
-              {templates.map(tpl => (
-                <div key={tpl.id} className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 text-sm">
-                  <button onClick={() => handleLoadTemplate(tpl)} className="flex-1 text-right hover:text-primary transition-colors font-medium truncate">
-                    {tpl.name}
-                  </button>
-                  <button onClick={() => handleDeleteTemplate(tpl.id)} className="text-muted-foreground hover:text-destructive transition-colors p-1">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-          {showSaveInput ? (
-            <div className="flex gap-2">
-              <Input
-                value={templateName}
-                onChange={e => setTemplateName(e.target.value)}
-                placeholder="اسم القالب..."
-                className="text-sm"
-                dir="auto"
-                onKeyDown={e => e.key === 'Enter' && handleSaveTemplate()}
-              />
-              <Button size="sm" onClick={handleSaveTemplate} disabled={!templateName.trim()}>
-                <Save className="h-4 w-4" />
-              </Button>
-            </div>
-          ) : (
-            <Button variant="outline" size="sm" className="w-full gap-2" onClick={() => setShowSaveInput(true)}>
-              <Save className="h-4 w-4" />
-              حفظ الإعدادات الحالية كقالب
-            </Button>
-          )}
-        </div>
-        {/* Visibility Toggles */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="showSurahName" className="flex items-center gap-2 cursor-pointer">
-              {settings.showSurahName ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-              إظهار اسم السورة
-            </Label>
-            <Switch
-              id="showSurahName"
-              checked={settings.showSurahName}
-              onCheckedChange={(checked) => updateSetting('showSurahName', checked)}
-            />
-          </div>
+      <CardContent className="p-0">
+        <Accordion type="multiple" defaultValue={['display-elements', 'verse-display']} className="w-full">
 
-          <div className="flex items-center justify-between">
-            <Label htmlFor="showReciterName" className="flex items-center gap-2 cursor-pointer">
-              {settings.showReciterName ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-              إظهار اسم القارئ
-            </Label>
-            <Switch
-              id="showReciterName"
-              checked={settings.showReciterName}
-              onCheckedChange={(checked) => updateSetting('showReciterName', checked)}
-            />
-          </div>
-
-          <div className="flex items-center justify-between">
-            <Label htmlFor="showAyahText" className="flex items-center gap-2 cursor-pointer">
-              {settings.showAyahText ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-              إظهار نص الآية
-            </Label>
-            <Switch
-              id="showAyahText"
-              checked={settings.showAyahText}
-              onCheckedChange={(checked) => updateSetting('showAyahText', checked)}
-            />
-          </div>
-
-          <div className="flex items-center justify-between">
-            <Label htmlFor="showAyahNumber" className="flex items-center gap-2 cursor-pointer">
-              {settings.showAyahNumber ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-              إظهار رقم الآية
-            </Label>
-            <Switch
-              id="showAyahNumber"
-              checked={settings.showAyahNumber}
-              onCheckedChange={(checked) => updateSetting('showAyahNumber', checked)}
-            />
-          </div>
-        </div>
-
-        {/* Reciter Name Style */}
-        {settings.showReciterName && (
-          <div className="space-y-3 pt-2 border-t">
-            <Label className="text-sm flex items-center gap-2">
-              <User className="h-4 w-4" />
-              شكل اسم القارئ
-            </Label>
-            <RadioGroup
-              value={settings.reciterNameStyle || 'simple'}
-              onValueChange={(value) => updateSetting('reciterNameStyle', value as DisplaySettings['reciterNameStyle'])}
-              className="grid grid-cols-3 gap-2"
-            >
-              {reciterNameStyleOptions.map((option) => (
-                <div key={option.value} className="relative">
-                  <RadioGroupItem value={option.value} id={`reciter-${option.value}`} className="peer sr-only" />
-                  <Label
-                    htmlFor={`reciter-${option.value}`}
-                    className="flex flex-col items-center rounded-lg border-2 border-muted p-2 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all text-center"
-                  >
-                    <span className="font-medium text-sm">{option.label}</span>
-                    <span className="text-xs text-muted-foreground">{option.description}</span>
+          {/* ═══ Section 1: Display Elements ═══ */}
+          <AccordionItem value="display-elements" className="border-b px-4">
+            <AccordionTrigger className="text-sm font-semibold gap-2">
+              <span className="flex items-center gap-2">
+                <Eye className="h-4 w-4 text-primary" />
+                عناصر العرض
+              </span>
+            </AccordionTrigger>
+            <AccordionContent className="space-y-4 pb-4">
+              {/* Visibility Toggles */}
+              {[
+                { key: 'showSurahName' as const, label: 'إظهار اسم السورة' },
+                { key: 'showReciterName' as const, label: 'إظهار اسم القارئ' },
+                { key: 'showAyahText' as const, label: 'إظهار نص الآية' },
+                { key: 'showAyahNumber' as const, label: 'إظهار رقم الآية' },
+              ].map(({ key, label }) => (
+                <div key={key} className="flex items-center justify-between">
+                  <Label htmlFor={key} className="flex items-center gap-2 cursor-pointer">
+                    {settings[key] ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4 text-muted-foreground" />}
+                    {label}
                   </Label>
+                  <Switch
+                    id={key}
+                    checked={settings[key]}
+                    onCheckedChange={(checked) => updateSetting(key, checked)}
+                  />
                 </div>
               ))}
-            </RadioGroup>
-          </div>
-        )}
+            </AccordionContent>
+          </AccordionItem>
 
-        {/* Slideshow Transition */}
-        <div className="space-y-3 pt-2 border-t">
-          <Label className="text-sm flex items-center gap-2">
-            🎬 نمط الانتقال بين الصور
-          </Label>
-          <RadioGroup
-            value={settings.slideshowTransition || 'crossfade'}
-            onValueChange={(value) => updateSetting('slideshowTransition', value as DisplaySettings['slideshowTransition'])}
-            className="grid grid-cols-2 gap-2"
-          >
-            {slideshowTransitionOptions.map((option) => (
-              <div key={option.value} className="relative">
-                <RadioGroupItem value={option.value} id={`slt-${option.value}`} className="peer sr-only" />
-                <Label
-                  htmlFor={`slt-${option.value}`}
-                  className="flex flex-col items-center rounded-lg border-2 border-muted p-2 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all text-center"
-                >
-                  <span className="font-medium text-sm">{option.label}</span>
-                  <span className="text-xs text-muted-foreground">{option.description}</span>
-                </Label>
-              </div>
-            ))}
-          </RadioGroup>
-        </div>
+          {/* ═══ Section 2: Text Styling ═══ */}
+          <AccordionItem value="text-styling" className="border-b px-4">
+            <AccordionTrigger className="text-sm font-semibold gap-2">
+              <span className="flex items-center gap-2">
+                <Palette className="h-4 w-4 text-primary" />
+                نمط النصوص
+              </span>
+            </AccordionTrigger>
+            <AccordionContent className="space-y-5 pb-4">
+              {/* Surah Name Style */}
+              {settings.showSurahName && (
+                <>
+                  <div className="space-y-3">
+                    <Label className="text-sm flex items-center gap-2">
+                      <Wand2 className="h-4 w-4" />
+                      شكل اسم السورة
+                    </Label>
+                    <RadioOptionGrid
+                      options={surahNameStyleOptions}
+                      value={settings.surahNameStyle || 'classic'}
+                      onChange={(v) => updateSetting('surahNameStyle', v as DisplaySettings['surahNameStyle'])}
+                      idPrefix="sname"
+                      columns={3}
+                    />
+                  </div>
 
-        {/* Verse Display Mode */}
-        <div className="space-y-3 pt-2 border-t">
-          <Label className="text-sm flex items-center gap-2">
-            <Type className="h-4 w-4" />
-            طريقة عرض الآيات
-          </Label>
-          <RadioGroup
-            value={settings.verseDisplayMode || 'full'}
-            onValueChange={(value) => updateSetting('verseDisplayMode', value as DisplaySettings['verseDisplayMode'])}
-            className="grid grid-cols-2 gap-2"
-          >
-            {verseDisplayModeOptions.map((option) => (
-              <div key={option.value} className="relative">
-                <RadioGroupItem value={option.value} id={`vdm-${option.value}`} className="peer sr-only" />
-                <Label
-                  htmlFor={`vdm-${option.value}`}
-                  className="flex flex-col items-center rounded-lg border-2 border-muted p-2 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all text-center"
-                >
-                  <span className="font-medium text-sm">{option.label}</span>
-                  <span className="text-xs text-muted-foreground">{option.description}</span>
-                </Label>
-              </div>
-            ))}
-          </RadioGroup>
-        </div>
+                  <div className="space-y-3">
+                    <Label className="text-sm">موضع اسم السورة</Label>
+                    <RadioOptionGrid
+                      options={surahPositionOptions}
+                      value={settings.surahNamePosition || 'top'}
+                      onChange={(v) => updateSetting('surahNamePosition', v as DisplaySettings['surahNamePosition'])}
+                      idPrefix="pos"
+                    />
+                  </div>
+                </>
+              )}
 
-        {/* Glow Style - Premium */}
-        <div className="space-y-3 pt-2 border-t">
-          <Label className="text-sm flex items-center gap-2">
-            <Sparkles className="h-4 w-4" />
-            نمط التوهج (الابتهالات)
-            {!isPremium && <Lock className="h-3 w-3 text-muted-foreground" />}
-          </Label>
-          {!isPremium ? (
-            <div className="text-center py-3">
-              <PremiumBadge showLock />
-            </div>
-          ) : (
-          <RadioGroup
-            value={settings.glowStyle || 'golden'}
-            onValueChange={(value) => updateSetting('glowStyle', value as DisplaySettings['glowStyle'])}
-            className="grid grid-cols-3 gap-2"
-          >
-            {glowStyleOptions.map((option) => (
-              <div key={option.value} className="relative">
-                <RadioGroupItem value={option.value} id={`glow-${option.value}`} className="peer sr-only" />
-                <Label
-                  htmlFor={`glow-${option.value}`}
-                  className="flex flex-col items-center rounded-lg border-2 border-muted p-2 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all text-center"
-                >
-                  <span className="font-medium text-sm">{option.label}</span>
-                  <span className="text-xs text-muted-foreground">{option.description}</span>
-                </Label>
-              </div>
-            ))}
-          </RadioGroup>
-          )}
-        </div>
+              {/* Reciter Name Style */}
+              {settings.showReciterName && (
+                <div className="space-y-3">
+                  <Label className="text-sm flex items-center gap-2">
+                    <User className="h-4 w-4" />
+                    شكل اسم القارئ
+                  </Label>
+                  <RadioOptionGrid
+                    options={reciterNameStyleOptions}
+                    value={settings.reciterNameStyle || 'simple'}
+                    onChange={(v) => updateSetting('reciterNameStyle', v as DisplaySettings['reciterNameStyle'])}
+                    idPrefix="reciter"
+                    columns={3}
+                  />
+                </div>
+              )}
 
-        {/* Lyrics Display Style */}
-        <div className="space-y-3 pt-2 border-t">
-          <Label className="text-sm flex items-center gap-2">
-            <Wand2 className="h-4 w-4" />
-            طريقة عرض الكلمات (الابتهالات)
-          </Label>
-          <RadioGroup
-            value={settings.lyricsDisplayStyle || 'scroll'}
-            onValueChange={(value) => updateSetting('lyricsDisplayStyle', value as DisplaySettings['lyricsDisplayStyle'])}
-            className="grid grid-cols-2 gap-2"
-          >
-            {lyricsDisplayOptions.map((option) => (
-              <div key={option.value} className="relative">
-                <RadioGroupItem value={option.value} id={`lyrics-${option.value}`} className="peer sr-only" />
-                <Label
-                  htmlFor={`lyrics-${option.value}`}
-                  className="flex flex-col items-center rounded-lg border-2 border-muted p-2 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all text-center"
-                >
-                  <span className="font-medium text-sm">{option.label}</span>
-                  <span className="text-xs text-muted-foreground">{option.description}</span>
-                </Label>
-              </div>
-            ))}
-          </RadioGroup>
-        </div>
-
-        {/* Watermark - Premium */}
-        <div className="space-y-3 pt-2 border-t">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="watermarkEnabled" className="flex items-center gap-2 cursor-pointer">
-              <Type className="h-4 w-4" />
-              علامة مائية
-              {!isPremium && <Lock className="h-3 w-3 text-muted-foreground" />}
-            </Label>
-            <Switch
-              id="watermarkEnabled"
-              checked={settings.watermarkEnabled || false}
-              onCheckedChange={(checked) => {
-                if (!isPremium) {
-                  toast.error('العلامة المائية متاحة للأعضاء المميزين فقط');
-                  return;
-                }
-                updateSetting('watermarkEnabled', checked);
-              }}
-            />
-          </div>
-          {!isPremium && <PremiumBadge showLock />}
-          {settings.watermarkEnabled && isPremium && (
-            <div className="space-y-3 pl-2">
-              <div>
-                <Label className="text-xs text-muted-foreground mb-1 block">نص العلامة المائية</Label>
-                <Input
-                  value={settings.watermarkText || ''}
-                  onChange={(e) => updateSetting('watermarkText', e.target.value)}
-                  placeholder="مثال: @username"
-                  className="text-sm"
-                  dir="auto"
+              {/* Text Shadow Style */}
+              <div className="space-y-3">
+                <Label className="text-sm">نمط ظل النص</Label>
+                <RadioOptionGrid
+                  options={textShadowOptions}
+                  value={settings.textShadowStyle || 'soft'}
+                  onChange={(v) => updateSetting('textShadowStyle', v as DisplaySettings['textShadowStyle'])}
+                  idPrefix="shadow"
                 />
               </div>
-              <div>
-                <Label className="text-xs text-muted-foreground mb-1 block">موضع العلامة</Label>
+
+              {/* Highlight Style */}
+              <div className="space-y-3">
+                <Label className="text-sm flex items-center gap-2">
+                  <Sparkles className="h-4 w-4" />
+                  نمط تمييز الكلمات
+                </Label>
                 <RadioGroup
-                  value={settings.watermarkPosition || 'bottomRight'}
-                  onValueChange={(value) => updateSetting('watermarkPosition', value as DisplaySettings['watermarkPosition'])}
-                  className="grid grid-cols-3 gap-2"
+                  value={settings.highlightStyle}
+                  onValueChange={(value) => updateSetting('highlightStyle', value as DisplaySettings['highlightStyle'])}
+                  className="space-y-1.5"
                 >
-                  {watermarkPositionOptions.map((option) => (
+                  {highlightOptions.map((option) => (
                     <div key={option.value} className="relative">
-                      <RadioGroupItem value={option.value} id={`wm-${option.value}`} className="peer sr-only" />
+                      <RadioGroupItem value={option.value} id={`highlight-${option.value}`} className="peer sr-only" />
                       <Label
-                        htmlFor={`wm-${option.value}`}
-                        className="flex items-center justify-center rounded-lg border-2 border-muted p-2 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all text-center text-xs"
+                        htmlFor={`highlight-${option.value}`}
+                        className="flex flex-col rounded-lg border-2 border-muted p-2.5 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all"
                       >
-                        {option.label}
+                        <span className="font-medium text-sm">{option.label}</span>
+                        <span className="text-xs text-muted-foreground">{option.description}</span>
                       </Label>
                     </div>
                   ))}
                 </RadioGroup>
               </div>
-            </div>
-          )}
-        </div>
+            </AccordionContent>
+          </AccordionItem>
 
-        {/* Performance Mode */}
-        <div className="space-y-3 pt-2 border-t">
-          <Label className="text-sm flex items-center gap-2">
-            ⚡ وضع الأداء
-          </Label>
-          <RadioGroup
-            value={settings.performanceMode || 'balanced'}
-            onValueChange={(value) => updateSetting('performanceMode', value as DisplaySettings['performanceMode'])}
-            className="grid grid-cols-3 gap-2"
-          >
-            {performanceModeOptions.map((option) => (
-              <div key={option.value} className="relative">
-                <RadioGroupItem value={option.value} id={`perf-${option.value}`} className="peer sr-only" />
-                <Label
-                  htmlFor={`perf-${option.value}`}
-                  className="flex flex-col items-center rounded-lg border-2 border-muted p-2 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all text-center"
-                >
-                  <span className="font-medium text-sm">{option.label}</span>
-                  <span className="text-xs text-muted-foreground">{option.description}</span>
+          {/* ═══ Section 3: Verse Display ═══ */}
+          <AccordionItem value="verse-display" className="border-b px-4">
+            <AccordionTrigger className="text-sm font-semibold gap-2">
+              <span className="flex items-center gap-2">
+                <LayoutGrid className="h-4 w-4 text-primary" />
+                عرض الآيات
+              </span>
+            </AccordionTrigger>
+            <AccordionContent className="space-y-5 pb-4">
+              {/* Verse Display Mode */}
+              <div className="space-y-3">
+                <Label className="text-sm flex items-center gap-2">
+                  <Type className="h-4 w-4" />
+                  طريقة عرض الآيات
                 </Label>
+                <RadioOptionGrid
+                  options={verseDisplayModeOptions}
+                  value={settings.verseDisplayMode || 'full'}
+                  onChange={(v) => updateSetting('verseDisplayMode', v as DisplaySettings['verseDisplayMode'])}
+                  idPrefix="vdm"
+                />
               </div>
-            ))}
-          </RadioGroup>
-        </div>
 
-        {/* Highlight Style */}
-        <div className="space-y-3 pt-2 border-t">
-          <Label className="text-sm flex items-center gap-2">
-            <Sparkles className="h-4 w-4" />
-            نمط تمييز الكلمات
-          </Label>
-          <RadioGroup
-            value={settings.highlightStyle}
-            onValueChange={(value) => updateSetting('highlightStyle', value as DisplaySettings['highlightStyle'])}
-            className="space-y-2"
-          >
-            {highlightOptions.map((option) => (
-              <div key={option.value} className="relative">
-                <RadioGroupItem value={option.value} id={`highlight-${option.value}`} className="peer sr-only" />
-                <Label
-                  htmlFor={`highlight-${option.value}`}
-                  className="flex flex-col rounded-lg border-2 border-muted p-3 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all"
-                >
-                  <span className="font-medium">{option.label}</span>
-                  <span className="text-xs text-muted-foreground">{option.description}</span>
+              {/* Ayah Number Style + Color */}
+              {settings.showAyahNumber && (
+                <>
+                  <div className="space-y-3">
+                    <Label className="text-sm flex items-center gap-2">
+                      <Hash className="h-4 w-4" />
+                      شكل رقم الآية
+                    </Label>
+                    <RadioGroup
+                      value={settings.ayahNumberStyle}
+                      onValueChange={(value) => updateSetting('ayahNumberStyle', value as DisplaySettings['ayahNumberStyle'])}
+                      className="flex flex-wrap gap-2"
+                    >
+                      {ayahNumberOptions.map((option) => (
+                        <div key={option.value} className="relative">
+                          <RadioGroupItem value={option.value} id={`ayahNum-${option.value}`} className="peer sr-only" />
+                          <Label
+                            htmlFor={`ayahNum-${option.value}`}
+                            className="flex flex-col items-center rounded-lg border-2 border-muted px-3 py-2 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all"
+                          >
+                            <span className="text-2xl text-primary">{option.description}</span>
+                            <span className="text-xs">{option.label}</span>
+                          </Label>
+                        </div>
+                      ))}
+                    </RadioGroup>
+                  </div>
+                  <div className="space-y-3">
+                    <Label className="text-sm">لون رقم الآية</Label>
+                    <RadioOptionGrid
+                      options={ayahNumberColorOptions}
+                      value={settings.ayahNumberColor || 'gold'}
+                      onChange={(v) => updateSetting('ayahNumberColor', v as DisplaySettings['ayahNumberColor'])}
+                      idPrefix="ayahColor"
+                      columns={3}
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* Ayah Transition */}
+              <div className="space-y-3">
+                <Label className="text-sm flex items-center gap-2">
+                  <Wand2 className="h-4 w-4" />
+                  انتقال بين الآيات
                 </Label>
+                <RadioOptionGrid
+                  options={transitionOptions}
+                  value={settings.ayahTransition || 'fade'}
+                  onChange={(v) => updateSetting('ayahTransition', v as DisplaySettings['ayahTransition'])}
+                  idPrefix="trans"
+                  columns={3}
+                />
               </div>
-            ))}
-          </RadioGroup>
-        </div>
 
-        {/* Frame Style */}
-        <div className="space-y-3 pt-2 border-t">
-          <Label className="text-sm flex items-center gap-2">
-            <Frame className="h-4 w-4" />
-            إطار النص
-            <span className="text-xs text-muted-foreground mr-auto">(الافتراضي: بدون)</span>
-          </Label>
-          <RadioGroup
-            value={settings.frameStyle}
-            onValueChange={(value) => updateSetting('frameStyle', value as DisplaySettings['frameStyle'])}
-            className="grid grid-cols-2 gap-2"
-          >
-            {frameOptions.map((option) => (
-              <div key={option.value} className="relative">
-                <RadioGroupItem value={option.value} id={`frame-${option.value}`} className="peer sr-only" />
-                <Label
-                  htmlFor={`frame-${option.value}`}
-                  className="flex flex-col items-center rounded-lg border-2 border-muted p-2 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all text-center"
-                >
-                  <span className="font-medium text-sm">{option.label}</span>
-                  <span className="text-xs text-muted-foreground">{option.description}</span>
+              {/* Decoration Style */}
+              <div className="space-y-3">
+                <Label className="text-sm flex items-center gap-2">
+                  <Sparkles className="h-4 w-4" />
+                  زخرفة حول الآيات
                 </Label>
+                <RadioOptionGrid
+                  options={decorationOptions}
+                  value={settings.decorationStyle || 'none'}
+                  onChange={(v) => updateSetting('decorationStyle', v as DisplaySettings['decorationStyle'])}
+                  idPrefix="deco"
+                />
               </div>
-            ))}
-          </RadioGroup>
-        </div>
+            </AccordionContent>
+          </AccordionItem>
 
-        {/* Ayah Number Style */}
-        {settings.showAyahNumber && (
-          <>
-          <div className="space-y-3 pt-2 border-t">
-            <Label className="text-sm flex items-center gap-2">
-              <Hash className="h-4 w-4" />
-              شكل رقم الآية
-            </Label>
-            <RadioGroup
-              value={settings.ayahNumberStyle}
-              onValueChange={(value) => updateSetting('ayahNumberStyle', value as DisplaySettings['ayahNumberStyle'])}
-              className="flex flex-wrap gap-2"
-            >
-              {ayahNumberOptions.map((option) => (
-                <div key={option.value} className="relative">
-                  <RadioGroupItem value={option.value} id={`ayahNum-${option.value}`} className="peer sr-only" />
-                  <Label
-                    htmlFor={`ayahNum-${option.value}`}
-                    className="flex flex-col items-center rounded-lg border-2 border-muted px-3 py-2 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all"
-                  >
-                    <span className="text-2xl text-primary">{option.description}</span>
-                    <span className="text-xs">{option.label}</span>
+          {/* ═══ Section 4: Frame & Background ═══ */}
+          <AccordionItem value="frame-background" className="border-b px-4">
+            <AccordionTrigger className="text-sm font-semibold gap-2">
+              <span className="flex items-center gap-2">
+                <Film className="h-4 w-4 text-primary" />
+                الإطار والخلفية
+              </span>
+            </AccordionTrigger>
+            <AccordionContent className="space-y-5 pb-4">
+              {/* Frame Style */}
+              <div className="space-y-3">
+                <Label className="text-sm flex items-center gap-2">
+                  <Frame className="h-4 w-4" />
+                  إطار النص
+                </Label>
+                <RadioOptionGrid
+                  options={frameOptions}
+                  value={settings.frameStyle}
+                  onChange={(v) => updateSetting('frameStyle', v as DisplaySettings['frameStyle'])}
+                  idPrefix="frame"
+                />
+              </div>
+
+              {/* Slideshow Transition */}
+              <div className="space-y-3">
+                <Label className="text-sm">🎬 نمط الانتقال بين الصور</Label>
+                <RadioOptionGrid
+                  options={slideshowTransitionOptions}
+                  value={settings.slideshowTransition || 'crossfade'}
+                  onChange={(v) => updateSetting('slideshowTransition', v as DisplaySettings['slideshowTransition'])}
+                  idPrefix="slt"
+                />
+              </div>
+
+              {/* Performance Mode */}
+              <div className="space-y-3">
+                <Label className="text-sm">⚡ وضع الأداء</Label>
+                <RadioOptionGrid
+                  options={performanceModeOptions}
+                  value={settings.performanceMode || 'balanced'}
+                  onChange={(v) => updateSetting('performanceMode', v as DisplaySettings['performanceMode'])}
+                  idPrefix="perf"
+                  columns={3}
+                />
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+
+          {/* ═══ Section 5: Ibtahalat & Advanced ═══ */}
+          <AccordionItem value="advanced" className="px-4">
+            <AccordionTrigger className="text-sm font-semibold gap-2">
+              <span className="flex items-center gap-2">
+                <Star className="h-4 w-4 text-primary" />
+                ابتهالات ومتقدم
+              </span>
+            </AccordionTrigger>
+            <AccordionContent className="space-y-5 pb-4">
+              {/* Glow Style - Premium */}
+              <div className="space-y-3">
+                <Label className="text-sm flex items-center gap-2">
+                  <Sparkles className="h-4 w-4" />
+                  نمط التوهج (الابتهالات)
+                  {!isPremium && <Lock className="h-3 w-3 text-muted-foreground" />}
+                </Label>
+                {!isPremium ? (
+                  <div className="text-center py-3"><PremiumBadge showLock /></div>
+                ) : (
+                  <RadioOptionGrid
+                    options={glowStyleOptions}
+                    value={settings.glowStyle || 'golden'}
+                    onChange={(v) => updateSetting('glowStyle', v as DisplaySettings['glowStyle'])}
+                    idPrefix="glow"
+                    columns={3}
+                  />
+                )}
+              </div>
+
+              {/* Lyrics Display Style */}
+              <div className="space-y-3">
+                <Label className="text-sm flex items-center gap-2">
+                  <Wand2 className="h-4 w-4" />
+                  طريقة عرض الكلمات (الابتهالات)
+                </Label>
+                <RadioOptionGrid
+                  options={lyricsDisplayOptions}
+                  value={settings.lyricsDisplayStyle || 'scroll'}
+                  onChange={(v) => updateSetting('lyricsDisplayStyle', v as DisplaySettings['lyricsDisplayStyle'])}
+                  idPrefix="lyrics"
+                />
+              </div>
+
+              {/* Watermark - Premium */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="watermarkEnabled" className="flex items-center gap-2 cursor-pointer">
+                    <Type className="h-4 w-4" />
+                    علامة مائية
+                    {!isPremium && <Lock className="h-3 w-3 text-muted-foreground" />}
                   </Label>
+                  <Switch
+                    id="watermarkEnabled"
+                    checked={settings.watermarkEnabled || false}
+                    onCheckedChange={(checked) => {
+                      if (!isPremium) {
+                        toast.error('العلامة المائية متاحة للأعضاء المميزين فقط');
+                        return;
+                      }
+                      updateSetting('watermarkEnabled', checked);
+                    }}
+                  />
                 </div>
-              ))}
-            </RadioGroup>
-          </div>
-          {/* Ayah Number Color */}
-          <div className="space-y-3 pt-2">
-            <Label className="text-sm">لون رقم الآية</Label>
-            <RadioGroup
-              value={settings.ayahNumberColor || 'gold'}
-              onValueChange={(value) => updateSetting('ayahNumberColor', value as DisplaySettings['ayahNumberColor'])}
-              className="flex flex-wrap gap-2"
-            >
-              {ayahNumberColorOptions.map((option) => (
-                <div key={option.value} className="relative">
-                  <RadioGroupItem value={option.value} id={`ayahColor-${option.value}`} className="peer sr-only" />
-                  <Label
-                    htmlFor={`ayahColor-${option.value}`}
-                    className="flex flex-col items-center rounded-lg border-2 border-muted px-3 py-2 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all"
-                  >
-                    <span className="text-lg" style={{ color: option.color }}>{option.description}</span>
-                    <span className="text-xs">{option.label}</span>
-                  </Label>
-                </div>
-              ))}
-            </RadioGroup>
-          </div>
-          </>
-        )}
-
-        {settings.showSurahName && (
-          <div className="space-y-3 pt-2 border-t">
-            <Label className="text-sm flex items-center gap-2">
-              موضع اسم السورة
-            </Label>
-            <RadioGroup
-              value={settings.surahNamePosition || 'top'}
-              onValueChange={(value) => updateSetting('surahNamePosition', value as DisplaySettings['surahNamePosition'])}
-              className="grid grid-cols-2 gap-2"
-            >
-              {surahPositionOptions.map((option) => (
-                <div key={option.value} className="relative">
-                  <RadioGroupItem value={option.value} id={`pos-${option.value}`} className="peer sr-only" />
-                  <Label
-                    htmlFor={`pos-${option.value}`}
-                    className="flex flex-col items-center rounded-lg border-2 border-muted p-2 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all text-center"
-                  >
-                    <span className="font-medium text-sm">{option.label}</span>
-                    <span className="text-xs text-muted-foreground">{option.description}</span>
-                  </Label>
-                </div>
-              ))}
-            </RadioGroup>
-          </div>
-        )}
-
-        {/* Surah Name Style */}
-        {settings.showSurahName && (
-          <div className="space-y-3 pt-2 border-t">
-            <Label className="text-sm flex items-center gap-2">
-              <Wand2 className="h-4 w-4" />
-              شكل اسم السورة
-            </Label>
-            <RadioGroup
-              value={settings.surahNameStyle || 'classic'}
-              onValueChange={(value) => updateSetting('surahNameStyle', value as DisplaySettings['surahNameStyle'])}
-              className="grid grid-cols-3 gap-2"
-            >
-              {surahNameStyleOptions.map((option) => (
-                <div key={option.value} className="relative">
-                  <RadioGroupItem value={option.value} id={`sname-${option.value}`} className="peer sr-only" />
-                  <Label
-                    htmlFor={`sname-${option.value}`}
-                    className="flex flex-col items-center rounded-lg border-2 border-muted p-2 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all text-center"
-                  >
-                    <span className="font-medium text-sm">{option.label}</span>
-                    <span className="text-xs text-muted-foreground">{option.description}</span>
-                  </Label>
-                </div>
-              ))}
-            </RadioGroup>
-          </div>
-        )}
-
-        {/* Text Shadow Style */}
-        <div className="space-y-3 pt-2 border-t">
-          <Label className="text-sm flex items-center gap-2">
-            نمط ظل النص
-          </Label>
-          <RadioGroup
-            value={settings.textShadowStyle || 'soft'}
-            onValueChange={(value) => updateSetting('textShadowStyle', value as DisplaySettings['textShadowStyle'])}
-            className="grid grid-cols-2 gap-2"
-          >
-            {textShadowOptions.map((option) => (
-              <div key={option.value} className="relative">
-                <RadioGroupItem value={option.value} id={`shadow-${option.value}`} className="peer sr-only" />
-                <Label
-                  htmlFor={`shadow-${option.value}`}
-                  className="flex flex-col items-center rounded-lg border-2 border-muted p-2 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all text-center"
-                >
-                  <span className="font-medium text-sm">{option.label}</span>
-                  <span className="text-xs text-muted-foreground">{option.description}</span>
-                </Label>
+                {!isPremium && <PremiumBadge showLock />}
+                {settings.watermarkEnabled && isPremium && (
+                  <div className="space-y-3 pl-2">
+                    <div>
+                      <Label className="text-xs text-muted-foreground mb-1 block">نص العلامة المائية</Label>
+                      <Input
+                        value={settings.watermarkText || ''}
+                        onChange={(e) => updateSetting('watermarkText', e.target.value)}
+                        placeholder="مثال: @username"
+                        className="text-sm"
+                        dir="auto"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground mb-1 block">موضع العلامة</Label>
+                      <RadioGroup
+                        value={settings.watermarkPosition || 'bottomRight'}
+                        onValueChange={(value) => updateSetting('watermarkPosition', value as DisplaySettings['watermarkPosition'])}
+                        className="grid grid-cols-3 gap-2"
+                      >
+                        {watermarkPositionOptions.map((option) => (
+                          <div key={option.value} className="relative">
+                            <RadioGroupItem value={option.value} id={`wm-${option.value}`} className="peer sr-only" />
+                            <Label
+                              htmlFor={`wm-${option.value}`}
+                              className="flex items-center justify-center rounded-lg border-2 border-muted p-2 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all text-center text-xs"
+                            >
+                              {option.label}
+                            </Label>
+                          </div>
+                        ))}
+                      </RadioGroup>
+                    </div>
+                  </div>
+                )}
               </div>
-            ))}
-          </RadioGroup>
-        </div>
 
-        {/* Decoration Style */}
-        <div className="space-y-3 pt-2 border-t">
-          <Label className="text-sm flex items-center gap-2">
-            <Sparkles className="h-4 w-4" />
-            زخرفة حول الآيات
-          </Label>
-          <RadioGroup
-            value={settings.decorationStyle || 'none'}
-            onValueChange={(value) => updateSetting('decorationStyle', value as DisplaySettings['decorationStyle'])}
-            className="grid grid-cols-2 gap-2"
-          >
-            {decorationOptions.map((option) => (
-              <div key={option.value} className="relative">
-                <RadioGroupItem value={option.value} id={`deco-${option.value}`} className="peer sr-only" />
-                <Label
-                  htmlFor={`deco-${option.value}`}
-                  className="flex flex-col items-center rounded-lg border-2 border-muted p-2 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all text-center"
-                >
-                  <span className="font-medium text-sm">{option.label}</span>
-                  <span className="text-xs text-muted-foreground">{option.description}</span>
+              {/* Templates */}
+              <div className="space-y-3 pt-2 border-t">
+                <Label className="text-sm flex items-center gap-2">
+                  <Save className="h-4 w-4" />
+                  القوالب المحفوظة
                 </Label>
+                {templates.length > 0 && (
+                  <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                    {templates.map(tpl => (
+                      <div key={tpl.id} className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 text-sm">
+                        <button onClick={() => handleLoadTemplate(tpl)} className="flex-1 text-right hover:text-primary transition-colors font-medium truncate">
+                          {tpl.name}
+                        </button>
+                        <button onClick={() => handleDeleteTemplate(tpl.id)} className="text-muted-foreground hover:text-destructive transition-colors p-1">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {showSaveInput ? (
+                  <div className="flex gap-2">
+                    <Input
+                      value={templateName}
+                      onChange={e => setTemplateName(e.target.value)}
+                      placeholder="اسم القالب..."
+                      className="text-sm"
+                      dir="auto"
+                      onKeyDown={e => e.key === 'Enter' && handleSaveTemplate()}
+                    />
+                    <Button size="sm" onClick={handleSaveTemplate} disabled={!templateName.trim()}>
+                      <Save className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <Button variant="outline" size="sm" className="w-full gap-2" onClick={() => setShowSaveInput(true)}>
+                    <Save className="h-4 w-4" />
+                    حفظ الإعدادات كقالب
+                  </Button>
+                )}
               </div>
-            ))}
-          </RadioGroup>
-        </div>
+            </AccordionContent>
+          </AccordionItem>
 
-        {/* Ayah Transition */}
-        <div className="space-y-3 pt-2 border-t">
-          <Label className="text-sm flex items-center gap-2">
-            <Wand2 className="h-4 w-4" />
-            انتقال بين الآيات
-          </Label>
-          <RadioGroup
-            value={settings.ayahTransition || 'fade'}
-            onValueChange={(value) => updateSetting('ayahTransition', value as DisplaySettings['ayahTransition'])}
-            className="grid grid-cols-3 gap-2"
-          >
-            {transitionOptions.map((option) => (
-              <div key={option.value} className="relative">
-                <RadioGroupItem value={option.value} id={`trans-${option.value}`} className="peer sr-only" />
-                <Label
-                  htmlFor={`trans-${option.value}`}
-                  className="flex flex-col items-center rounded-lg border-2 border-muted p-2 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all text-center"
-                >
-                  <span className="font-medium text-sm">{option.label}</span>
-                  <span className="text-xs text-muted-foreground">{option.description}</span>
-                </Label>
-              </div>
-            ))}
-          </RadioGroup>
-        </div>
+        </Accordion>
       </CardContent>
     </Card>
   );
