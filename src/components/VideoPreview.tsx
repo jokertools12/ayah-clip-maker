@@ -1640,7 +1640,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         }
         const cIdx = highlightedWordIndex != null
           ? (() => { let p = 0; for (let i = 0; i < chunks.length; i++) { if (highlightedWordIndex < p + chunks[i].length) return i; p += chunks[i].length; } return chunks.length - 1; })()
-          : Math.floor((Date.now() / 2500) % chunks.length);
+          : (chunkCounterRef.current % chunks.length);
         displayWords = chunks[cIdx] || allWords.slice(0, 3);
       } else {
         displayWords = allWords;
