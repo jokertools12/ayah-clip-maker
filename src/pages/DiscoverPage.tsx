@@ -298,11 +298,13 @@ export default function DiscoverPage() {
             {filteredVideos.map((video, i) => (
               <motion.div key={video.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
                 <Card className="overflow-hidden hover:shadow-lg transition-shadow">
-                  <div className="bg-gradient-to-br from-primary/10 to-accent/10 p-6 text-center">
-                    <BookOpen className="h-10 w-10 text-primary mx-auto mb-2" />
-                    <h3 className="font-bold text-lg">{video.surah_name}</h3>
-                    <p className="text-sm text-muted-foreground">آية {video.start_ayah} - {video.end_ayah}</p>
-                  </div>
+                  <Link to={`/video?id=${video.id}`} className="block">
+                    <div className="bg-gradient-to-br from-primary/10 to-accent/10 p-6 text-center">
+                      <BookOpen className="h-10 w-10 text-primary mx-auto mb-2" />
+                      <h3 className="font-bold text-lg">{video.surah_name}</h3>
+                      <p className="text-sm text-muted-foreground">آية {video.start_ayah} - {video.end_ayah}</p>
+                    </div>
+                  </Link>
 
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between mb-3">
