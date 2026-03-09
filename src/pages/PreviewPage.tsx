@@ -95,8 +95,6 @@ const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
   glowStyle: 'golden',
   lyricsDisplayStyle: 'scroll',
   slideshowTransition: 'crossfade',
-  wordScaleEffect: true,
-};
 
 // Note: frameStyle defaults to 'none' — user must explicitly select a frame
 
