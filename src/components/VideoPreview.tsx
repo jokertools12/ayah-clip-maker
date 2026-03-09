@@ -1360,7 +1360,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
           ctx.font = `bold ${fontSize * 1.1}px "${fontName}", "Noto Naskh Arabic", serif`;
           ctx.fillStyle = textSettings.textColor;
           ctx.shadowColor = `rgba(0, 0, 0, ${textSettings.shadowIntensity})`;
-          ctx.shadowBlur = 6 * S;
+          ctx.shadowBlur = isAnyRecording ? 3 * S : 6 * S;
           ctx.fillText(line, x, y);
           return;
         }
