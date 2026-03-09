@@ -1400,7 +1400,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
           return;
         }
 
-        const pulse = 0.6 + Math.sin(Date.now() / 400) * 0.4;
+        const pulse = 0.6 + Math.sin(renderTimestamp / 400) * 0.4;
         let glowColor: string;
         let glowBlur: number;
         let textColor: string;
