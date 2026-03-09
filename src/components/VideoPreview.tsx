@@ -825,7 +825,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     if (slideshowReady && slideshowImagesRef.current.length > 1) {
       const images = slideshowImagesRef.current;
       const presets = kenBurnsPresetsRef.current;
-      const elapsed = Date.now() - slideshowStartTimeRef.current;
+      const elapsed = renderTimestamp - slideshowStartTimeRef.current;
       const cycleDuration = SLIDESHOW_DISPLAY_DURATION + SLIDESHOW_TRANSITION_DURATION;
       const totalCycle = cycleDuration * images.length;
       const cyclePosition = elapsed % totalCycle;
