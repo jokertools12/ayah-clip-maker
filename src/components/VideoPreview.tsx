@@ -1277,7 +1277,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     }
 
     // Draw decorative separator — skip during ALL recording modes for performance
-    if (!isAnyRecording && (displaySettings.showSurahName || displaySettings.showReciterName)) {
+    if (isPreviewRender && (displaySettings.showSurahName || displaySettings.showReciterName)) {
       const lineY = displaySettings.showReciterName ? canvas.height * 0.21 : canvas.height * 0.17;
       const lineHalf = 120 * S;
 
