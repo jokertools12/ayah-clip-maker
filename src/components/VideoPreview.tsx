@@ -1653,8 +1653,48 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       ctx.fillStyle = textSettings.textColor;
       
       // Word wrap — with layout cache to avoid measureText every frame
-      const words = (currentAyahWords?.length ? currentAyahWords : currentAyah.text.split(' ')).filter(Boolean);
-      const cacheKey = `${currentAyah.numberInSurah}|${canvas.width}|${textSettings.fontSize}|${fontName}|${words.length}`;
+      const allWords = (currentAyahWords?.length ? currentAyahWords : currentAyah.text.split(' ')).filter(Boolean);
+      
+      // Apply verse display mode - chunk words differently
+      const verseMode = displaySettings.verseDisplayMode || 'full';
+      let displayWords: string[];
+      
+      if (verseMode === 'full') {
+        displayWords = allWords;
+      } else if (verseMode === 'wordByWord') {
+        // Show only current highlighted word or cycle through
+        const wordIdx = highlightedWordIndex != null ? highlightedWordIndex : Math.floor((Date.now() / 1200) % allWords.length);
+        displayWords = allWords[wordIdx] ? [allWords[wordIdx]] : allWords.slice(0, 1);
+      } else if (verseMode === 'twoWords') {
+        // Show 2 words at a time
+        const chunkSize = 2;
+        const totalChunks = Math.ceil(allWords.length / chunkSize);
+        const chunkIdx = highlightedWordIndex != null
+          ? Math.floor(highlightedWordIndex / chunkSize)
+          : Math.floor((Date.now() / 2000) % totalChunks);
+        const start = chunkIdx * chunkSize;
+        displayWords = allWords.slice(start, start + chunkSize);
+      } else if (verseMode === 'threeTwo') {
+        // Alternating 3 then 2 words
+        const pattern = [3, 2];
+        let pos = 0, chunkIndex = 0;
+        const chunks: string[][] = [];
+        while (pos < allWords.length) {
+          const size = pattern[chunkIndex % pattern.length];
+          chunks.push(allWords.slice(pos, pos + size));
+          pos += size;
+          chunkIndex++;
+        }
+        const cIdx = highlightedWordIndex != null
+          ? (() => { let p = 0; for (let i = 0; i < chunks.length; i++) { if (highlightedWordIndex < p + chunks[i].length) return i; p += chunks[i].length; } return chunks.length - 1; })()
+          : Math.floor((Date.now() / 2500) % chunks.length);
+        displayWords = chunks[cIdx] || allWords.slice(0, 3);
+      } else {
+        displayWords = allWords;
+      }
+      
+      const words = displayWords;
+      const cacheKey = `${currentAyah.numberInSurah}|${canvas.width}|${textSettings.fontSize}|${fontName}|${words.join('|')}|${verseMode}`;
 
       let lines: string[][];
       let spaceWidth: number;
@@ -1669,6 +1709,8 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         startY = textLayoutCacheRef.current.startY;
       } else {
         // Compute and cache
+        // For word-by-word/chunk modes, use larger font
+        const adjustedMaxWidth = verseMode !== 'full' ? canvas.width * 0.9 : maxWidth;
         spaceWidth = ctx.measureText(' ').width;
         lines = [];
         let line: string[] = [];
@@ -1677,7 +1719,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         for (const word of words) {
           const w = ctx.measureText(word).width;
           const add = line.length ? spaceWidth + w : w;
-          if (lw + add > maxWidth && line.length) {
+          if (lw + add > adjustedMaxWidth && line.length) {
             lines.push(line);
             line = [word];
             lw = w;
