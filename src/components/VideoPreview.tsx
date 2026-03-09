@@ -1918,13 +1918,15 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       ctx.direction = 'rtl';
       ctx.textAlign = 'right';
 
-      const primaryRaw = (() => {
+      // Cache primaryRaw to avoid per-frame DOM access
+      if (!primaryColorCacheRef.current) {
         try {
-          return getComputedStyle(document.documentElement).getPropertyValue('--primary').trim();
+          primaryColorCacheRef.current = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim();
         } catch {
-          return '';
+          primaryColorCacheRef.current = '';
         }
-      })();
+      }
+      const primaryRaw = primaryColorCacheRef.current;
       
       // Different highlight styles
       let highlightBg: string;
