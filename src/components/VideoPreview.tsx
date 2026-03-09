@@ -182,7 +182,14 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     totalHeight: number;
     startY: number;
     lineHeight: number;
+    lineTotals: number[];
   } | null>(null);
+
+  // ── Performance caches (avoid per-frame DOM/gradient recreation) ──────
+  const primaryColorCacheRef = useRef<string | null>(null);
+  const gradientCacheSizeRef = useRef<{ w: number; h: number }>({ w: 0, h: 0 });
+  const topGradientCacheRef = useRef<CanvasGradient | null>(null);
+  const bottomGradientCacheRef = useRef<CanvasGradient | null>(null);
 
   // Verse transition state
   const prevAyahRef = useRef<{ numberInSurah: number; text: string } | null>(null);
@@ -1001,19 +1008,25 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     ctx.fillStyle = `rgba(0, 0, 0, ${textSettings.overlayOpacity})`;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Draw top gradient
-    const topGradient = ctx.createLinearGradient(0, 0, 0, canvas.height * 0.25);
-    topGradient.addColorStop(0, 'rgba(0, 0, 0, 0.5)');
-    topGradient.addColorStop(1, 'transparent');
-    ctx.fillStyle = topGradient;
-    ctx.fillRect(0, 0, canvas.width, canvas.height * 0.25);
-
-    // Draw bottom gradient
-    const bottomGradient = ctx.createLinearGradient(0, canvas.height * 0.75, 0, canvas.height);
-    bottomGradient.addColorStop(0, 'transparent');
-    bottomGradient.addColorStop(1, 'rgba(0, 0, 0, 0.5)');
-    ctx.fillStyle = bottomGradient;
-    ctx.fillRect(0, canvas.height * 0.75, canvas.width, canvas.height * 0.25);
+    // Draw top/bottom gradients (skip during recording for performance)
+    if (isPreviewRender) {
+      const sizeChanged = gradientCacheSizeRef.current.w !== canvas.width || gradientCacheSizeRef.current.h !== canvas.height;
+      if (sizeChanged || !topGradientCacheRef.current || !bottomGradientCacheRef.current) {
+        const tg = ctx.createLinearGradient(0, 0, 0, canvas.height * 0.25);
+        tg.addColorStop(0, 'rgba(0, 0, 0, 0.5)');
+        tg.addColorStop(1, 'transparent');
+        topGradientCacheRef.current = tg;
+        const bg = ctx.createLinearGradient(0, canvas.height * 0.75, 0, canvas.height);
+        bg.addColorStop(0, 'transparent');
+        bg.addColorStop(1, 'rgba(0, 0, 0, 0.5)');
+        bottomGradientCacheRef.current = bg;
+        gradientCacheSizeRef.current = { w: canvas.width, h: canvas.height };
+      }
+      ctx.fillStyle = topGradientCacheRef.current;
+      ctx.fillRect(0, 0, canvas.width, canvas.height * 0.25);
+      ctx.fillStyle = bottomGradientCacheRef.current;
+      ctx.fillRect(0, canvas.height * 0.75, canvas.width, canvas.height * 0.25);
+    }
 
     // (Particles removed for performance — particleDensity defaults to 'off')
 
@@ -1242,12 +1255,14 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         case 'glow': {
           ctx.font = `${textSettings.fontSize * 1.0 * S}px "${fontName}", "Noto Naskh Arabic", serif`;
           ctx.shadowColor = '#D4AF37';
-           ctx.shadowBlur = isAnyRecording ? 6 * S : 18 * S;
-           ctx.fillStyle = '#FFD700';
-           ctx.fillText(reciterText, canvas.width / 2, reciterY);
-           // Second pass for stronger glow
-           ctx.shadowBlur = isAnyRecording ? 3 * S : 8 * S;
+          ctx.shadowBlur = !isPreviewRender ? 4 * S : 18 * S;
+          ctx.fillStyle = '#FFD700';
           ctx.fillText(reciterText, canvas.width / 2, reciterY);
+          // Second pass for stronger glow — skip during recording
+          if (isPreviewRender) {
+            ctx.shadowBlur = 8 * S;
+            ctx.fillText(reciterText, canvas.width / 2, reciterY);
+          }
           break;
         }
         default: { // simple
@@ -1261,8 +1276,8 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       ctx.restore();
     }
 
-    // Draw decorative separator (waveform-inspired) - Minimal ornate line
-    if (displaySettings.showSurahName || displaySettings.showReciterName) {
+    // Draw decorative separator — skip during ALL recording modes for performance
+    if (isPreviewRender && (displaySettings.showSurahName || displaySettings.showReciterName)) {
       const lineY = displaySettings.showReciterName ? canvas.height * 0.21 : canvas.height * 0.17;
       const lineHalf = 120 * S;
 
@@ -1756,12 +1771,17 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         totalHeight = lines.length * lineHeight;
         startY = ayahY - totalHeight / 2;
 
-        textLayoutCacheRef.current = { key: cacheKey, lines, spaceWidth, totalHeight, startY, lineHeight };
+        // Pre-compute line totals to avoid per-frame measureText
+        const lineTotals = lines.map(wordsInLine =>
+          wordsInLine.reduce((sum, w) => sum + ctx.measureText(w).width, 0) +
+          Math.max(wordsInLine.length - 1, 0) * spaceWidth
+        );
+        textLayoutCacheRef.current = { key: cacheKey, lines, spaceWidth, totalHeight, startY, lineHeight, lineTotals };
       }
 
       // Draw decoration (side borders or separator) based on decorationStyle
-      // Skip complex decorations in recordingLite mode for performance
-      if (!isLiteRecording) {
+      // Skip complex decorations in ALL recording modes for performance
+      if (!isAnyRecording) {
         const decoStyle = displaySettings.decorationStyle || 'none';
 
         // Draw side ornaments (left & right of ayah area)
@@ -1903,13 +1923,15 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       ctx.direction = 'rtl';
       ctx.textAlign = 'right';
 
-      const primaryRaw = (() => {
+      // Cache primaryRaw to avoid per-frame DOM access
+      if (!primaryColorCacheRef.current) {
         try {
-          return getComputedStyle(document.documentElement).getPropertyValue('--primary').trim();
+          primaryColorCacheRef.current = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim();
         } catch {
-          return '';
+          primaryColorCacheRef.current = '';
         }
-      })();
+      }
+      const primaryRaw = primaryColorCacheRef.current;
       
       // Different highlight styles
       let highlightBg: string;
@@ -1936,9 +1958,10 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
 
       let localIndex = 0;
       const chunkStart = chunkStartWordIndexRef.current;
+      const cachedLineTotals = textLayoutCacheRef.current?.lineTotals;
       lines.forEach((wordsInLine, i) => {
-        const lineTotal = wordsInLine.reduce((sum, w) => sum + ctx.measureText(w).width, 0) +
-          Math.max(wordsInLine.length - 1, 0) * spaceWidth;
+        const lineTotal = cachedLineTotals?.[i] ?? (wordsInLine.reduce((sum, w) => sum + ctx.measureText(w).width, 0) +
+          Math.max(wordsInLine.length - 1, 0) * spaceWidth);
 
         let cursorX = canvas.width / 2 + lineTotal / 2;
         const y = startY + i * lineHeight + lineHeight / 2;
