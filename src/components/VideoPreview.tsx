@@ -1775,8 +1775,8 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       }
 
       // Draw decoration (side borders or separator) based on decorationStyle
-      // Skip complex decorations in recordingLite mode for performance
-      if (!isLiteRecording) {
+      // Skip complex decorations in ALL recording modes for performance
+      if (!isAnyRecording) {
         const decoStyle = displaySettings.decorationStyle || 'none';
 
         // Draw side ornaments (left & right of ayah area)
