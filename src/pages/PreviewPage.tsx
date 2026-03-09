@@ -1045,9 +1045,13 @@ export default function PreviewPage() {
           let stopped = false;
 
           const drawIsolatedFrame = () => {
-            const livePreviewApi = videoPreviewRef.current;
-            const draw = livePreviewApi?.drawFrame ?? previewApi.drawFrame;
-            draw(recordingCanvas, attempt.renderMode);
+            try {
+              const livePreviewApi = videoPreviewRef.current;
+              const draw = livePreviewApi?.drawFrame ?? previewApi.drawFrame;
+              draw(recordingCanvas, attempt.renderMode);
+            } catch (e) {
+              console.warn('Frame draw error:', e);
+            }
           };
 
           const renderIsolatedFrame = (now: number) => {
