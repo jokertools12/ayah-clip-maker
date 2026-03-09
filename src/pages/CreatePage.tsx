@@ -18,7 +18,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { surahs } from '@/data/surahs';
 import { reciters, getRecitersByStyle } from '@/data/reciters';
-import { BackgroundItem, getRandomBackground, slideshowBackgrounds } from '@/data/backgrounds';
+import { BackgroundItem, getRandomBackground, slideshowBackgrounds, backgroundImages } from '@/data/backgrounds';
 import { FamousAyah, famousAyahs, ayahCategories, getAyahsByCategory } from '@/data/famousAyahs';
 import {
   performers,
@@ -82,7 +82,7 @@ export default function CreatePage() {
 
   // ── Shared state ──
   const [selectedBackground, setSelectedBackground] = useState<BackgroundItem | null>(
-    () => slideshowBackgrounds[0] || getRandomBackground('animated')
+    () => backgroundImages[0] || slideshowBackgrounds[0] || getRandomBackground('animated')
   );
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('9:16');
   const [textSettings, setTextSettings] = useState<TextSettings>(defaultTextSettings);
