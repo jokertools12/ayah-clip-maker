@@ -387,28 +387,22 @@ export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPane
           </RadioGroup>
         </div>
 
-        {/* Particle Density - Premium */}
+        {/* Verse Display Mode */}
         <div className="space-y-3 pt-2 border-t">
           <Label className="text-sm flex items-center gap-2">
-            <Droplets className="h-4 w-4" />
-            كثافة الجزيئات الذهبية
-            {!isPremium && <Lock className="h-3 w-3 text-muted-foreground" />}
+            <Type className="h-4 w-4" />
+            طريقة عرض الآيات
           </Label>
-          {!isPremium ? (
-            <div className="text-center py-3">
-              <PremiumBadge showLock />
-            </div>
-          ) : (
           <RadioGroup
-            value={settings.particleDensity || 'off'}
-            onValueChange={(value) => updateSetting('particleDensity', value as DisplaySettings['particleDensity'])}
-            className="grid grid-cols-4 gap-2"
+            value={settings.verseDisplayMode || 'full'}
+            onValueChange={(value) => updateSetting('verseDisplayMode', value as DisplaySettings['verseDisplayMode'])}
+            className="grid grid-cols-2 gap-2"
           >
-            {particleDensityOptions.map((option) => (
+            {verseDisplayModeOptions.map((option) => (
               <div key={option.value} className="relative">
-                <RadioGroupItem value={option.value} id={`particle-${option.value}`} className="peer sr-only" />
+                <RadioGroupItem value={option.value} id={`vdm-${option.value}`} className="peer sr-only" />
                 <Label
-                  htmlFor={`particle-${option.value}`}
+                  htmlFor={`vdm-${option.value}`}
                   className="flex flex-col items-center rounded-lg border-2 border-muted p-2 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all text-center"
                 >
                   <span className="font-medium text-sm">{option.label}</span>
@@ -417,7 +411,6 @@ export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPane
               </div>
             ))}
           </RadioGroup>
-          )}
         </div>
 
         {/* Glow Style - Premium */}
