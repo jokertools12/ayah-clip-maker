@@ -1134,7 +1134,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     ctx.textBaseline = 'middle';
 
     // Apply textShadowStyle setting
-    const textShadowStyle = displaySettings.textShadowStyle || 'soft';
+    const textShadowStyle = isAnyRecording ? 'none' : (displaySettings.textShadowStyle || 'soft');
     if (textShadowStyle === 'none') {
       ctx.shadowColor = 'transparent';
       ctx.shadowBlur = 0;
