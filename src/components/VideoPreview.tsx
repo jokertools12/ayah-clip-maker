@@ -97,6 +97,8 @@ const DEFAULT_DISPLAY_SETTINGS = {
   highlightStyle: 'none' as const,
   frameStyle: 'none' as const,
   ayahNumberStyle: 'circle' as const,
+  ayahNumberColor: 'gold' as const,
+  verseDisplayMode: 'full' as const,
   surahNamePosition: 'top' as const,
   surahNameStyle: 'classic' as const,
   reciterNameStyle: 'simple' as const,
