@@ -1948,13 +1948,14 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       if (displaySettings.showAyahNumber) {
         let badgeY: number;
         let badgeSize = 36 * S;
+        // Always position badge relative to the text block
+        badgeY = startY + totalHeight + 40 * S;
         if (verseMode !== 'full') {
-          // For chunk modes, place badge at a fixed lower position to prevent overlap with large text
-          badgeY = canvas.height * 0.72;
-          badgeSize = 30 * S; // slightly smaller for chunk modes
-        } else {
-          badgeY = startY + totalHeight + 70 * S;
+          badgeSize = 30 * S;
         }
+        // Clamp to prevent going off-screen
+        badgeY = Math.min(badgeY, canvas.height * 0.88);
+        badgeY = Math.max(badgeY, canvas.height * 0.55);
         drawAyahBadge(ctx, canvas.width / 2, badgeY, currentAyah.numberInSurah, badgeSize, displaySettings.ayahNumberStyle, displaySettings.ayahNumberColor);
       }
       ctx.restore(); // End verse transition transform
