@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { Layout } from '@/components/Layout';
@@ -7,12 +7,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
-  Compass, Heart, Share2, Video, Mic, BookOpen, Loader2, Clock,
-  MessageCircle, Send, User, Trash2, Search, Reply, ChevronDown,
+  Compass, Heart, Share2, Video, Mic, BookOpen, Loader2,
+  MessageCircle, Send, User, Trash2, Reply,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { AdvancedSearchBar, SearchFilters, defaultFilters, getDateFilterTimestamp } from '@/components/AdvancedSearchBar';
+import { Input } from '@/components/ui/input';
 
 interface PublicVideo {
   id: string;
@@ -21,6 +22,7 @@ interface PublicVideo {
   start_ayah: number;
   end_ayah: number;
   reciter_name: string;
+  reciter_id: string;
   background_type: string;
   aspect_ratio: string;
   created_at: string;
@@ -44,8 +46,7 @@ export default function DiscoverPage() {
   const { user, isAuthenticated } = useAuth();
   const [videos, setVideos] = useState<PublicVideo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [sortBy, setSortBy] = useState<'latest' | 'popular'>('latest');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [filters, setFilters] = useState<SearchFilters>(defaultFilters);
   const [expandedComments, setExpandedComments] = useState<string | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentText, setCommentText] = useState('');
@@ -93,16 +94,56 @@ export default function DiscoverPage() {
       comments_count: commentCounts[v.id] || 0,
     }));
 
-    if (sortBy === 'popular') mapped.sort((a, b) => b.likes_count - a.likes_count);
     setVideos(mapped);
     setLoading(false);
   };
 
-  useEffect(() => { fetchVideos(); }, [user, sortBy]);
+  useEffect(() => { fetchVideos(); }, [user]);
 
-  const filteredVideos = searchQuery.trim()
-    ? videos.filter(v => v.surah_name.includes(searchQuery) || v.reciter_name.includes(searchQuery))
-    : videos;
+  // Apply filters and sorting
+  const filteredVideos = useMemo(() => {
+    let result = [...videos];
+
+    // Text search
+    if (filters.query.trim()) {
+      const q = filters.query.toLowerCase();
+      result = result.filter(v => 
+        v.surah_name.toLowerCase().includes(q) || 
+        v.reciter_name.toLowerCase().includes(q)
+      );
+    }
+
+    // Reciter filter
+    if (filters.reciterId !== 'all') {
+      result = result.filter(v => v.reciter_id === filters.reciterId);
+    }
+
+    // Surah filter
+    if (filters.surahNumber !== 'all') {
+      result = result.filter(v => v.surah_number === Number(filters.surahNumber));
+    }
+
+    // Date filter
+    const dateTimestamp = getDateFilterTimestamp(filters.dateFilter);
+    if (dateTimestamp) {
+      result = result.filter(v => new Date(v.created_at) >= new Date(dateTimestamp));
+    }
+
+    // Sorting
+    switch (filters.sortBy) {
+      case 'popular':
+        result.sort((a, b) => b.likes_count - a.likes_count);
+        break;
+      case 'oldest':
+        result.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+        break;
+      case 'latest':
+      default:
+        result.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    }
+
+    return result;
+  }, [videos, filters]);
 
   const toggleLike = async (videoId: string) => {
     if (!isAuthenticated || !user) { toast.error('سجل دخول أولاً'); return; }
