@@ -120,11 +120,19 @@ const reciterNameStyleOptions = [
   { value: 'glow', label: 'متوهج', description: 'توهج ذهبي حول النص' },
 ];
 
-const particleDensityOptions = [
-  { value: 'off', label: 'إيقاف', description: 'بدون جزيئات' },
-  { value: 'low', label: 'قليل', description: '10 جزيئات' },
-  { value: 'medium', label: 'متوسط', description: '20 جزيئة' },
-  { value: 'high', label: 'كثيف', description: '40 جزيئة' },
+const ayahNumberColorOptions = [
+  { value: 'gold', label: 'ذهبي', description: '✨', color: '#D4AF37' },
+  { value: 'white', label: 'أبيض', description: '⬜', color: '#FFFFFF' },
+  { value: 'silver', label: 'فضي', description: '🩶', color: '#C0C0C0' },
+  { value: 'emerald', label: 'زمردي', description: '💚', color: '#50C878' },
+  { value: 'royal', label: 'ملكي', description: '💜', color: '#7B68EE' },
+];
+
+const verseDisplayModeOptions = [
+  { value: 'full', label: 'كامل', description: 'عرض الآية كاملة' },
+  { value: 'twoWords', label: 'كلمتين', description: 'عرض كلمتين كلمتين' },
+  { value: 'threeTwo', label: 'ثلاث ثم اثنتين', description: 'تبديل 3 و 2 كلمات' },
+  { value: 'wordByWord', label: 'كلمة كلمة', description: 'عرض كلمة واحدة' },
 ];
 
 const glowStyleOptions = [
