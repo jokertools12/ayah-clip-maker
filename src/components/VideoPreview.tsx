@@ -2039,7 +2039,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
 
           ctx.save();
           if (isWordHighlighted) {
-            if (displaySettings.highlightStyle === 'glow') {
+            if (effectiveHighlightStyle === 'glow') {
               const glowPulse = 0.35 + Math.sin(Math.PI * Math.min(Math.max(highlightWordProgress ?? 0, 0), 1)) * 0.65;
               ctx.shadowColor = '#FFD700';
               ctx.shadowBlur = isAnyRecording ? (8 + glowPulse * 14) * S : (18 + glowPulse * 28) * S;
