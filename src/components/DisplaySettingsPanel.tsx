@@ -18,6 +18,8 @@ export interface DisplaySettings {
   highlightStyle: 'none' | 'solid' | 'glow' | 'underline' | 'shadow';
   frameStyle: 'none' | 'simple' | 'ornate' | 'golden' | 'geometric' | 'modern' | 'minimal';
   ayahNumberStyle: 'circle' | 'star' | 'diamond' | 'octagon' | 'flower' | 'square' | 'hexagon';
+  ayahNumberColor: 'gold' | 'white' | 'silver' | 'emerald' | 'royal';
+  verseDisplayMode: 'full' | 'twoWords' | 'threeTwo' | 'wordByWord';
   surahNamePosition: 'top' | 'bottom' | 'topLeft' | 'topRight';
   surahNameStyle: 'classic' | 'banner' | 'calligraphy' | 'circle' | 'diamond' | 'ribbon';
   reciterNameStyle: 'simple' | 'elegant' | 'badge' | 'tag' | 'glow';
@@ -118,11 +120,19 @@ const reciterNameStyleOptions = [
   { value: 'glow', label: 'متوهج', description: 'توهج ذهبي حول النص' },
 ];
 
-const particleDensityOptions = [
-  { value: 'off', label: 'إيقاف', description: 'بدون جزيئات' },
-  { value: 'low', label: 'قليل', description: '10 جزيئات' },
-  { value: 'medium', label: 'متوسط', description: '20 جزيئة' },
-  { value: 'high', label: 'كثيف', description: '40 جزيئة' },
+const ayahNumberColorOptions = [
+  { value: 'gold', label: 'ذهبي', description: '✨', color: '#D4AF37' },
+  { value: 'white', label: 'أبيض', description: '⬜', color: '#FFFFFF' },
+  { value: 'silver', label: 'فضي', description: '🩶', color: '#C0C0C0' },
+  { value: 'emerald', label: 'زمردي', description: '💚', color: '#50C878' },
+  { value: 'royal', label: 'ملكي', description: '💜', color: '#7B68EE' },
+];
+
+const verseDisplayModeOptions = [
+  { value: 'full', label: 'كامل', description: 'عرض الآية كاملة' },
+  { value: 'twoWords', label: 'كلمتين', description: 'عرض كلمتين كلمتين' },
+  { value: 'threeTwo', label: 'ثلاث ثم اثنتين', description: 'تبديل 3 و 2 كلمات' },
+  { value: 'wordByWord', label: 'كلمة كلمة', description: 'عرض كلمة واحدة' },
 ];
 
 const glowStyleOptions = [
@@ -377,28 +387,22 @@ export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPane
           </RadioGroup>
         </div>
 
-        {/* Particle Density - Premium */}
+        {/* Verse Display Mode */}
         <div className="space-y-3 pt-2 border-t">
           <Label className="text-sm flex items-center gap-2">
-            <Droplets className="h-4 w-4" />
-            كثافة الجزيئات الذهبية
-            {!isPremium && <Lock className="h-3 w-3 text-muted-foreground" />}
+            <Type className="h-4 w-4" />
+            طريقة عرض الآيات
           </Label>
-          {!isPremium ? (
-            <div className="text-center py-3">
-              <PremiumBadge showLock />
-            </div>
-          ) : (
           <RadioGroup
-            value={settings.particleDensity || 'off'}
-            onValueChange={(value) => updateSetting('particleDensity', value as DisplaySettings['particleDensity'])}
-            className="grid grid-cols-4 gap-2"
+            value={settings.verseDisplayMode || 'full'}
+            onValueChange={(value) => updateSetting('verseDisplayMode', value as DisplaySettings['verseDisplayMode'])}
+            className="grid grid-cols-2 gap-2"
           >
-            {particleDensityOptions.map((option) => (
+            {verseDisplayModeOptions.map((option) => (
               <div key={option.value} className="relative">
-                <RadioGroupItem value={option.value} id={`particle-${option.value}`} className="peer sr-only" />
+                <RadioGroupItem value={option.value} id={`vdm-${option.value}`} className="peer sr-only" />
                 <Label
-                  htmlFor={`particle-${option.value}`}
+                  htmlFor={`vdm-${option.value}`}
                   className="flex flex-col items-center rounded-lg border-2 border-muted p-2 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all text-center"
                 >
                   <span className="font-medium text-sm">{option.label}</span>
@@ -407,7 +411,6 @@ export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPane
               </div>
             ))}
           </RadioGroup>
-          )}
         </div>
 
         {/* Glow Style - Premium */}
@@ -606,6 +609,7 @@ export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPane
 
         {/* Ayah Number Style */}
         {settings.showAyahNumber && (
+          <>
           <div className="space-y-3 pt-2 border-t">
             <Label className="text-sm flex items-center gap-2">
               <Hash className="h-4 w-4" />
@@ -630,9 +634,31 @@ export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPane
               ))}
             </RadioGroup>
           </div>
+          {/* Ayah Number Color */}
+          <div className="space-y-3 pt-2">
+            <Label className="text-sm">لون رقم الآية</Label>
+            <RadioGroup
+              value={settings.ayahNumberColor || 'gold'}
+              onValueChange={(value) => updateSetting('ayahNumberColor', value as DisplaySettings['ayahNumberColor'])}
+              className="flex flex-wrap gap-2"
+            >
+              {ayahNumberColorOptions.map((option) => (
+                <div key={option.value} className="relative">
+                  <RadioGroupItem value={option.value} id={`ayahColor-${option.value}`} className="peer sr-only" />
+                  <Label
+                    htmlFor={`ayahColor-${option.value}`}
+                    className="flex flex-col items-center rounded-lg border-2 border-muted px-3 py-2 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all"
+                  >
+                    <span className="text-lg" style={{ color: option.color }}>{option.description}</span>
+                    <span className="text-xs">{option.label}</span>
+                  </Label>
+                </div>
+              ))}
+            </RadioGroup>
+          </div>
+          </>
         )}
 
-        {/* Surah Name Position */}
         {settings.showSurahName && (
           <div className="space-y-3 pt-2 border-t">
             <Label className="text-sm flex items-center gap-2">

@@ -49,6 +49,8 @@ interface VideoPreviewProps {
     highlightStyle: 'none' | 'solid' | 'glow' | 'underline' | 'shadow';
     frameStyle: 'none' | 'simple' | 'ornate' | 'golden' | 'geometric' | 'modern' | 'minimal';
     ayahNumberStyle: 'circle' | 'star' | 'diamond' | 'octagon' | 'flower' | 'square' | 'hexagon';
+    ayahNumberColor?: 'gold' | 'white' | 'silver' | 'emerald' | 'royal';
+    verseDisplayMode?: 'full' | 'twoWords' | 'threeTwo' | 'wordByWord';
     surahNamePosition?: 'top' | 'bottom' | 'topLeft' | 'topRight';
     surahNameStyle?: 'classic' | 'banner' | 'calligraphy' | 'circle' | 'diamond' | 'ribbon';
     reciterNameStyle?: 'simple' | 'elegant' | 'badge' | 'tag' | 'glow';
@@ -95,6 +97,8 @@ const DEFAULT_DISPLAY_SETTINGS = {
   highlightStyle: 'none' as const,
   frameStyle: 'none' as const,
   ayahNumberStyle: 'circle' as const,
+  ayahNumberColor: 'gold' as const,
+  verseDisplayMode: 'full' as const,
   surahNamePosition: 'top' as const,
   surahNameStyle: 'classic' as const,
   reciterNameStyle: 'simple' as const,
@@ -435,8 +439,18 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   };
 
   // Draw decorative ayah number badge with different styles
-  const drawAyahBadge = useCallback((ctx: CanvasRenderingContext2D, x: number, y: number, num: number, size: number, style: string) => {
+  const drawAyahBadge = useCallback((ctx: CanvasRenderingContext2D, x: number, y: number, num: number, size: number, style: string, colorScheme?: string) => {
     const arabicNum = toArabicNumber(num);
+    
+    // Color map based on ayahNumberColor setting
+    const colorMap: Record<string, { main: string; glow: string; fill: string }> = {
+      gold: { main: 'rgba(212, 175, 55, 0.7)', glow: 'rgba(212, 175, 55, 0.4)', fill: '#D4AF37' },
+      white: { main: 'rgba(255, 255, 255, 0.7)', glow: 'rgba(255, 255, 255, 0.3)', fill: '#FFFFFF' },
+      silver: { main: 'rgba(192, 192, 192, 0.7)', glow: 'rgba(192, 192, 192, 0.3)', fill: '#C0C0C0' },
+      emerald: { main: 'rgba(80, 200, 120, 0.7)', glow: 'rgba(80, 200, 120, 0.3)', fill: '#50C878' },
+      royal: { main: 'rgba(123, 104, 238, 0.7)', glow: 'rgba(123, 104, 238, 0.3)', fill: '#7B68EE' },
+    };
+    const colors = colorMap[colorScheme || 'gold'] || colorMap.gold;
     
     ctx.save();
     
@@ -454,6 +468,13 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       case 'flower':
         drawFlower(ctx, x, y, size);
         break;
+      case 'hexagon':
+        drawPolygon(ctx, x, y, size, 6);
+        break;
+      case 'square':
+        ctx.beginPath();
+        ctx.roundRect(x - size, y - size, size * 2, size * 2, size * 0.2);
+        break;
       default: // circle
         ctx.beginPath();
         ctx.arc(x, y, size, 0, Math.PI * 2);
@@ -461,14 +482,14 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     
     // Fill with gradient
     const gradient = ctx.createRadialGradient(x, y, 0, x, y, size);
-    gradient.addColorStop(0, 'rgba(212, 175, 55, 0.4)');
-    gradient.addColorStop(0.7, 'rgba(212, 175, 55, 0.2)');
-    gradient.addColorStop(1, 'rgba(212, 175, 55, 0.1)');
+    gradient.addColorStop(0, colors.glow);
+    gradient.addColorStop(0.7, colors.glow.replace('0.4', '0.2').replace('0.3', '0.15'));
+    gradient.addColorStop(1, 'rgba(0, 0, 0, 0.1)');
     ctx.fillStyle = gradient;
     ctx.fill();
     
     // Draw border
-    ctx.strokeStyle = 'rgba(212, 175, 55, 0.7)';
+    ctx.strokeStyle = colors.main;
     ctx.lineWidth = 2;
     ctx.stroke();
     
@@ -476,14 +497,14 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     if (style === 'circle') {
       ctx.beginPath();
       ctx.arc(x, y, size * 0.75, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(212, 175, 55, 0.4)';
+      ctx.strokeStyle = colors.main.replace('0.7', '0.4');
       ctx.lineWidth = 1;
       ctx.stroke();
     }
     
     // Draw number
     ctx.font = `bold ${size * 1.1}px "Noto Naskh Arabic", "Amiri", serif`;
-    ctx.fillStyle = '#D4AF37';
+    ctx.fillStyle = colors.fill;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
@@ -1632,8 +1653,48 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       ctx.fillStyle = textSettings.textColor;
       
       // Word wrap — with layout cache to avoid measureText every frame
-      const words = (currentAyahWords?.length ? currentAyahWords : currentAyah.text.split(' ')).filter(Boolean);
-      const cacheKey = `${currentAyah.numberInSurah}|${canvas.width}|${textSettings.fontSize}|${fontName}|${words.length}`;
+      const allWords = (currentAyahWords?.length ? currentAyahWords : currentAyah.text.split(' ')).filter(Boolean);
+      
+      // Apply verse display mode - chunk words differently
+      const verseMode = displaySettings.verseDisplayMode || 'full';
+      let displayWords: string[];
+      
+      if (verseMode === 'full') {
+        displayWords = allWords;
+      } else if (verseMode === 'wordByWord') {
+        // Show only current highlighted word or cycle through
+        const wordIdx = highlightedWordIndex != null ? highlightedWordIndex : Math.floor((Date.now() / 1200) % allWords.length);
+        displayWords = allWords[wordIdx] ? [allWords[wordIdx]] : allWords.slice(0, 1);
+      } else if (verseMode === 'twoWords') {
+        // Show 2 words at a time
+        const chunkSize = 2;
+        const totalChunks = Math.ceil(allWords.length / chunkSize);
+        const chunkIdx = highlightedWordIndex != null
+          ? Math.floor(highlightedWordIndex / chunkSize)
+          : Math.floor((Date.now() / 2000) % totalChunks);
+        const start = chunkIdx * chunkSize;
+        displayWords = allWords.slice(start, start + chunkSize);
+      } else if (verseMode === 'threeTwo') {
+        // Alternating 3 then 2 words
+        const pattern = [3, 2];
+        let pos = 0, chunkIndex = 0;
+        const chunks: string[][] = [];
+        while (pos < allWords.length) {
+          const size = pattern[chunkIndex % pattern.length];
+          chunks.push(allWords.slice(pos, pos + size));
+          pos += size;
+          chunkIndex++;
+        }
+        const cIdx = highlightedWordIndex != null
+          ? (() => { let p = 0; for (let i = 0; i < chunks.length; i++) { if (highlightedWordIndex < p + chunks[i].length) return i; p += chunks[i].length; } return chunks.length - 1; })()
+          : Math.floor((Date.now() / 2500) % chunks.length);
+        displayWords = chunks[cIdx] || allWords.slice(0, 3);
+      } else {
+        displayWords = allWords;
+      }
+      
+      const words = displayWords;
+      const cacheKey = `${currentAyah.numberInSurah}|${canvas.width}|${textSettings.fontSize}|${fontName}|${words.join('|')}|${verseMode}`;
 
       let lines: string[][];
       let spaceWidth: number;
@@ -1648,6 +1709,8 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         startY = textLayoutCacheRef.current.startY;
       } else {
         // Compute and cache
+        // For word-by-word/chunk modes, use larger font
+        const adjustedMaxWidth = verseMode !== 'full' ? canvas.width * 0.9 : maxWidth;
         spaceWidth = ctx.measureText(' ').width;
         lines = [];
         let line: string[] = [];
@@ -1656,7 +1719,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         for (const word of words) {
           const w = ctx.measureText(word).width;
           const add = line.length ? spaceWidth + w : w;
-          if (lw + add > maxWidth && line.length) {
+          if (lw + add > adjustedMaxWidth && line.length) {
             lines.push(line);
             line = [word];
             lw = w;
@@ -1901,7 +1964,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       // Draw ayah number badge (if enabled)
       if (displaySettings.showAyahNumber) {
         const badgeY = startY + totalHeight + 70 * S;
-        drawAyahBadge(ctx, canvas.width / 2, badgeY, currentAyah.numberInSurah, 36 * S, displaySettings.ayahNumberStyle);
+        drawAyahBadge(ctx, canvas.width / 2, badgeY, currentAyah.numberInSurah, 36 * S, displaySettings.ayahNumberStyle, displaySettings.ayahNumberColor);
       }
       ctx.restore(); // End verse transition transform
     }

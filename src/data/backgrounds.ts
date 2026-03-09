@@ -76,6 +76,20 @@ export const animatedBackgrounds: BackgroundItem[] = [];
 
 export const slideshowBackgrounds: BackgroundItem[] = [
   {
+    id: 'slideshow-mountain-peaks', type: 'animated',
+    url: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&q=80',
+    thumbnail: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=300',
+    name: 'جبال شاهقة متغيرة', category: 'mountain',
+    slideImages: [
+      'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&q=80',
+      'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=1920&q=80',
+      'https://images.unsplash.com/photo-1454496522488-7a8e488e8606?w=1920&q=80',
+      'https://images.unsplash.com/photo-1486870591958-9b9d0d1dda99?w=1920&q=80',
+      'https://images.unsplash.com/photo-1519681393784-d120267933ba?w=1920&q=80',
+      'https://images.unsplash.com/photo-1483728642387-6c3bdd6c93e5?w=1920&q=80',
+    ],
+  },
+  {
     id: 'slideshow-nature-1', type: 'animated',
     url: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&q=80',
     thumbnail: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=300',
