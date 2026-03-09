@@ -158,8 +158,9 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     transition: SlideshowTransition;
   }>>([]);
 
-  // Floating particles state (golden dust)
-  const particlesRef = useRef<Array<{ x: number; y: number; vx: number; vy: number; size: number; alpha: number; life: number }>>([]);
+  // Smooth chunk cycling counter for non-full verse modes
+  const chunkCounterRef = useRef<number>(0);
+  const lastChunkTimeRef = useRef<number>(Date.now());
 
   // ── Text layout cache ───────────────────────────────────────────────────
   const textLayoutCacheRef = useRef<{
