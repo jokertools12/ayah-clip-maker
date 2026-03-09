@@ -1625,10 +1625,35 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       const allWords = (currentAyahWords?.length ? currentAyahWords : currentAyah.text.split(' ')).filter(Boolean);
       
       let displayWords: string[];
+      let chunkStartWordIndex = 0; // Global word index where current chunk starts
       
-      // Smooth chunk cycling: use a counter that advances at fixed intervals
+      // ── Adaptive timing: learn reciter speed from highlightedWordIndex changes ──
       const now = Date.now();
-      const chunkInterval = verseMode === 'wordByWord' ? 800 : verseMode === 'twoWords' ? 1500 : 1800;
+      if (highlightedWordIndex != null && highlightedWordIndex !== lastHighlightedWordRef.current) {
+        if (lastHighlightedWordRef.current != null) {
+          highlightWordTimestampsRef.current.push(now);
+          // Keep last 8 timestamps for rolling average
+          if (highlightWordTimestampsRef.current.length > 8) {
+            highlightWordTimestampsRef.current.shift();
+          }
+          // Calculate average time per word from recent transitions
+          const ts = highlightWordTimestampsRef.current;
+          if (ts.length >= 2) {
+            const totalTime = ts[ts.length - 1] - ts[0];
+            const avgPerWord = totalTime / (ts.length - 1);
+            // Adaptive interval: scale by chunk size with some breathing room
+            const chunkSize = verseMode === 'wordByWord' ? 1 : verseMode === 'twoWords' ? 2 : 2.5;
+            adaptiveChunkIntervalRef.current = Math.max(300, Math.min(avgPerWord * chunkSize, 4000));
+          }
+        }
+        lastHighlightedWordRef.current = highlightedWordIndex;
+      }
+      
+      // Use adaptive interval (learned from reciter) or fallback defaults
+      const chunkInterval = highlightedWordIndex != null 
+        ? adaptiveChunkIntervalRef.current
+        : (verseMode === 'wordByWord' ? 800 : verseMode === 'twoWords' ? 1500 : 1800);
+      
       if (now - lastChunkTimeRef.current > chunkInterval) {
         chunkCounterRef.current += 1;
         lastChunkTimeRef.current = now;
@@ -1638,10 +1663,12 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       if (verseMode === 'full') {
         displayWords = allWords;
         currentChunkIndex = 0;
+        chunkStartWordIndex = 0;
       } else if (verseMode === 'wordByWord') {
         const wordIdx = highlightedWordIndex != null ? highlightedWordIndex : (chunkCounterRef.current % allWords.length);
         displayWords = allWords[wordIdx] ? [allWords[wordIdx]] : allWords.slice(0, 1);
         currentChunkIndex = wordIdx;
+        chunkStartWordIndex = wordIdx;
       } else if (verseMode === 'twoWords') {
         const chunkSize = 2;
         const totalChunks = Math.ceil(allWords.length / chunkSize);
@@ -1651,12 +1678,15 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         const start = chunkIdx * chunkSize;
         displayWords = allWords.slice(start, start + chunkSize);
         currentChunkIndex = chunkIdx;
+        chunkStartWordIndex = start;
       } else if (verseMode === 'threeTwo') {
         const pattern = [3, 2];
         let pos = 0, chunkIndex = 0;
         const chunks: string[][] = [];
+        const chunkStarts: number[] = [];
         while (pos < allWords.length) {
           const size = pattern[chunkIndex % pattern.length];
+          chunkStarts.push(pos);
           chunks.push(allWords.slice(pos, pos + size));
           pos += size;
           chunkIndex++;
@@ -1666,9 +1696,13 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
           : (chunkCounterRef.current % chunks.length);
         displayWords = chunks[cIdx] || allWords.slice(0, 3);
         currentChunkIndex = cIdx;
+        chunkStartWordIndex = chunkStarts[cIdx] || 0;
       } else {
         displayWords = allWords;
       }
+      
+      // Save chunk start for highlight mapping
+      chunkStartWordIndexRef.current = chunkStartWordIndex;
 
       // Fade transition between chunks
       if (verseMode !== 'full' && currentChunkIndex !== prevChunkIndexRef.current) {
