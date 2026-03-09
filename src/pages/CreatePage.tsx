@@ -82,11 +82,7 @@ export default function CreatePage() {
 
   // ── Shared state ──
   const [selectedBackground, setSelectedBackground] = useState<BackgroundItem | null>(
-    () => {
-      // Default to first slideshow background (mountains)
-      const { slideshowBackgrounds } = require('@/data/backgrounds');
-      return slideshowBackgrounds[0] || getRandomBackground('animated');
-    }
+    () => slideshowBackgrounds[0] || getRandomBackground('animated')
   );
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('9:16');
   const [textSettings, setTextSettings] = useState<TextSettings>(defaultTextSettings);
