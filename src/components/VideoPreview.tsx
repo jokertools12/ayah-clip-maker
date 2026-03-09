@@ -161,6 +161,11 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   // Smooth chunk cycling counter for non-full verse modes
   const chunkCounterRef = useRef<number>(0);
   const lastChunkTimeRef = useRef<number>(Date.now());
+  // Fade transition between chunks
+  const prevChunkIndexRef = useRef<number>(-1);
+  const chunkFadeRef = useRef<number>(1);
+  const chunkFadeStartRef = useRef<number>(0);
+  const currentAyahIdRef = useRef<number>(-1);
 
   // ── Text layout cache ───────────────────────────────────────────────────
   const textLayoutCacheRef = useRef<{
