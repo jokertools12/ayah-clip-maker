@@ -1282,7 +1282,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     }
 
     // Draw reciter name (if enabled) with style — scaled
-    if (displaySettings.showReciterName) {
+    if (!isAnyRecording && displaySettings.showReciterName) {
       const reciterY = displaySettings.showSurahName ? canvas.height * 0.175 : canvas.height * 0.12;
       const reciterText = `بصوت ${reciterName}`;
       const reciterStyle = displaySettings.reciterNameStyle || 'simple';
