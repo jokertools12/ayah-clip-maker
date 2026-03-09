@@ -166,6 +166,12 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   const chunkFadeRef = useRef<number>(1);
   const chunkFadeStartRef = useRef<number>(0);
   const currentAyahIdRef = useRef<number>(-1);
+  // Track chunk start word index for mapping global highlight → local
+  const chunkStartWordIndexRef = useRef<number>(0);
+  // Adaptive timing: track highlighted word changes to estimate reciter speed
+  const lastHighlightedWordRef = useRef<number | null>(null);
+  const highlightWordTimestampsRef = useRef<number[]>([]);
+  const adaptiveChunkIntervalRef = useRef<number>(800);
 
   // ── Text layout cache ───────────────────────────────────────────────────
   const textLayoutCacheRef = useRef<{
