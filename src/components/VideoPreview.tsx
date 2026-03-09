@@ -1963,11 +1963,15 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       const primaryRaw = primaryColorCacheRef.current;
       
       // Different highlight styles
+      const effectiveHighlightStyle: 'none' | 'solid' | 'glow' | 'underline' | 'shadow' = isAnyRecording
+        ? (displaySettings.highlightStyle === 'none' ? 'none' : 'underline')
+        : displaySettings.highlightStyle;
+
       let highlightBg: string;
       let highlightText: string;
-      const highlightEnabled = displaySettings.highlightStyle !== 'none';
-      
-      switch (displaySettings.highlightStyle) {
+      const highlightEnabled = effectiveHighlightStyle !== 'none';
+
+      switch (effectiveHighlightStyle) {
         case 'none':
           highlightBg = 'transparent';
           highlightText = textSettings.textColor;
