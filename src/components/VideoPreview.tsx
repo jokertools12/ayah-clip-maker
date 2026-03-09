@@ -1008,19 +1008,25 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     ctx.fillStyle = `rgba(0, 0, 0, ${textSettings.overlayOpacity})`;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Draw top gradient
-    const topGradient = ctx.createLinearGradient(0, 0, 0, canvas.height * 0.25);
-    topGradient.addColorStop(0, 'rgba(0, 0, 0, 0.5)');
-    topGradient.addColorStop(1, 'transparent');
-    ctx.fillStyle = topGradient;
-    ctx.fillRect(0, 0, canvas.width, canvas.height * 0.25);
-
-    // Draw bottom gradient
-    const bottomGradient = ctx.createLinearGradient(0, canvas.height * 0.75, 0, canvas.height);
-    bottomGradient.addColorStop(0, 'transparent');
-    bottomGradient.addColorStop(1, 'rgba(0, 0, 0, 0.5)');
-    ctx.fillStyle = bottomGradient;
-    ctx.fillRect(0, canvas.height * 0.75, canvas.width, canvas.height * 0.25);
+    // Draw top/bottom gradients (skip during recording for performance)
+    if (!isAnyRecording) {
+      const sizeChanged = gradientCacheSizeRef.current.w !== canvas.width || gradientCacheSizeRef.current.h !== canvas.height;
+      if (sizeChanged || !topGradientCacheRef.current || !bottomGradientCacheRef.current) {
+        const tg = ctx.createLinearGradient(0, 0, 0, canvas.height * 0.25);
+        tg.addColorStop(0, 'rgba(0, 0, 0, 0.5)');
+        tg.addColorStop(1, 'transparent');
+        topGradientCacheRef.current = tg;
+        const bg = ctx.createLinearGradient(0, canvas.height * 0.75, 0, canvas.height);
+        bg.addColorStop(0, 'transparent');
+        bg.addColorStop(1, 'rgba(0, 0, 0, 0.5)');
+        bottomGradientCacheRef.current = bg;
+        gradientCacheSizeRef.current = { w: canvas.width, h: canvas.height };
+      }
+      ctx.fillStyle = topGradientCacheRef.current;
+      ctx.fillRect(0, 0, canvas.width, canvas.height * 0.25);
+      ctx.fillStyle = bottomGradientCacheRef.current;
+      ctx.fillRect(0, canvas.height * 0.75, canvas.width, canvas.height * 0.25);
+    }
 
     // (Particles removed for performance — particleDensity defaults to 'off')
 
