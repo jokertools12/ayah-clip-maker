@@ -1368,7 +1368,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     const transitionType = rawTransitionType === 'random' ? currentRandomTransitionRef.current : rawTransitionType;
     let transitionProgress = 1; // 1 = fully visible
     if (isTransitioningRef.current && transitionType !== 'none') {
-      const elapsed = Date.now() - transitionStartRef.current;
+      const elapsed = renderTimestamp - transitionStartRef.current;
       transitionProgress = Math.min(elapsed / VERSE_TRANSITION_DURATION, 1);
       if (transitionProgress >= 1) {
         isTransitioningRef.current = false;
