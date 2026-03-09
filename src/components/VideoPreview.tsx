@@ -1995,7 +1995,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
           ctx.restore();
 
           cursorX -= wWidth + spaceWidth;
-          globalIndex += 1;
+          localIndex += 1;
         });
       });
 
