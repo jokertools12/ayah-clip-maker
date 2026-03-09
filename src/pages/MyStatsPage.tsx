@@ -15,7 +15,7 @@ import {
 } from 'recharts';
 import {
   Video, Star, Calendar, Crown, TrendingUp, BookOpen,
-  Loader2, BarChart3, Heart, Mic, Clock,
+  Loader2, BarChart3, Heart, Mic, Clock, Music,
 } from 'lucide-react';
 
 interface VideoRecord {
@@ -33,20 +33,23 @@ export default function MyStatsPage() {
 
   const [totalCreated, setTotalCreated] = useState(0);
   const [favReciters, setFavReciters] = useState<string[]>([]);
+  const [favPerformers, setFavPerformers] = useState<string[]>([]);
 
   useEffect(() => {
     if (!user) return;
     const load = async () => {
-      const [{ data: vids }, { data: favs }, { data: usageData }, { data: favRecs }] = await Promise.all([
+      const [{ data: vids }, { data: favs }, { data: usageData }, { data: favRecs }, { data: favPerfs }] = await Promise.all([
         supabase.from('saved_videos').select('reciter_name, surah_name, created_at').eq('user_id', user.id).order('created_at', { ascending: false }),
         supabase.from('favorite_surahs').select('surah_number').eq('user_id', user.id),
         supabase.from('daily_video_usage').select('count').eq('user_id', user.id),
         supabase.from('favorite_reciters').select('reciter_id').eq('user_id', user.id),
+        supabase.from('favorite_performers' as any).select('performer_id').eq('user_id', user.id),
       ]);
       setVideos((vids as VideoRecord[]) || []);
       setFavorites((favs || []).map((f: any) => f.surah_number));
       setTotalCreated((usageData || []).reduce((sum: number, r: any) => sum + (r.count || 0), 0));
       setFavReciters((favRecs || []).map((f: any) => f.reciter_id));
+      setFavPerformers(((favPerfs as any[]) || []).map((f: any) => f.performer_id));
       setLoading(false);
     };
     load();
@@ -117,21 +120,21 @@ export default function MyStatsPage() {
         </motion.div>
 
         {/* Quick Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
           {[
-            { label: 'إجمالي الفيديوهات المنشأة', value: totalVideos, icon: Video, color: 'text-primary' },
-            { label: 'الفيديوهات المحفوظة', value: videos.length, icon: Video, color: 'text-accent' },
+            { label: 'الفيديوهات المنشأة', value: totalVideos, icon: Video, color: 'text-primary' },
+            { label: 'المحفوظة', value: videos.length, icon: Video, color: 'text-accent' },
             { label: 'القراء المفضلون', value: favReciters.length, icon: Mic, color: 'text-accent' },
             { label: 'السور المفضلة', value: favorites.length, icon: Heart, color: 'text-destructive' },
+            { label: 'المبتهلين المفضلين', value: favPerformers.length, icon: Music, color: 'text-primary' },
+            { label: 'إجمالي المفضلة', value: favorites.length + favReciters.length + favPerformers.length, icon: Star, color: 'text-quran-gold' },
           ].map((stat, i) => (
-            <motion.div key={i} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}>
+            <motion.div key={i} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
               <Card>
-                <CardContent className="p-4 flex items-center gap-3">
-                  <stat.icon className={`h-8 w-8 ${stat.color}`} />
-                  <div>
-                    <p className="text-2xl font-bold">{stat.value}</p>
-                    <p className="text-xs text-muted-foreground">{stat.label}</p>
-                  </div>
+                <CardContent className="p-4 flex flex-col items-center text-center gap-2">
+                  <stat.icon className={`h-6 w-6 ${stat.color}`} />
+                  <p className="text-2xl font-bold">{stat.value}</p>
+                  <p className="text-xs text-muted-foreground">{stat.label}</p>
                 </CardContent>
               </Card>
             </motion.div>

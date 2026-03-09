@@ -13,16 +13,25 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 type FilterType = 'all' | 'Meccan' | 'Medinan';
+type SortType = 'number' | 'name' | 'ayahs';
 
 export default function SurahsPage() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState<FilterType>('all');
+  const [sortBy, setSortBy] = useState<SortType>('number');
 
   const filteredSurahs = useMemo(() => {
-    return surahs.filter((surah) => {
+    let result = surahs.filter((surah) => {
       const matchesSearch =
         surah.name.includes(searchQuery) ||
         surah.englishName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -32,7 +41,17 @@ export default function SurahsPage() {
 
       return matchesSearch && matchesFilter;
     });
-  }, [searchQuery, filter]);
+
+    // Sorting
+    if (sortBy === 'name') {
+      result = [...result].sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+    } else if (sortBy === 'ayahs') {
+      result = [...result].sort((a, b) => b.numberOfAyahs - a.numberOfAyahs);
+    }
+    // 'number' is default order
+
+    return result;
+  }, [searchQuery, filter, sortBy]);
 
   const handleSurahClick = (surahNumber: number) => {
     navigate(`/create?surah=${surahNumber}`);
@@ -69,6 +88,17 @@ export default function SurahsPage() {
               className="pr-10"
             />
           </div>
+
+          <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortType)}>
+            <SelectTrigger className="w-[140px]">
+              <SelectValue placeholder="ترتيب حسب" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="number">رقم السورة</SelectItem>
+              <SelectItem value="name">الاسم</SelectItem>
+              <SelectItem value="ayahs">عدد الآيات</SelectItem>
+            </SelectContent>
+          </Select>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

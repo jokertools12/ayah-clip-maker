@@ -102,9 +102,9 @@ export default function LeaderboardPage() {
   }, [tab]);
 
   const getRankIcon = (rank: number) => {
-    if (rank === 1) return <Crown className="h-6 w-6 text-yellow-500" />;
-    if (rank === 2) return <Medal className="h-6 w-6 text-gray-400" />;
-    if (rank === 3) return <Medal className="h-6 w-6 text-amber-700" />;
+    if (rank === 1) return <Crown className="h-6 w-6 text-quran-gold" />;
+    if (rank === 2) return <Medal className="h-6 w-6 text-muted-foreground" />;
+    if (rank === 3) return <Medal className="h-6 w-6 text-accent" />;
     return <span className="text-sm font-bold text-muted-foreground w-6 text-center">{rank}</span>;
   };
 
@@ -192,8 +192,8 @@ export default function LeaderboardPage() {
                             </p>
                           </div>
                           <div className="text-left shrink-0">
-                            <p className="font-bold text-primary">{tab === 'points' ? entry.points : entry.video_count}</p>
-                            <p className="text-xs text-muted-foreground">{tab === 'points' ? 'نقطة' : 'فيديو'}</p>
+                            <p className="font-bold text-primary text-lg">{tab === 'points' ? entry.points : entry.video_count}</p>
+                            <p className="text-xs text-muted-foreground">{tab === 'points' ? 'نقطة' : 'فيديو عام'}</p>
                           </div>
                         </CardContent>
                       </Card>
