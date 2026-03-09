@@ -177,7 +177,11 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     startY: number;
     lineHeight: number;
     lineTotals: number[];
+    wordWidths: number[][];
   } | null>(null);
+
+  // ── Off-screen video scale canvas for performance ──────────────────────
+  const videoScaleCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // ── Performance caches (avoid per-frame DOM/gradient recreation) ──────
   const primaryColorCacheRef = useRef<string | null>(null);
