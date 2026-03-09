@@ -1966,7 +1966,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
             } else if (displaySettings.highlightStyle === 'glow') {
               const glowPulse = 0.35 + Math.sin(Math.PI * Math.min(Math.max(highlightWordProgress, 0), 1)) * 0.65;
               ctx.shadowColor = '#FFD700';
-              ctx.shadowBlur = (14 + glowPulse * 24) * S;
+              ctx.shadowBlur = (isAnyRecording ? (8 + glowPulse * 14) : (14 + glowPulse * 24)) * S;
             } else if (displaySettings.highlightStyle === 'underline') {
               ctx.strokeStyle = '#FFD700';
               ctx.lineWidth = 3 * S;
