@@ -1663,7 +1663,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       let chunkStartWordIndex = 0; // Global word index where current chunk starts
       
       // ── Adaptive timing: learn reciter speed from highlightedWordIndex changes ──
-      const now = Date.now();
+      const now = renderTimestamp;
       if (highlightedWordIndex != null && highlightedWordIndex !== lastHighlightedWordRef.current) {
         if (lastHighlightedWordRef.current != null) {
           highlightWordTimestampsRef.current.push(now);
