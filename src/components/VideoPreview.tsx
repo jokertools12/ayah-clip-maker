@@ -1314,11 +1314,15 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       transitionStartRef.current = Date.now();
       isTransitioningRef.current = true;
       currentRandomTransitionRef.current = RANDOM_TRANSITIONS[Math.floor(Math.random() * RANDOM_TRANSITIONS.length)];
-      // Reset chunk counter for new verse
+      // Reset chunk counter and adaptive timing for new verse
       chunkCounterRef.current = 0;
       lastChunkTimeRef.current = Date.now();
       prevChunkIndexRef.current = -1;
       chunkFadeRef.current = 1;
+      chunkStartWordIndexRef.current = 0;
+      lastHighlightedWordRef.current = null;
+      highlightWordTimestampsRef.current = [];
+      adaptiveChunkIntervalRef.current = 800;
     }
     if (currentAyah) {
       prevAyahRef.current = currentAyah;
