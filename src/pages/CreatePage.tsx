@@ -82,7 +82,7 @@ export default function CreatePage() {
 
   // ── Shared state ──
   const [selectedBackground, setSelectedBackground] = useState<BackgroundItem | null>(
-    () => slideshowBackgrounds[0] || getRandomBackground('animated')
+    () => backgroundImages[0] || slideshowBackgrounds[0] || getRandomBackground('animated')
   );
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('9:16');
   const [textSettings, setTextSettings] = useState<TextSettings>(defaultTextSettings);
