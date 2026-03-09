@@ -455,6 +455,57 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     }
   }, []);
 
+  const drawRecordingHeaderLayer = useCallback((targetCtx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, S: number, fontName: string) => {
+    const key = [
+      canvas.width,
+      canvas.height,
+      displaySettings.showSurahName,
+      displaySettings.showReciterName,
+      surahName,
+      reciterName,
+      textSettings.textColor,
+      textSettings.fontSize,
+      fontName,
+    ].join('|');
+
+    let layer = recordingHeaderLayerRef.current;
+    if (!layer) {
+      layer = document.createElement('canvas');
+      recordingHeaderLayerRef.current = layer;
+    }
+
+    if (layer.width !== canvas.width || layer.height !== canvas.height || recordingHeaderLayerKeyRef.current !== key) {
+      layer.width = canvas.width;
+      layer.height = canvas.height;
+      const lctx = layer.getContext('2d');
+      if (!lctx) return;
+
+      lctx.clearRect(0, 0, layer.width, layer.height);
+      lctx.direction = 'rtl';
+      lctx.textAlign = 'center';
+      lctx.textBaseline = 'middle';
+
+      if (displaySettings.showSurahName) {
+        lctx.globalAlpha = 0.95;
+        lctx.fillStyle = textSettings.textColor;
+        lctx.font = `600 ${Math.max(18, textSettings.fontSize * 1.45 * S)}px "Amiri", "Scheherazade New", serif`;
+        lctx.fillText(surahName, canvas.width / 2, canvas.height * 0.11);
+      }
+
+      if (displaySettings.showReciterName) {
+        lctx.globalAlpha = 0.76;
+        lctx.fillStyle = textSettings.textColor;
+        lctx.font = `500 ${Math.max(14, textSettings.fontSize * 0.92 * S)}px "${fontName}", "Noto Naskh Arabic", serif`;
+        lctx.fillText(`بصوت ${reciterName}`, canvas.width / 2, displaySettings.showSurahName ? canvas.height * 0.175 : canvas.height * 0.12);
+      }
+
+      lctx.globalAlpha = 1;
+      recordingHeaderLayerKeyRef.current = key;
+    }
+
+    targetCtx.drawImage(layer, 0, 0);
+  }, [displaySettings.showSurahName, displaySettings.showReciterName, surahName, reciterName, textSettings.textColor, textSettings.fontSize]);
+
   // Convert Arabic number to Eastern Arabic numerals
   const toArabicNumber = (num: number): string => {
     const arabicNumerals = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
