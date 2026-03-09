@@ -81,12 +81,6 @@ const textShadowOptions = [
   { value: 'none', label: 'بدون ظل', description: 'نص مسطح' },
 ];
 
-const decorationOptions = [
-  { value: 'none', label: 'نظيف', description: 'بدون زخرفة' },
-  { value: 'sideBorder', label: 'زخارف جانبية', description: 'رموز يمين/يسار' },
-  { value: 'separator', label: 'فاصل علوي', description: 'خط/موجة فوق الآيات' },
-  { value: 'both', label: 'كلاهما', description: 'جانبية + فاصل' },
-];
 
 const transitionOptions = [
   { value: 'none', label: 'بدون انتقال', description: 'ظهور مباشر' },
