@@ -1618,7 +1618,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       
       // Smooth chunk cycling: use a counter that advances at fixed intervals
       const now = Date.now();
-      const chunkInterval = verseMode === 'wordByWord' ? 1200 : verseMode === 'twoWords' ? 2000 : 2500;
+      const chunkInterval = verseMode === 'wordByWord' ? 800 : verseMode === 'twoWords' ? 1500 : 1800;
       if (now - lastChunkTimeRef.current > chunkInterval) {
         chunkCounterRef.current += 1;
         lastChunkTimeRef.current = now;
