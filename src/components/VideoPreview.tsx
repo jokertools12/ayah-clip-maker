@@ -1958,9 +1958,10 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
 
       let localIndex = 0;
       const chunkStart = chunkStartWordIndexRef.current;
+      const cachedLineTotals = textLayoutCacheRef.current?.lineTotals;
       lines.forEach((wordsInLine, i) => {
-        const lineTotal = wordsInLine.reduce((sum, w) => sum + ctx.measureText(w).width, 0) +
-          Math.max(wordsInLine.length - 1, 0) * spaceWidth;
+        const lineTotal = cachedLineTotals?.[i] ?? (wordsInLine.reduce((sum, w) => sum + ctx.measureText(w).width, 0) +
+          Math.max(wordsInLine.length - 1, 0) * spaceWidth);
 
         let cursorX = canvas.width / 2 + lineTotal / 2;
         const y = startY + i * lineHeight + lineHeight / 2;
