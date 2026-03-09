@@ -1307,8 +1307,12 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         currentAyah.numberInSurah !== prevAyahRef.current.numberInSurah) {
       transitionStartRef.current = Date.now();
       isTransitioningRef.current = true;
-      // Pick a random transition for this verse change
       currentRandomTransitionRef.current = RANDOM_TRANSITIONS[Math.floor(Math.random() * RANDOM_TRANSITIONS.length)];
+      // Reset chunk counter for new verse
+      chunkCounterRef.current = 0;
+      lastChunkTimeRef.current = Date.now();
+      prevChunkIndexRef.current = -1;
+      chunkFadeRef.current = 1;
     }
     if (currentAyah) {
       prevAyahRef.current = currentAyah;
