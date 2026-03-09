@@ -22,6 +22,10 @@ export interface RecordingOptions {
   mimeTypeCandidates?: string[];
   captureStreamFps?: number;
   frameRenderer?: (frameTimeMs: number, frameIndex: number) => void;
+  /** Drop stale frames when recorder lags behind to prevent UI freeze */
+  maxFrameCatchup?: number;
+  /** Minimum scheduler delay to keep main thread responsive */
+  minFrameDelayMs?: number;
 }
 
 export const QUALITY_PRESETS: Record<ExportQuality, QualitySettings> = {
@@ -217,11 +221,20 @@ export function useVideoRecorder() {
         if (enableFrameByFrame && frameRenderer) {
           const frameIntervalMs = 1000 / safeFps;
           const totalFrames = Math.max(1, Math.ceil(duration * safeFps));
+          const maxFrameCatchup = Math.min(Math.max(options?.maxFrameCatchup ?? 2, 0), 8);
+          const minFrameDelayMs = Math.min(Math.max(options?.minFrameDelayMs ?? 6, 0), 20);
           let frameIndex = 0;
           const loopStart = performance.now();
 
           const renderNextFrame = () => {
             if (mediaRecorder.state === 'inactive') return;
+
+            // If rendering falls behind, skip stale frames instead of blocking the browser.
+            const elapsedRealMs = performance.now() - loopStart;
+            const expectedFrame = Math.floor(elapsedRealMs / frameIntervalMs);
+            if (expectedFrame - frameIndex > maxFrameCatchup) {
+              frameIndex = expectedFrame - maxFrameCatchup;
+            }
 
             const frameTimeMs = Math.min(frameIndex * frameIntervalMs, duration * 1000);
             try {
@@ -241,7 +254,8 @@ export function useVideoRecorder() {
             }
 
             const nextTarget = loopStart + frameIndex * frameIntervalMs;
-            const delay = Math.max(0, nextTarget - performance.now());
+            const driftMs = performance.now() - nextTarget;
+            const delay = Math.max(minFrameDelayMs, frameIntervalMs - Math.max(driftMs, 0));
             frameLoopTimerId = window.setTimeout(renderNextFrame, delay);
           };
 

@@ -242,6 +242,7 @@ export default function PreviewPage() {
   const currentAyahIndexRef = useRef(0);
   const ayahsRef = useRef<{ numberInSurah: number; text: string }[]>([]);
   const recordingUiLastUpdateRef = useRef(0);
+  const recordingSyncLastUpdateRef = useRef(0);
 
   // ── Reset transcription state when switching ibtahalat tracks ────────────────
   const prevIbtAudioUrlRef = useRef(ibtAudioUrl);
@@ -528,6 +529,12 @@ export default function PreviewPage() {
       const nowSec = audio.currentTime;
       const nowMs = nowSec * 1000;
       const isRecordingNow = videoRecorder.isRecording;
+
+      if (isRecordingNow) {
+        const syncTs = performance.now();
+        if (syncTs - recordingSyncLastUpdateRef.current < 120) return;
+        recordingSyncLastUpdateRef.current = syncTs;
+      }
 
       const updateTimeline = (timeSec: number, percent: number) => {
         if (isRecordingNow) {
@@ -930,24 +937,29 @@ export default function PreviewPage() {
 
       const isLongRecording = recordingDuration >= 45;
       const isVeryLongRecording = recordingDuration >= 90;
+      const backgroundUrl = customBackground || background?.url || '';
+      const isVideoBackground = (background?.type || backgroundType) === 'video';
+      const isPexelsBackground = isVideoBackground && /pexels/i.test(backgroundUrl);
 
       const clampQualityForDuration = (quality: ExportQuality): ExportQuality => {
         if (isVeryLongRecording) return 'low';
+        if (isPexelsBackground && recordingDuration >= 45) return 'low';
         if (isLongRecording && (quality === 'ultra' || quality === 'high')) return 'medium';
+        if (isPexelsBackground && quality === 'ultra') return 'medium';
         return quality;
       };
 
       const targetQuality = clampQualityForDuration(exportSettings.quality);
-      const targetFps = isVeryLongRecording ? 18 : isLongRecording ? 20 : 24;
-      const renderMode: 'recording' | 'recordingLite' = isLongRecording ? 'recordingLite' : 'recording';
+      const targetFps = isVeryLongRecording ? 14 : isPexelsBackground ? 18 : isLongRecording ? 20 : 24;
+      const renderMode: 'recording' | 'recordingLite' = (isLongRecording || isVideoBackground) ? 'recordingLite' : 'recording';
 
-      if (isLongRecording) {
-        toast.info('تم تفعيل نظام الإطارات الخفيف تلقائيًا لتقليل التهنيج.');
+      if (isLongRecording || isPexelsBackground) {
+        toast.info('تم تفعيل نمط التصدير الطبقي الخفيف لتقليل التهنيج أثناء التسجيل.');
       }
 
       const recordingCanvas = document.createElement('canvas');
       const recordingDimensions = getQualityDimensions(targetQuality, aspectRatio);
-      const resolutionScale = isVeryLongRecording ? 0.62 : isLongRecording ? 0.72 : 1;
+      const resolutionScale = isVeryLongRecording ? 0.5 : isLongRecording ? 0.62 : isPexelsBackground ? 0.74 : 0.88;
       recordingCanvas.width = Math.max(360, Math.round(recordingDimensions.width * resolutionScale));
       recordingCanvas.height = Math.max(640, Math.round(recordingDimensions.height * resolutionScale));
 
@@ -979,10 +991,12 @@ export default function PreviewPage() {
         targetFps,
         {
           strategy: 'compatibility',
-          bitrateMultiplier: isVeryLongRecording ? 0.58 : isLongRecording ? 0.68 : 0.78,
-          timesliceMs: isLongRecording ? 3000 : 2200,
+          bitrateMultiplier: isVeryLongRecording ? 0.5 : isPexelsBackground ? 0.58 : isLongRecording ? 0.64 : 0.74,
+          timesliceMs: isLongRecording || isPexelsBackground ? 3200 : 2200,
           mimeTypeCandidates: ['video/webm;codecs=vp8,opus', 'video/webm'],
           captureStreamFps: targetFps,
+          maxFrameCatchup: isPexelsBackground ? 1 : 2,
+          minFrameDelayMs: isPexelsBackground ? 8 : 6,
           frameRenderer: (frameTimeMs) => drawIsolatedFrame(frameTimeMs),
         }
       );

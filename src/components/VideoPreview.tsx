@@ -181,6 +181,11 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
 
   // ── Off-screen video scale canvas for performance ──────────────────────
   const videoScaleCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const videoLayerLastUpdateRef = useRef<number>(-Infinity);
+
+  // ── Recording layered header cache (static text layer) ─────────────────
+  const recordingHeaderLayerRef = useRef<HTMLCanvasElement | null>(null);
+  const recordingHeaderLayerKeyRef = useRef<string>('');
 
   // ── Performance caches (avoid per-frame DOM/gradient recreation) ──────
   const primaryColorCacheRef = useRef<string | null>(null);
@@ -449,6 +454,57 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       return fallback;
     }
   }, []);
+
+  const drawRecordingHeaderLayer = useCallback((targetCtx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, S: number, fontName: string) => {
+    const key = [
+      canvas.width,
+      canvas.height,
+      displaySettings.showSurahName,
+      displaySettings.showReciterName,
+      surahName,
+      reciterName,
+      textSettings.textColor,
+      textSettings.fontSize,
+      fontName,
+    ].join('|');
+
+    let layer = recordingHeaderLayerRef.current;
+    if (!layer) {
+      layer = document.createElement('canvas');
+      recordingHeaderLayerRef.current = layer;
+    }
+
+    if (layer.width !== canvas.width || layer.height !== canvas.height || recordingHeaderLayerKeyRef.current !== key) {
+      layer.width = canvas.width;
+      layer.height = canvas.height;
+      const lctx = layer.getContext('2d');
+      if (!lctx) return;
+
+      lctx.clearRect(0, 0, layer.width, layer.height);
+      lctx.direction = 'rtl';
+      lctx.textAlign = 'center';
+      lctx.textBaseline = 'middle';
+
+      if (displaySettings.showSurahName) {
+        lctx.globalAlpha = 0.95;
+        lctx.fillStyle = textSettings.textColor;
+        lctx.font = `600 ${Math.max(18, textSettings.fontSize * 1.45 * S)}px "Amiri", "Scheherazade New", serif`;
+        lctx.fillText(surahName, canvas.width / 2, canvas.height * 0.11);
+      }
+
+      if (displaySettings.showReciterName) {
+        lctx.globalAlpha = 0.76;
+        lctx.fillStyle = textSettings.textColor;
+        lctx.font = `500 ${Math.max(14, textSettings.fontSize * 0.92 * S)}px "${fontName}", "Noto Naskh Arabic", serif`;
+        lctx.fillText(`بصوت ${reciterName}`, canvas.width / 2, displaySettings.showSurahName ? canvas.height * 0.175 : canvas.height * 0.12);
+      }
+
+      lctx.globalAlpha = 1;
+      recordingHeaderLayerKeyRef.current = key;
+    }
+
+    targetCtx.drawImage(layer, 0, 0);
+  }, [displaySettings.showSurahName, displaySettings.showReciterName, surahName, reciterName, textSettings.textColor, textSettings.fontSize]);
 
   // Convert Arabic number to Eastern Arabic numerals
   const toArabicNumber = (num: number): string => {
@@ -989,7 +1045,15 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       }
       const sCtx = sc.getContext('2d');
       if (sCtx) {
-        sCtx.drawImage(video, 0, 0, scaleW, scaleH);
+        const refreshIntervalMs = isPreviewRender ? 0 : isLiteRecording ? 110 : 80;
+        const shouldRefreshVideoLayer =
+          refreshIntervalMs === 0 || (renderTimestamp - videoLayerLastUpdateRef.current) >= refreshIntervalMs;
+
+        if (shouldRefreshVideoLayer) {
+          sCtx.drawImage(video, 0, 0, scaleW, scaleH);
+          videoLayerLastUpdateRef.current = renderTimestamp;
+        }
+
         ctx.drawImage(sc, 0, 0, canvas.width, canvas.height);
       } else {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -1070,7 +1134,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     ctx.textBaseline = 'middle';
 
     // Apply textShadowStyle setting
-    const textShadowStyle = displaySettings.textShadowStyle || 'soft';
+    const textShadowStyle = isAnyRecording ? 'none' : (displaySettings.textShadowStyle || 'soft');
     if (textShadowStyle === 'none') {
       ctx.shadowColor = 'transparent';
       ctx.shadowBlur = 0;
@@ -1093,8 +1157,12 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       ctx.shadowOffsetY = 0;
     }
 
+    if (isAnyRecording) {
+      drawRecordingHeaderLayer(ctx, canvas, S, fontName);
+    }
+
     // Draw surah name badge (if enabled) based on surahNameStyle
-    if (displaySettings.showSurahName) {
+    if (!isAnyRecording && displaySettings.showSurahName) {
       const badgeY = canvas.height * 0.11;
       const nameStyle = displaySettings.surahNameStyle || 'classic';
 
@@ -1214,7 +1282,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     }
 
     // Draw reciter name (if enabled) with style — scaled
-    if (displaySettings.showReciterName) {
+    if (!isAnyRecording && displaySettings.showReciterName) {
       const reciterY = displaySettings.showSurahName ? canvas.height * 0.175 : canvas.height * 0.12;
       const reciterText = `بصوت ${reciterName}`;
       const reciterStyle = displaySettings.reciterNameStyle || 'simple';
@@ -1365,7 +1433,9 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
 
     // Calculate transition progress
     const rawTransitionType = displaySettings.ayahTransition || 'fade';
-    const transitionType = rawTransitionType === 'random' ? currentRandomTransitionRef.current : rawTransitionType;
+    const transitionType = isAnyRecording
+      ? 'none'
+      : (rawTransitionType === 'random' ? currentRandomTransitionRef.current : rawTransitionType);
     let transitionProgress = 1; // 1 = fully visible
     if (isTransitioningRef.current && transitionType !== 'none') {
       const elapsed = renderTimestamp - transitionStartRef.current;
@@ -1893,11 +1963,15 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       const primaryRaw = primaryColorCacheRef.current;
       
       // Different highlight styles
+      const effectiveHighlightStyle: 'none' | 'solid' | 'glow' | 'underline' | 'shadow' = isAnyRecording
+        ? (displaySettings.highlightStyle === 'none' ? 'none' : 'underline')
+        : displaySettings.highlightStyle;
+
       let highlightBg: string;
       let highlightText: string;
-      const highlightEnabled = displaySettings.highlightStyle !== 'none';
-      
-      switch (displaySettings.highlightStyle) {
+      const highlightEnabled = effectiveHighlightStyle !== 'none';
+
+      switch (effectiveHighlightStyle) {
         case 'none':
           highlightBg = 'transparent';
           highlightText = textSettings.textColor;
@@ -1936,7 +2010,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
             ctx.save();
             ctx.shadowBlur = 0;
             
-            if (displaySettings.highlightStyle === 'solid') {
+            if (effectiveHighlightStyle === 'solid') {
               const padX = 20 * S;
               const padY = 12 * S;
               ctx.fillStyle = highlightBg;
@@ -1947,11 +2021,11 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
               ctx.beginPath();
               ctx.roundRect(left, top, width, height, 24 * S);
               ctx.fill();
-            } else if (displaySettings.highlightStyle === 'glow') {
+            } else if (effectiveHighlightStyle === 'glow') {
               const glowPulse = 0.35 + Math.sin(Math.PI * Math.min(Math.max(highlightWordProgress, 0), 1)) * 0.65;
               ctx.shadowColor = '#FFD700';
               ctx.shadowBlur = (isAnyRecording ? (8 + glowPulse * 14) : (14 + glowPulse * 24)) * S;
-            } else if (displaySettings.highlightStyle === 'underline') {
+            } else if (effectiveHighlightStyle === 'underline') {
               ctx.strokeStyle = '#FFD700';
               ctx.lineWidth = 3 * S;
               ctx.beginPath();
@@ -1965,7 +2039,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
 
           ctx.save();
           if (isWordHighlighted) {
-            if (displaySettings.highlightStyle === 'glow') {
+            if (effectiveHighlightStyle === 'glow') {
               const glowPulse = 0.35 + Math.sin(Math.PI * Math.min(Math.max(highlightWordProgress ?? 0, 0), 1)) * 0.65;
               ctx.shadowColor = '#FFD700';
               ctx.shadowBlur = isAnyRecording ? (8 + glowPulse * 14) * S : (18 + glowPulse * 28) * S;
@@ -2045,7 +2119,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       ctx.fillText(wmText, wmX, wmY);
       ctx.restore();
     }
-  }, [background, customBackground, imageLoaded, videoReady, slideshowReady, surahName, reciterName, currentAyah, currentAyahWords, highlightedWordIndex, highlightWordProgress, textSettings, displaySettings, getRecordingDimensions, getTokenHsl, drawAyahBadge, getCanvasFontFamily, drawIslamicFrame, motionSpeed, isPlaying, ibtahalatLyricsMode, allLyricsLines, currentLyricsIndex]);
+  }, [background, customBackground, imageLoaded, videoReady, slideshowReady, surahName, reciterName, currentAyah, currentAyahWords, highlightedWordIndex, highlightWordProgress, textSettings, displaySettings, getRecordingDimensions, getTokenHsl, drawAyahBadge, getCanvasFontFamily, drawIslamicFrame, drawRecordingHeaderLayer, motionSpeed, isPlaying, ibtahalatLyricsMode, allLyricsLines, currentLyricsIndex]);
 
   useEffect(() => {
     drawFrameRuntimeRef.current = drawFrame;
