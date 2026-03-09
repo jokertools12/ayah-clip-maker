@@ -1433,7 +1433,9 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
 
     // Calculate transition progress
     const rawTransitionType = displaySettings.ayahTransition || 'fade';
-    const transitionType = rawTransitionType === 'random' ? currentRandomTransitionRef.current : rawTransitionType;
+    const transitionType = isAnyRecording
+      ? 'none'
+      : (rawTransitionType === 'random' ? currentRandomTransitionRef.current : rawTransitionType);
     let transitionProgress = 1; // 1 = fully visible
     if (isTransitioningRef.current && transitionType !== 'none') {
       const elapsed = renderTimestamp - transitionStartRef.current;
