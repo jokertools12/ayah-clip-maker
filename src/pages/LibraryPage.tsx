@@ -1,11 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { 
   Video, 
   Trash2, 
@@ -15,7 +23,8 @@ import {
   Library as LibraryIcon,
   Plus,
   ExternalLink,
-  RotateCcw
+  RotateCcw,
+  Search,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -34,11 +43,15 @@ interface SavedVideo {
   thumbnail_url?: string;
 }
 
+type SortType = 'latest' | 'oldest' | 'surah' | 'reciter';
+
 export default function LibraryPage() {
   const navigate = useNavigate();
   const { user, isAuthenticated, loading: authLoading } = useAuth();
   const [videos, setVideos] = useState<SavedVideo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<SortType>('latest');
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -70,6 +83,34 @@ export default function LibraryPage() {
       fetchVideos();
     }
   }, [isAuthenticated, authLoading, navigate, user]);
+
+  const filteredVideos = useMemo(() => {
+    let result = videos.filter((v) => {
+      const query = searchQuery.toLowerCase();
+      return (
+        v.surah_name.toLowerCase().includes(query) ||
+        v.reciter_name.toLowerCase().includes(query)
+      );
+    });
+
+    // Sorting
+    switch (sortBy) {
+      case 'oldest':
+        result = [...result].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+        break;
+      case 'surah':
+        result = [...result].sort((a, b) => a.surah_number - b.surah_number);
+        break;
+      case 'reciter':
+        result = [...result].sort((a, b) => a.reciter_name.localeCompare(b.reciter_name, 'ar'));
+        break;
+      default:
+        // latest - already sorted by fetch
+        break;
+    }
+
+    return result;
+  }, [videos, searchQuery, sortBy]);
 
   const handleDelete = async (id: string) => {
     try {
@@ -154,15 +195,47 @@ export default function LibraryPage() {
           </Button>
         </motion.div>
 
+        {/* Search and Sort */}
+        {videos.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="flex flex-col sm:flex-row gap-4 mb-6"
+          >
+            <div className="relative flex-1">
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="ابحث بالسورة أو القارئ..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pr-10"
+              />
+            </div>
+
+            <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortType)}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="ترتيب حسب" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="latest">الأحدث</SelectItem>
+                <SelectItem value="oldest">الأقدم</SelectItem>
+                <SelectItem value="surah">السورة</SelectItem>
+                <SelectItem value="reciter">القارئ</SelectItem>
+              </SelectContent>
+            </Select>
+          </motion.div>
+        )}
+
         {/* Videos Grid */}
-        {videos.length > 0 ? (
+        {filteredVideos.length > 0 ? (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.1 }}
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
           >
-            {videos.map((video, index) => (
+            {filteredVideos.map((video, index) => (
               <motion.div
                 key={video.id}
                 initial={{ opacity: 0, y: 20 }}
@@ -241,6 +314,17 @@ export default function LibraryPage() {
                 </Card>
               </motion.div>
             ))}
+          </motion.div>
+        ) : videos.length > 0 ? (
+          /* No search results */
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-center py-12"
+          >
+            <p className="text-muted-foreground text-lg">
+              لم يتم العثور على نتائج للبحث "{searchQuery}"
+            </p>
           </motion.div>
         ) : (
           /* Empty State */

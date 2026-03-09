@@ -45,10 +45,24 @@ export function useAchievements() {
     if (!user) return;
 
     // Fetch current stats
-    const [{ count: videoCount }, { count: favCount }, { data: videos }] = await Promise.all([
+    const [
+      { count: videoCount },
+      { count: favCount },
+      { data: videos },
+      { count: favReciterCount },
+      { count: favPerformerCount },
+      { count: likesCount },
+      { count: commentsCount },
+      { count: followersCount },
+    ] = await Promise.all([
       supabase.from('saved_videos').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
       supabase.from('favorite_surahs').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
       supabase.from('saved_videos').select('reciter_name, surah_name').eq('user_id', user.id),
+      supabase.from('favorite_reciters').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
+      supabase.from('favorite_performers' as any).select('*', { count: 'exact', head: true }).eq('user_id', user.id),
+      supabase.from('video_likes').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
+      supabase.from('video_comments').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
+      supabase.from('user_follows').select('*', { count: 'exact', head: true }).eq('following_id', user.id),
     ]);
 
     const uniqueReciters = new Set((videos || []).map((v: any) => v.reciter_name)).size;
@@ -71,17 +85,39 @@ export function useAchievements() {
     // Use max of saved and usage-tracked counts
     const effectiveVideoCount = Math.max(videoCount || 0, totalCreated);
 
+    // For ibtahalat - count videos created via ibtahalat mode (stored in localStorage for now)
+    const ibtahalatCount = parseInt(localStorage.getItem('ibtahalat_video_count') || '0', 10);
+
     const statsMap: Record<string, number> = {
+      // Video achievements
       first_video: effectiveVideoCount,
       five_videos: effectiveVideoCount,
       twenty_videos: effectiveVideoCount,
       fifty_videos: effectiveVideoCount,
       hundred_videos: effectiveVideoCount,
+      // Favorites
       first_favorite: favCount || 0,
       five_favorites: favCount || 0,
+      // Reciters
       five_reciters: uniqueReciters,
+      first_fav_reciter: favReciterCount || 0,
+      five_fav_reciters: favReciterCount || 0,
+      // Surahs
       ten_surahs: uniqueSurahs,
+      // Premium
       premium_member: (sub as any)?.plan && (sub as any).plan !== 'free' ? 1 : 0,
+      // Ibtahalat
+      first_ibtahal: ibtahalatCount,
+      five_ibtahalat: ibtahalatCount,
+      ten_ibtahalat: ibtahalatCount,
+      first_fav_performer: favPerformerCount || 0,
+      five_fav_performers: favPerformerCount || 0,
+      // Social
+      first_like: likesCount || 0,
+      ten_likes: likesCount || 0,
+      first_comment: commentsCount || 0,
+      first_follower: followersCount || 0,
+      ten_followers: followersCount || 0,
     };
 
     // Check each achievement

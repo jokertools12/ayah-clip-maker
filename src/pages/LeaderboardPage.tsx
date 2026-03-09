@@ -192,8 +192,8 @@ export default function LeaderboardPage() {
                             </p>
                           </div>
                           <div className="text-left shrink-0">
-                            <p className="font-bold text-primary">{tab === 'points' ? entry.points : entry.video_count}</p>
-                            <p className="text-xs text-muted-foreground">{tab === 'points' ? 'نقطة' : 'فيديو'}</p>
+                            <p className="font-bold text-primary text-lg">{tab === 'points' ? entry.points : entry.video_count}</p>
+                            <p className="text-xs text-muted-foreground">{tab === 'points' ? 'نقطة' : 'فيديو عام'}</p>
                           </div>
                         </CardContent>
                       </Card>
