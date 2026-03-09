@@ -930,24 +930,29 @@ export default function PreviewPage() {
 
       const isLongRecording = recordingDuration >= 45;
       const isVeryLongRecording = recordingDuration >= 90;
+      const backgroundUrl = customBackground || background?.url || '';
+      const isVideoBackground = (background?.type || backgroundType) === 'video';
+      const isPexelsBackground = isVideoBackground && /pexels/i.test(backgroundUrl);
 
       const clampQualityForDuration = (quality: ExportQuality): ExportQuality => {
         if (isVeryLongRecording) return 'low';
+        if (isPexelsBackground && recordingDuration >= 45) return 'low';
         if (isLongRecording && (quality === 'ultra' || quality === 'high')) return 'medium';
+        if (isPexelsBackground && quality === 'ultra') return 'medium';
         return quality;
       };
 
       const targetQuality = clampQualityForDuration(exportSettings.quality);
-      const targetFps = isVeryLongRecording ? 18 : isLongRecording ? 20 : 24;
-      const renderMode: 'recording' | 'recordingLite' = isLongRecording ? 'recordingLite' : 'recording';
+      const targetFps = isVeryLongRecording ? 14 : isPexelsBackground ? 18 : isLongRecording ? 20 : 24;
+      const renderMode: 'recording' | 'recordingLite' = (isLongRecording || isVideoBackground) ? 'recordingLite' : 'recording';
 
-      if (isLongRecording) {
-        toast.info('تم تفعيل نظام الإطارات الخفيف تلقائيًا لتقليل التهنيج.');
+      if (isLongRecording || isPexelsBackground) {
+        toast.info('تم تفعيل نمط التصدير الطبقي الخفيف لتقليل التهنيج أثناء التسجيل.');
       }
 
       const recordingCanvas = document.createElement('canvas');
       const recordingDimensions = getQualityDimensions(targetQuality, aspectRatio);
-      const resolutionScale = isVeryLongRecording ? 0.62 : isLongRecording ? 0.72 : 1;
+      const resolutionScale = isVeryLongRecording ? 0.5 : isLongRecording ? 0.62 : isPexelsBackground ? 0.74 : 0.88;
       recordingCanvas.width = Math.max(360, Math.round(recordingDimensions.width * resolutionScale));
       recordingCanvas.height = Math.max(640, Math.round(recordingDimensions.height * resolutionScale));
 
