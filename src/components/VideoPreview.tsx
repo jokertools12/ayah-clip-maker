@@ -1743,7 +1743,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       if (verseMode !== 'full' && currentChunkIndex !== prevChunkIndexRef.current) {
         prevChunkIndexRef.current = currentChunkIndex;
         chunkFadeRef.current = 0;
-        chunkFadeStartRef.current = Date.now();
+        chunkFadeStartRef.current = renderTimestamp;
       }
       if (verseMode !== 'full' && chunkFadeRef.current < 1) {
         const fadeElapsed = Date.now() - chunkFadeStartRef.current;
