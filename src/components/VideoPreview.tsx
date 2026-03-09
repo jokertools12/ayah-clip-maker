@@ -1020,14 +1020,34 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     // Get the font family for canvas
     const fontName = getCanvasFontFamily(textSettings.fontFamily);
 
-    // Text settings — reduce shadow cost during recording
+    // Text settings — apply textShadowStyle and reduce shadow cost during recording
+    const isAnyRecording = !isPreviewRender;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    const shadowMultiplier = isAnyRecording ? 0.3 : 1;
-    ctx.shadowColor = `rgba(0, 0, 0, ${textSettings.shadowIntensity * shadowMultiplier})`;
-    ctx.shadowBlur = isAnyRecording ? 4 : textSettings.shadowIntensity * 20;
-    ctx.shadowOffsetX = isAnyRecording ? 1 : 2;
-    ctx.shadowOffsetY = isAnyRecording ? 1 : 2;
+
+    // Apply textShadowStyle setting
+    const textShadowStyle = displaySettings.textShadowStyle || 'soft';
+    if (textShadowStyle === 'none') {
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+    } else if (textShadowStyle === 'soft') {
+      ctx.shadowColor = `rgba(0, 0, 0, ${isAnyRecording ? 0.3 : 0.4})`;
+      ctx.shadowBlur = isAnyRecording ? 4 : 6 * S;
+      ctx.shadowOffsetX = 1;
+      ctx.shadowOffsetY = 1;
+    } else if (textShadowStyle === 'strong') {
+      ctx.shadowColor = `rgba(0, 0, 0, ${isAnyRecording ? 0.5 : 0.8})`;
+      ctx.shadowBlur = isAnyRecording ? 8 : 16 * S;
+      ctx.shadowOffsetX = 2;
+      ctx.shadowOffsetY = 2;
+    } else if (textShadowStyle === 'glow') {
+      ctx.shadowColor = 'rgba(212, 175, 55, 0.6)';
+      ctx.shadowBlur = isAnyRecording ? 10 : 20 * S;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+    }
 
     // Draw surah name badge (if enabled) based on surahNameStyle
     if (displaySettings.showSurahName) {
