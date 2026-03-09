@@ -1742,21 +1742,21 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     function drawAyahSeparator(c: CanvasRenderingContext2D, cx: number, cy: number, width: number) {
       c.save();
       c.strokeStyle = 'rgba(212, 175, 55, 0.35)';
-      c.lineWidth = 1.5;
+      c.lineWidth = 1.5 * S;
       const hw = width / 2;
       c.beginPath();
       c.moveTo(cx - hw, cy);
-      c.bezierCurveTo(cx - hw + 30, cy - 6, cx - 30, cy + 6, cx, cy);
-      c.bezierCurveTo(cx + 30, cy - 6, cx + hw - 30, cy + 6, cx + hw, cy);
+      c.bezierCurveTo(cx - hw + 30 * S, cy - 6 * S, cx - 30 * S, cy + 6 * S, cx, cy);
+      c.bezierCurveTo(cx + 30 * S, cy - 6 * S, cx + hw - 30 * S, cy + 6 * S, cx + hw, cy);
       c.stroke();
 
       // End dots
       c.fillStyle = 'rgba(212, 175, 55, 0.5)';
       c.beginPath();
-      c.arc(cx - hw - 5, cy, 3, 0, Math.PI * 2);
+      c.arc(cx - hw - 5 * S, cy, 3 * S, 0, Math.PI * 2);
       c.fill();
       c.beginPath();
-      c.arc(cx + hw + 5, cy, 3, 0, Math.PI * 2);
+      c.arc(cx + hw + 5 * S, cy, 3 * S, 0, Math.PI * 2);
       c.fill();
       c.restore();
     }
