@@ -633,9 +633,30 @@ export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPane
               ))}
             </RadioGroup>
           </div>
+          {/* Ayah Number Color */}
+          <div className="space-y-3 pt-2">
+            <Label className="text-sm">لون رقم الآية</Label>
+            <RadioGroup
+              value={settings.ayahNumberColor || 'gold'}
+              onValueChange={(value) => updateSetting('ayahNumberColor', value as DisplaySettings['ayahNumberColor'])}
+              className="flex flex-wrap gap-2"
+            >
+              {ayahNumberColorOptions.map((option) => (
+                <div key={option.value} className="relative">
+                  <RadioGroupItem value={option.value} id={`ayahColor-${option.value}`} className="peer sr-only" />
+                  <Label
+                    htmlFor={`ayahColor-${option.value}`}
+                    className="flex flex-col items-center rounded-lg border-2 border-muted px-3 py-2 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all"
+                  >
+                    <span className="text-lg" style={{ color: option.color }}>{option.description}</span>
+                    <span className="text-xs">{option.label}</span>
+                  </Label>
+                </div>
+              ))}
+            </RadioGroup>
+          </div>
         )}
 
-        {/* Surah Name Position */}
         {settings.showSurahName && (
           <div className="space-y-3 pt-2 border-t">
             <Label className="text-sm flex items-center gap-2">
