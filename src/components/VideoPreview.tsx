@@ -2151,8 +2151,8 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     getRecordingDimensions,
     getRecommendedRecordingFps,
     // Always route through the live draw function ref to avoid stale closure
-    drawFrame: (targetCanvas?: HTMLCanvasElement, renderMode?: 'preview' | 'recording' | 'recordingLite') =>
-      drawFrameRuntimeRef.current(targetCanvas, renderMode),
+    drawFrame: (targetCanvas?: HTMLCanvasElement, renderMode?: 'preview' | 'recording' | 'recordingLite', forcedTimeMs?: number) =>
+      drawFrameRuntimeRef.current(targetCanvas, renderMode, forcedTimeMs),
   }));
 
   const containerClass = aspectRatio === '9:16'
