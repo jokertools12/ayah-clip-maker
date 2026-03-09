@@ -783,8 +783,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     if (!canvas || !ctx) return;
 
     const base = getRecordingDimensions();
-    const previewPerfMode = displaySettings.performanceMode || 'balanced';
-    const previewScale = previewPerfMode === 'economy' ? 0.3 : previewPerfMode === 'pro' ? 0.5 : 0.38;
+    const previewScale = 0.38;
     const isPreviewRender = renderMode === 'preview';
     const isLiteRecording = renderMode === 'recordingLite';
     const recordingScale = isLiteRecording ? 0.67 : 1;
