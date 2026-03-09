@@ -1964,6 +1964,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       let localIndex = 0;
       const chunkStart = chunkStartWordIndexRef.current;
       const cachedLineTotals = textLayoutCacheRef.current?.lineTotals;
+      const cachedWordWidths = textLayoutCacheRef.current?.wordWidths;
       lines.forEach((wordsInLine, i) => {
         const lineTotal = cachedLineTotals?.[i] ?? (wordsInLine.reduce((sum, w) => sum + ctx.measureText(w).width, 0) +
           Math.max(wordsInLine.length - 1, 0) * spaceWidth);
@@ -1971,8 +1972,8 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         let cursorX = canvas.width / 2 + lineTotal / 2;
         const y = startY + i * lineHeight + lineHeight / 2;
 
-        wordsInLine.forEach((w) => {
-          const wWidth = ctx.measureText(w).width;
+        wordsInLine.forEach((w, j) => {
+          const wWidth = cachedWordWidths?.[i]?.[j] ?? ctx.measureText(w).width;
           // Map local index to global: in chunked modes, the global word index = chunkStart + localIndex
           const globalWordIdx = verseMode === 'full' ? localIndex : chunkStart + localIndex;
           const isWordHighlighted = highlightEnabled && highlightedWordIndex != null && globalWordIdx === highlightedWordIndex;

@@ -529,17 +529,6 @@ export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPane
                 />
               </div>
 
-              {/* Performance Mode */}
-              <div className="space-y-3">
-                <Label className="text-sm">⚡ وضع الأداء</Label>
-                <RadioOptionGrid
-                  options={performanceModeOptions}
-                  value={settings.performanceMode || 'balanced'}
-                  onChange={(v) => updateSetting('performanceMode', v as DisplaySettings['performanceMode'])}
-                  idPrefix="perf"
-                  columns={3}
-                />
-              </div>
             </AccordionContent>
           </AccordionItem>
 
