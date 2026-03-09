@@ -6,13 +6,11 @@ import { Download, FileVideo, Settings2, Loader2, Film } from 'lucide-react';
 import { ExportQuality, QUALITY_PRESETS } from '@/hooks/useVideoRecorder';
 
 export type ExportFormat = 'mp4' | 'webm' | 'gif';
-export type RecordingMethod = 'auto' | 'smooth' | 'compatibility' | 'quality';
 
 export interface ExportSettings {
   format: ExportFormat;
   quality: ExportQuality;
   motionSpeed: number;
-  recordingMethod: RecordingMethod;
 }
 
 interface ExportFormatSelectorProps {
