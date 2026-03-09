@@ -622,11 +622,7 @@ export default function PreviewPage() {
           if (nowMs >= t.timestamp_from && nowMs < t.timestamp_to) {
             if (i !== currentAyahIndexRef.current) setCurrentAyahIndex(i);
 
-            // Disable expensive word-by-word highlight updates during recording
-            if (isRecordingNow) {
-              setHighlightWordIndex(null);
-              setHighlightWordProgress(0);
-            } else if (t.segments && t.segments.length > 0) {
+            if (t.segments && t.segments.length > 0) {
               const seg = t.segments.find((s) => nowMs >= s[1] && nowMs < s[2]);
               if (seg) {
                 setHighlightWordIndex(seg[0] - 1);
@@ -669,13 +665,6 @@ export default function PreviewPage() {
           if (nowSec >= everyAyahTimestamps[i].from) {
             if (i !== currentAyahIndexRef.current) {
               setCurrentAyahIndex(i);
-            }
-
-            // Disable expensive word-by-word highlight updates during recording
-            if (isRecordingNow) {
-              setHighlightWordIndex(null);
-              setHighlightWordProgress(0);
-              break;
             }
 
             // Word highlighting follows current ayah timeline (not fixed-speed animation)
@@ -728,11 +717,6 @@ export default function PreviewPage() {
           if (estimatedIndex !== currentAyahIndexRef.current) setCurrentAyahIndex(estimatedIndex);
 
           // Disable expensive word-by-word highlight updates during recording
-          if (isRecordingNow) {
-            setHighlightWordIndex(null);
-            setHighlightWordProgress(0);
-            return;
-          }
 
           const wordCount = (ayahsRef.current[estimatedIndex]?.text ?? '').split(' ').filter(Boolean).length;
           if (wordCount > 0) {

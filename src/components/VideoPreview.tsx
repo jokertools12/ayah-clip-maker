@@ -1045,17 +1045,17 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       ctx.shadowOffsetY = 0;
     } else if (textShadowStyle === 'soft') {
       ctx.shadowColor = `rgba(0, 0, 0, ${isAnyRecording ? 0.3 : 0.4})`;
-      ctx.shadowBlur = isAnyRecording ? 4 : 6 * S;
+      ctx.shadowBlur = isAnyRecording ? 3 * S : 6 * S;
       ctx.shadowOffsetX = 1;
       ctx.shadowOffsetY = 1;
     } else if (textShadowStyle === 'strong') {
       ctx.shadowColor = `rgba(0, 0, 0, ${isAnyRecording ? 0.5 : 0.8})`;
-      ctx.shadowBlur = isAnyRecording ? 8 : 16 * S;
+      ctx.shadowBlur = isAnyRecording ? 6 * S : 16 * S;
       ctx.shadowOffsetX = 2;
       ctx.shadowOffsetY = 2;
     } else if (textShadowStyle === 'glow') {
       ctx.shadowColor = 'rgba(212, 175, 55, 0.6)';
-      ctx.shadowBlur = isAnyRecording ? 10 : 20 * S;
+      ctx.shadowBlur = isAnyRecording ? 8 * S : 20 * S;
       ctx.shadowOffsetX = 0;
       ctx.shadowOffsetY = 0;
     }
@@ -1759,17 +1759,20 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       }
 
       // Draw decoration (side borders or separator) based on decorationStyle
-      const decoStyle = displaySettings.decorationStyle || 'none';
+      // Skip complex decorations in recordingLite mode for performance
+      if (!isLiteRecording) {
+        const decoStyle = displaySettings.decorationStyle || 'none';
 
-      // Draw side ornaments (left & right of ayah area)
-      if (decoStyle === 'sideBorder' || decoStyle === 'both') {
-        drawAyahSideOrnaments(ctx, canvas.width * 0.05, ayahY, totalHeight);
-        drawAyahSideOrnaments(ctx, canvas.width * 0.95, ayahY, totalHeight, true);
-      }
+        // Draw side ornaments (left & right of ayah area)
+        if (decoStyle === 'sideBorder' || decoStyle === 'both') {
+          drawAyahSideOrnaments(ctx, canvas.width * 0.05, ayahY, totalHeight);
+          drawAyahSideOrnaments(ctx, canvas.width * 0.95, ayahY, totalHeight, true);
+        }
 
-      // Draw separator line above the ayah
-      if (decoStyle === 'separator' || decoStyle === 'both') {
-        drawAyahSeparator(ctx, canvas.width / 2, startY - 40 * S, 180 * S);
+        // Draw separator line above the ayah
+        if (decoStyle === 'separator' || decoStyle === 'both') {
+          drawAyahSeparator(ctx, canvas.width / 2, startY - 40 * S, 180 * S);
+        }
       }
 
       // Draw frame around ayah text - centered properly
@@ -1963,7 +1966,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
             } else if (displaySettings.highlightStyle === 'glow') {
               const glowPulse = 0.35 + Math.sin(Math.PI * Math.min(Math.max(highlightWordProgress, 0), 1)) * 0.65;
               ctx.shadowColor = '#FFD700';
-              ctx.shadowBlur = (14 + glowPulse * 24) * S;
+              ctx.shadowBlur = (isAnyRecording ? (8 + glowPulse * 14) : (14 + glowPulse * 24)) * S;
             } else if (displaySettings.highlightStyle === 'underline') {
               ctx.strokeStyle = '#FFD700';
               ctx.lineWidth = 3 * S;
