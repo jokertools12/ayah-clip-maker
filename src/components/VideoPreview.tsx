@@ -1914,10 +1914,18 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         });
       });
 
-      // Draw ayah number badge (if enabled)
+      // Draw ayah number badge (if enabled) — position adapts to verse mode
       if (displaySettings.showAyahNumber) {
-        const badgeY = startY + totalHeight + 70 * S;
-        drawAyahBadge(ctx, canvas.width / 2, badgeY, currentAyah.numberInSurah, 36 * S, displaySettings.ayahNumberStyle, displaySettings.ayahNumberColor);
+        let badgeY: number;
+        let badgeSize = 36 * S;
+        if (verseMode !== 'full') {
+          // For chunk modes, place badge at a fixed lower position to prevent overlap with large text
+          badgeY = canvas.height * 0.72;
+          badgeSize = 30 * S; // slightly smaller for chunk modes
+        } else {
+          badgeY = startY + totalHeight + 70 * S;
+        }
+        drawAyahBadge(ctx, canvas.width / 2, badgeY, currentAyah.numberInSurah, badgeSize, displaySettings.ayahNumberStyle, displaySettings.ayahNumberColor);
       }
       ctx.restore(); // End verse transition transform
     }
