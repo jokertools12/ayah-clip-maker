@@ -32,7 +32,6 @@ export interface DisplaySettings {
   glowStyle: 'none' | 'golden' | 'soft' | 'neon' | 'pulse';
   lyricsDisplayStyle: 'scroll' | 'single' | 'karaoke' | 'fade';
   slideshowTransition: 'crossfade' | 'slideLeft' | 'slideRight' | 'slideUp' | 'zoomThrough' | 'wipe' | 'mixed';
-  wordScaleEffect: boolean;
 }
 
 interface DisplaySettingsPanelProps {
@@ -82,12 +81,6 @@ const textShadowOptions = [
   { value: 'none', label: 'بدون ظل', description: 'نص مسطح' },
 ];
 
-const decorationOptions = [
-  { value: 'none', label: 'نظيف', description: 'بدون زخرفة' },
-  { value: 'sideBorder', label: 'زخارف جانبية', description: 'رموز يمين/يسار' },
-  { value: 'separator', label: 'فاصل علوي', description: 'خط/موجة فوق الآيات' },
-  { value: 'both', label: 'كلاهما', description: 'جانبية + فاصل' },
-];
 
 const transitionOptions = [
   { value: 'none', label: 'بدون انتقال', description: 'ظهور مباشر' },
@@ -167,11 +160,6 @@ const watermarkPositionOptions = [
   { value: 'topLeft', label: 'أعلى يسار' },
 ];
 
-const performanceModeOptions = [
-  { value: 'economy', label: '🔋 اقتصادي', description: 'أداء أخف وأسرع' },
-  { value: 'balanced', label: '⚖️ متوازن', description: 'توازن جودة وأداء' },
-  { value: 'pro', label: '🎬 احترافي', description: 'أعلى جودة بصرية' },
-];
 
 const TEMPLATES_KEY = 'ayah-clip-display-templates';
 
@@ -400,17 +388,6 @@ export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPane
                 </RadioGroup>
               </div>
 
-              {/* Word Scale Effect Toggle */}
-              <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border/50">
-                <div className="space-y-0.5">
-                  <Label className="text-sm font-medium">تأثير تكبير الكلمة</Label>
-                  <p className="text-xs text-muted-foreground">تكبير الكلمة المميزة أثناء النطق</p>
-                </div>
-                <Switch
-                  checked={settings.wordScaleEffect !== false}
-                  onCheckedChange={(checked) => onChange({ ...settings, wordScaleEffect: checked })}
-                />
-              </div>
             </AccordionContent>
           </AccordionItem>
 

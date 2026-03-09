@@ -95,7 +95,6 @@ const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
   glowStyle: 'golden',
   lyricsDisplayStyle: 'scroll',
   slideshowTransition: 'crossfade',
-  wordScaleEffect: true,
 };
 
 // Note: frameStyle defaults to 'none' — user must explicitly select a frame
@@ -104,7 +103,6 @@ const DEFAULT_EXPORT_SETTINGS: ExportSettings = {
   format: 'mp4',
   quality: 'high',
   motionSpeed: 1.5,
-  recordingMethod: 'auto',
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -932,190 +930,69 @@ export default function PreviewPage() {
 
       const isLongRecording = recordingDuration >= 45;
       const isVeryLongRecording = recordingDuration >= 90;
-      const longRecordingFpsCap = isVeryLongRecording ? 18 : isLongRecording ? 20 : 30;
+
       const clampQualityForDuration = (quality: ExportQuality): ExportQuality => {
         if (isVeryLongRecording) return 'low';
-        if (!isLongRecording) return quality;
-        if (quality === 'ultra' || quality === 'high') return 'medium';
+        if (isLongRecording && (quality === 'ultra' || quality === 'high')) return 'medium';
         return quality;
       };
 
-      type RecordingAttemptKey = 'smooth' | 'compatibility' | 'quality';
-      type RecordingAttempt = {
-        id: RecordingAttemptKey;
-        label: string;
-        renderMode: 'recording' | 'recordingLite';
-        fps: number;
-        quality: ExportQuality;
-        recorderOptions: {
-          strategy: 'smooth' | 'compatibility' | 'quality';
-          bitrateMultiplier: number;
-          timesliceMs: number;
-          mimeTypeCandidates: string[];
-          captureStreamFps: number;
-        };
-      };
-
-      const baseFps = previewApi.getRecommendedRecordingFps();
-      const selectedQuality = clampQualityForDuration(exportSettings.quality);
-      const compatibilityQuality: ExportQuality = clampQualityForDuration(
-        exportSettings.quality === 'ultra'
-          ? 'medium'
-          : exportSettings.quality === 'high'
-          ? 'medium'
-          : exportSettings.quality
-      );
-
-      const attemptsByMode: Record<RecordingAttemptKey, RecordingAttempt> = {
-        smooth: {
-          id: 'smooth',
-          label: 'سلس',
-          renderMode: isLongRecording ? 'recordingLite' : 'recording',
-          fps: Math.max(18, Math.min(baseFps, isLongRecording ? 22 : 26, longRecordingFpsCap)),
-          quality: selectedQuality,
-          recorderOptions: {
-            strategy: 'smooth',
-            bitrateMultiplier: isLongRecording ? 0.82 : 0.9,
-            timesliceMs: isLongRecording ? 2600 : 1800,
-            mimeTypeCandidates: ['video/webm;codecs=vp8,opus', 'video/webm;codecs=vp9,opus', 'video/webm'],
-            captureStreamFps: Math.max(18, Math.min(baseFps, isLongRecording ? 22 : 26, longRecordingFpsCap)),
-          },
-        },
-        compatibility: {
-          id: 'compatibility',
-          label: 'توافق عالي',
-          renderMode: 'recordingLite',
-          fps: Math.max(16, Math.min(baseFps - 2, isLongRecording ? 20 : 22, longRecordingFpsCap)),
-          quality: compatibilityQuality,
-          recorderOptions: {
-            strategy: 'compatibility',
-            bitrateMultiplier: isVeryLongRecording ? 0.6 : 0.72,
-            timesliceMs: isLongRecording ? 2800 : 2200,
-            mimeTypeCandidates: ['video/webm;codecs=vp8,opus', 'video/webm'],
-            captureStreamFps: Math.max(16, Math.min(baseFps - 2, isLongRecording ? 20 : 22, longRecordingFpsCap)),
-          },
-        },
-        quality: {
-          id: 'quality',
-          label: 'جودة قصوى',
-          renderMode: isLongRecording ? 'recordingLite' : 'recording',
-          fps: Math.max(20, Math.min(baseFps + 1, isLongRecording ? 24 : 30, longRecordingFpsCap)),
-          quality: selectedQuality,
-          recorderOptions: {
-            strategy: isLongRecording ? 'smooth' : 'quality',
-            bitrateMultiplier: isLongRecording ? 0.86 : 1,
-            timesliceMs: isLongRecording ? 2200 : 1400,
-            mimeTypeCandidates: isLongRecording
-              ? ['video/webm;codecs=vp8,opus', 'video/webm']
-              : ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'],
-            captureStreamFps: Math.max(20, Math.min(baseFps + 1, isLongRecording ? 24 : 30, longRecordingFpsCap)),
-          },
-        },
-      };
-
-      // Start with compatibility for auto mode (least CPU), only try heavier if it fails
-      const selectedMode: RecordingAttemptKey = exportSettings.recordingMethod === 'auto' ? 'compatibility' : exportSettings.recordingMethod;
-      const attempts = exportSettings.recordingMethod === 'auto'
-        ? [attemptsByMode.compatibility, attemptsByMode.smooth, attemptsByMode.quality]
-        : [attemptsByMode[selectedMode]];
+      const targetQuality = clampQualityForDuration(exportSettings.quality);
+      const targetFps = isVeryLongRecording ? 18 : isLongRecording ? 20 : 24;
+      const renderMode: 'recording' | 'recordingLite' = isLongRecording ? 'recordingLite' : 'recording';
 
       if (isLongRecording) {
-        toast.info('تم تفعيل وضع التسجيل الطويل تلقائيًا لتجنب التهنيج.');
+        toast.info('تم تفعيل نظام الإطارات الخفيف تلقائيًا لتقليل التهنيج.');
       }
 
-      let lastError: unknown = null;
+      const recordingCanvas = document.createElement('canvas');
+      const recordingDimensions = getQualityDimensions(targetQuality, aspectRatio);
+      const resolutionScale = isVeryLongRecording ? 0.62 : isLongRecording ? 0.72 : 1;
+      recordingCanvas.width = Math.max(360, Math.round(recordingDimensions.width * resolutionScale));
+      recordingCanvas.height = Math.max(640, Math.round(recordingDimensions.height * resolutionScale));
 
-      for (let i = 0; i < attempts.length; i++) {
-        const attempt = attempts[i];
-        let stopIsolatedLoop: (() => void) | null = null;
+      if (audio) {
+        audio.pause();
+        audio.currentTime = recordingStartAt;
+      }
 
+      const frameTimelineOffsetMs = recordingStartAt * 1000;
+      const drawIsolatedFrame = (elapsedMs: number) => {
         try {
-          const recordingCanvas = document.createElement('canvas');
-          // Use quality-based dimensions; for lite mode, scale down once here
-          const recordingDimensions = getQualityDimensions(attempt.quality, aspectRatio);
-          const liteScale = attempt.renderMode === 'recordingLite' ? 0.67 : 1;
-          recordingCanvas.width = Math.round(recordingDimensions.width * liteScale);
-          recordingCanvas.height = Math.round(recordingDimensions.height * liteScale);
-
-          const frameInterval = Math.max(1000 / attempt.fps, 16);
-          let rafId: number | null = null;
-          let lastFrameTime = 0;
-          let stopped = false;
-
-          const drawIsolatedFrame = () => {
-            try {
-              const livePreviewApi = videoPreviewRef.current;
-              const draw = livePreviewApi?.drawFrame ?? previewApi.drawFrame;
-              draw(recordingCanvas, attempt.renderMode);
-            } catch (e) {
-              console.warn('Frame draw error:', e);
-            }
-          };
-
-          const renderIsolatedFrame = (now: number) => {
-            if (stopped) return;
-            rafId = requestAnimationFrame(renderIsolatedFrame);
-            if (now - lastFrameTime < frameInterval) return;
-            lastFrameTime = now;
-            drawIsolatedFrame();
-          };
-
-          drawIsolatedFrame();
-          rafId = requestAnimationFrame(renderIsolatedFrame);
-
-          stopIsolatedLoop = () => {
-            stopped = true;
-            if (rafId !== null) {
-              cancelAnimationFrame(rafId);
-              rafId = null;
-            }
-          };
-
-          // Warm up isolated canvas before captureStream starts
-          await new Promise((resolve) => setTimeout(resolve, 120));
-          drawIsolatedFrame();
-
-          if (audio) {
-            audio.pause();
-            audio.currentTime = recordingStartAt;
-          }
-
-          toast.info(
-            exportSettings.recordingMethod === 'auto'
-              ? `بدء التسجيل (${attempt.label})...`
-              : 'بدء التسجيل...'
-          );
-
-          const blob = await videoRecorder.startRecording(
-            recordingCanvas,
-            audio,
-            recordingDuration,
-            audioEffects.getRecordingStream(),
-            attempt.quality,
-            attempt.fps,
-            attempt.recorderOptions
-          );
-
-          if (blob) {
-            toast.success('تم إنشاء الفيديو بنجاح!');
-            return;
-          }
-
-          lastError = new Error('لم يتم إنشاء ملف فيديو');
-        } catch (error) {
-          lastError = error;
-
-          if (i < attempts.length - 1) {
-            videoRecorder.reset();
-            toast.warning(`فشل وضع "${attempt.label}"، سيتم تجربة وضع بديل...`);
-            await previewApi.ensureBackgroundPlayback();
-          }
-        } finally {
-          stopIsolatedLoop?.();
+          const livePreviewApi = videoPreviewRef.current;
+          const draw = livePreviewApi?.drawFrame ?? previewApi.drawFrame;
+          draw(recordingCanvas, renderMode, frameTimelineOffsetMs + elapsedMs);
+        } catch (e) {
+          console.warn('Frame draw error:', e);
         }
+      };
+
+      drawIsolatedFrame(0);
+      toast.info('بدء التسجيل بنظام الإطارات...');
+
+      const blob = await videoRecorder.startRecording(
+        recordingCanvas,
+        audio,
+        recordingDuration,
+        undefined,
+        targetQuality,
+        targetFps,
+        {
+          strategy: 'compatibility',
+          bitrateMultiplier: isVeryLongRecording ? 0.58 : isLongRecording ? 0.68 : 0.78,
+          timesliceMs: isLongRecording ? 3000 : 2200,
+          mimeTypeCandidates: ['video/webm;codecs=vp8,opus', 'video/webm'],
+          captureStreamFps: targetFps,
+          frameRenderer: (frameTimeMs) => drawIsolatedFrame(frameTimeMs),
+        }
+      );
+
+      if (blob) {
+        toast.success('تم إنشاء الفيديو بنجاح!');
+        return;
       }
 
-      throw lastError instanceof Error ? lastError : new Error('حدث خطأ في التسجيل');
+      throw new Error('لم يتم إنشاء ملف فيديو');
     } catch (error) {
       console.error('Recording error:', error);
       toast.error('فشل التسجيل على هذا الوضع. جرّب طريقة توافق أعلى أو جودة أقل.');

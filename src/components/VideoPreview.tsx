@@ -62,7 +62,6 @@ interface VideoPreviewProps {
     glowStyle?: 'none' | 'golden' | 'soft' | 'neon' | 'pulse';
     lyricsDisplayStyle?: 'scroll' | 'single' | 'karaoke' | 'fade';
     slideshowTransition?: 'crossfade' | 'slideLeft' | 'slideRight' | 'slideUp' | 'zoomThrough' | 'wipe' | 'mixed';
-    wordScaleEffect?: boolean;
   };
   isPlaying: boolean;
   isRecording?: boolean;
@@ -84,7 +83,7 @@ export interface VideoPreviewRef {
   ensureBackgroundPlayback: () => Promise<void>;
   getRecordingDimensions: () => { width: number; height: number };
   getRecommendedRecordingFps: () => number;
-  drawFrame: (targetCanvas?: HTMLCanvasElement, renderMode?: 'preview' | 'recording' | 'recordingLite') => void;
+  drawFrame: (targetCanvas?: HTMLCanvasElement, renderMode?: 'preview' | 'recording' | 'recordingLite', forcedTimeMs?: number) => void;
 }
 
 const DEFAULT_DISPLAY_SETTINGS = {
@@ -136,7 +135,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   const imageRef = useRef<HTMLImageElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
-  const drawFrameRuntimeRef = useRef<(targetCanvas?: HTMLCanvasElement, renderMode?: 'preview' | 'recording' | 'recordingLite') => void>(() => {});
+  const drawFrameRuntimeRef = useRef<(targetCanvas?: HTMLCanvasElement, renderMode?: 'preview' | 'recording' | 'recordingLite', forcedTimeMs?: number) => void>(() => {});
   const [imageLoaded, setImageLoaded] = useState(false);
   const [videoReady, setVideoReady] = useState(false);
 
@@ -777,16 +776,20 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   };
 
   // Draw frame on canvas
-  const drawFrame = useCallback((targetCanvas?: HTMLCanvasElement, renderMode: 'preview' | 'recording' | 'recordingLite' = 'preview') => {
+  const drawFrame = useCallback((
+    targetCanvas?: HTMLCanvasElement,
+    renderMode: 'preview' | 'recording' | 'recordingLite' = 'preview',
+    forcedTimeMs?: number
+  ) => {
     const canvas = targetCanvas || canvasRef.current;
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
 
+    const renderTimestamp = forcedTimeMs ?? Date.now();
     const base = getRecordingDimensions();
     const previewScale = 0.38;
     const isPreviewRender = renderMode === 'preview';
     const isLiteRecording = renderMode === 'recordingLite';
-    const recordingScale = isLiteRecording ? 0.67 : 1;
 
     // For recording: the canvas dimensions are set by the caller (PreviewPage)
     // based on quality preset. We only resize for preview mode.
@@ -813,7 +816,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
 
     // Draw background motion (lighter in recordingLite)
     const motionFactor = isLiteRecording ? 0.55 : 1;
-    const t = (Date.now() / 1000) * motionSpeed * motionFactor;
+    const t = (renderTimestamp / 1000) * motionSpeed * motionFactor;
     const scale = 1.04 + Math.sin(t * 0.2) * (0.03 * motionFactor);
     const offsetX = Math.sin(t * 0.12) * (20 * motionFactor);
     const offsetY = Math.cos(t * 0.1) * (16 * motionFactor);
@@ -822,7 +825,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     if (slideshowReady && slideshowImagesRef.current.length > 1) {
       const images = slideshowImagesRef.current;
       const presets = kenBurnsPresetsRef.current;
-      const elapsed = Date.now() - slideshowStartTimeRef.current;
+      const elapsed = renderTimestamp - slideshowStartTimeRef.current;
       const cycleDuration = SLIDESHOW_DISPLAY_DURATION + SLIDESHOW_TRANSITION_DURATION;
       const totalCycle = cycleDuration * images.length;
       const cyclePosition = elapsed % totalCycle;
@@ -1343,12 +1346,12 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     // Detect ayah change and start transition
     if (currentAyah && prevAyahRef.current && 
         currentAyah.numberInSurah !== prevAyahRef.current.numberInSurah) {
-      transitionStartRef.current = Date.now();
+      transitionStartRef.current = renderTimestamp;
       isTransitioningRef.current = true;
       currentRandomTransitionRef.current = RANDOM_TRANSITIONS[Math.floor(Math.random() * RANDOM_TRANSITIONS.length)];
       // Reset chunk counter and adaptive timing for new verse
       chunkCounterRef.current = 0;
-      lastChunkTimeRef.current = Date.now();
+      lastChunkTimeRef.current = renderTimestamp;
       prevChunkIndexRef.current = -1;
       chunkFadeRef.current = 1;
       chunkStartWordIndexRef.current = 0;
@@ -1365,7 +1368,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     const transitionType = rawTransitionType === 'random' ? currentRandomTransitionRef.current : rawTransitionType;
     let transitionProgress = 1; // 1 = fully visible
     if (isTransitioningRef.current && transitionType !== 'none') {
-      const elapsed = Date.now() - transitionStartRef.current;
+      const elapsed = renderTimestamp - transitionStartRef.current;
       transitionProgress = Math.min(elapsed / VERSE_TRANSITION_DURATION, 1);
       if (transitionProgress >= 1) {
         isTransitioningRef.current = false;
@@ -1397,7 +1400,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
           return;
         }
 
-        const pulse = 0.6 + Math.sin(Date.now() / 400) * 0.4;
+        const pulse = 0.6 + Math.sin(renderTimestamp / 400) * 0.4;
         let glowColor: string;
         let glowBlur: number;
         let textColor: string;
@@ -1660,7 +1663,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       let chunkStartWordIndex = 0; // Global word index where current chunk starts
       
       // ── Adaptive timing: learn reciter speed from highlightedWordIndex changes ──
-      const now = Date.now();
+      const now = renderTimestamp;
       if (highlightedWordIndex != null && highlightedWordIndex !== lastHighlightedWordRef.current) {
         if (lastHighlightedWordRef.current != null) {
           highlightWordTimestampsRef.current.push(now);
@@ -1740,10 +1743,10 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       if (verseMode !== 'full' && currentChunkIndex !== prevChunkIndexRef.current) {
         prevChunkIndexRef.current = currentChunkIndex;
         chunkFadeRef.current = 0;
-        chunkFadeStartRef.current = Date.now();
+        chunkFadeStartRef.current = renderTimestamp;
       }
       if (verseMode !== 'full' && chunkFadeRef.current < 1) {
-        const fadeElapsed = Date.now() - chunkFadeStartRef.current;
+        const fadeElapsed = renderTimestamp - chunkFadeStartRef.current;
         chunkFadeRef.current = Math.min(fadeElapsed / 300, 1);
       }
       
@@ -1809,51 +1812,6 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         drawIslamicFrame(ctx, frameX, frameY, frameWidth, frameHeight, effectiveFrameStyle);
       }
 
-    // Helper: draw decorative vertical ornament on side
-    function drawAyahSideOrnaments(c: CanvasRenderingContext2D, x: number, centerY: number, h: number, flipX = false) {
-      c.save();
-      c.translate(x, centerY);
-      if (flipX) c.scale(-1, 1);
-      c.strokeStyle = 'rgba(212, 175, 55, 0.4)';
-      c.lineWidth = 2 * S;
-      c.beginPath();
-      c.moveTo(0, -h / 2);
-      c.bezierCurveTo(30 * S, -h / 4, 30 * S, h / 4, 0, h / 2);
-      c.stroke();
-
-      // Small end circles
-      c.fillStyle = 'rgba(212, 175, 55, 0.5)';
-      c.beginPath();
-      c.arc(0, -h / 2, 4 * S, 0, Math.PI * 2);
-      c.fill();
-      c.beginPath();
-      c.arc(0, h / 2, 4 * S, 0, Math.PI * 2);
-      c.fill();
-      c.restore();
-    }
-
-    // Helper: draw horizontal separator line (subtle wave-like)
-    function drawAyahSeparator(c: CanvasRenderingContext2D, cx: number, cy: number, width: number) {
-      c.save();
-      c.strokeStyle = 'rgba(212, 175, 55, 0.35)';
-      c.lineWidth = 1.5 * S;
-      const hw = width / 2;
-      c.beginPath();
-      c.moveTo(cx - hw, cy);
-      c.bezierCurveTo(cx - hw + 30 * S, cy - 6 * S, cx - 30 * S, cy + 6 * S, cx, cy);
-      c.bezierCurveTo(cx + 30 * S, cy - 6 * S, cx + hw - 30 * S, cy + 6 * S, cx + hw, cy);
-      c.stroke();
-
-      // End dots
-      c.fillStyle = 'rgba(212, 175, 55, 0.5)';
-      c.beginPath();
-      c.arc(cx - hw - 5 * S, cy, 3 * S, 0, Math.PI * 2);
-      c.fill();
-      c.beginPath();
-      c.arc(cx + hw + 5 * S, cy, 3 * S, 0, Math.PI * 2);
-      c.fill();
-      c.restore();
-    }
 
       // Apply verse transition effects
       ctx.save();
@@ -2007,14 +1965,6 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
 
           ctx.save();
           if (isWordHighlighted) {
-            // Subtle scale-up effect for the highlighted word (optional)
-            if (displaySettings.wordScaleEffect !== false) {
-              const scalePulse = 1.0 + 0.12 * Math.sin(Math.PI * Math.min(Math.max(highlightWordProgress ?? 0, 0), 1));
-              ctx.translate(cursorX - wWidth / 2, y);
-              ctx.scale(scalePulse, scalePulse);
-              ctx.translate(-(cursorX - wWidth / 2), -y);
-            }
-
             if (displaySettings.highlightStyle === 'glow') {
               const glowPulse = 0.35 + Math.sin(Math.PI * Math.min(Math.max(highlightWordProgress ?? 0, 0), 1)) * 0.65;
               ctx.shadowColor = '#FFD700';
@@ -2156,8 +2106,8 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     getRecordingDimensions,
     getRecommendedRecordingFps,
     // Always route through the live draw function ref to avoid stale closure
-    drawFrame: (targetCanvas?: HTMLCanvasElement, renderMode?: 'preview' | 'recording' | 'recordingLite') =>
-      drawFrameRuntimeRef.current(targetCanvas, renderMode),
+    drawFrame: (targetCanvas?: HTMLCanvasElement, renderMode?: 'preview' | 'recording' | 'recordingLite', forcedTimeMs?: number) =>
+      drawFrameRuntimeRef.current(targetCanvas, renderMode, forcedTimeMs),
   }));
 
   const containerClass = aspectRatio === '9:16'
