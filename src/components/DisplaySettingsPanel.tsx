@@ -160,11 +160,6 @@ const watermarkPositionOptions = [
   { value: 'topLeft', label: 'أعلى يسار' },
 ];
 
-const performanceModeOptions = [
-  { value: 'economy', label: '🔋 اقتصادي', description: 'أداء أخف وأسرع' },
-  { value: 'balanced', label: '⚖️ متوازن', description: 'توازن جودة وأداء' },
-  { value: 'pro', label: '🎬 احترافي', description: 'أعلى جودة بصرية' },
-];
 
 const TEMPLATES_KEY = 'ayah-clip-display-templates';
 
