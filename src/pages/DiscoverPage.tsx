@@ -301,27 +301,13 @@ export default function DiscoverPage() {
           <p className="text-muted-foreground mt-1">استعرض أحدث وأشهر الفيديوهات من المجتمع</p>
         </motion.div>
 
-        {/* Search & Sort */}
-        <div className="flex flex-col sm:flex-row gap-3 mb-6">
-          <div className="relative flex-1">
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="ابحث بالسورة أو القارئ..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="pr-10"
-            />
-          </div>
-          <div className="flex gap-2">
-            <Button size="sm" variant={sortBy === 'latest' ? 'default' : 'outline'} onClick={() => setSortBy('latest')} className="gap-1">
-              <Clock className="h-4 w-4" />
-              الأحدث
-            </Button>
-            <Button size="sm" variant={sortBy === 'popular' ? 'default' : 'outline'} onClick={() => setSortBy('popular')} className="gap-1">
-              <Heart className="h-4 w-4" />
-              الأكثر إعجاباً
-            </Button>
-          </div>
+        {/* Advanced Search Bar */}
+        <div className="mb-6">
+          <AdvancedSearchBar
+            filters={filters}
+            onFiltersChange={setFilters}
+            placeholder="ابحث بالسورة أو القارئ..."
+          />
         </div>
 
         {loading ? (
@@ -330,8 +316,8 @@ export default function DiscoverPage() {
           <Card>
             <CardContent className="p-12 text-center">
               <Video className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-lg font-medium mb-2">{searchQuery ? 'لا توجد نتائج' : 'لا توجد فيديوهات عامة بعد'}</p>
-              <p className="text-sm text-muted-foreground">{searchQuery ? 'جرب كلمات بحث مختلفة' : 'كن أول من يشارك فيديو مع المجتمع!'}</p>
+              <p className="text-lg font-medium mb-2">{filters.query ? 'لا توجد نتائج' : 'لا توجد فيديوهات عامة بعد'}</p>
+              <p className="text-sm text-muted-foreground">{filters.query ? 'جرب كلمات بحث مختلفة' : 'كن أول من يشارك فيديو مع المجتمع!'}</p>
             </CardContent>
           </Card>
         ) : (
