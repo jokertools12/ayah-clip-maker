@@ -1930,7 +1930,8 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
           highlightText = getTokenHsl('--primary-foreground', '#FFD700');
       }
 
-      let globalIndex = 0;
+      let localIndex = 0;
+      const chunkStart = chunkStartWordIndexRef.current;
       lines.forEach((wordsInLine, i) => {
         const lineTotal = wordsInLine.reduce((sum, w) => sum + ctx.measureText(w).width, 0) +
           Math.max(wordsInLine.length - 1, 0) * spaceWidth;
@@ -1940,7 +1941,9 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
 
         wordsInLine.forEach((w) => {
           const wWidth = ctx.measureText(w).width;
-          const isWordHighlighted = highlightEnabled && highlightedWordIndex != null && globalIndex === highlightedWordIndex;
+          // Map local index to global: in chunked modes, the global word index = chunkStart + localIndex
+          const globalWordIdx = verseMode === 'full' ? localIndex : chunkStart + localIndex;
+          const isWordHighlighted = highlightEnabled && highlightedWordIndex != null && globalWordIdx === highlightedWordIndex;
 
           if (isWordHighlighted) {
             ctx.save();
