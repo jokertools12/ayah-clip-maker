@@ -1351,7 +1351,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       currentRandomTransitionRef.current = RANDOM_TRANSITIONS[Math.floor(Math.random() * RANDOM_TRANSITIONS.length)];
       // Reset chunk counter and adaptive timing for new verse
       chunkCounterRef.current = 0;
-      lastChunkTimeRef.current = Date.now();
+      lastChunkTimeRef.current = renderTimestamp;
       prevChunkIndexRef.current = -1;
       chunkFadeRef.current = 1;
       chunkStartWordIndexRef.current = 0;
