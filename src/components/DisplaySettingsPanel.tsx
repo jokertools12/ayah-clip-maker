@@ -25,13 +25,10 @@ export interface DisplaySettings {
   surahNameStyle: 'classic' | 'banner' | 'calligraphy' | 'circle' | 'diamond' | 'ribbon';
   reciterNameStyle: 'simple' | 'elegant' | 'badge' | 'tag' | 'glow';
   textShadowStyle: 'soft' | 'strong' | 'none' | 'glow';
-  decorationStyle: 'none' | 'sideBorder' | 'separator' | 'both';
   ayahTransition: 'none' | 'fade' | 'slide' | 'zoom' | 'blur' | 'rise' | 'rotate' | 'cinematic' | 'elastic' | 'random';
-  particleDensity: 'off' | 'low' | 'medium' | 'high';
   watermarkEnabled: boolean;
   watermarkText: string;
   watermarkPosition: 'bottomLeft' | 'bottomRight' | 'topLeft' | 'topRight' | 'bottomCenter';
-  performanceMode: 'economy' | 'balanced' | 'pro';
   glowStyle: 'none' | 'golden' | 'soft' | 'neon' | 'pulse';
   lyricsDisplayStyle: 'scroll' | 'single' | 'karaoke' | 'fade';
   slideshowTransition: 'crossfade' | 'slideLeft' | 'slideRight' | 'slideUp' | 'zoomThrough' | 'wipe' | 'mixed';
