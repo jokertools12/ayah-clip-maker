@@ -1721,19 +1721,19 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       c.translate(x, centerY);
       if (flipX) c.scale(-1, 1);
       c.strokeStyle = 'rgba(212, 175, 55, 0.4)';
-      c.lineWidth = 2;
+      c.lineWidth = 2 * S;
       c.beginPath();
       c.moveTo(0, -h / 2);
-      c.bezierCurveTo(30, -h / 4, 30, h / 4, 0, h / 2);
+      c.bezierCurveTo(30 * S, -h / 4, 30 * S, h / 4, 0, h / 2);
       c.stroke();
 
       // Small end circles
       c.fillStyle = 'rgba(212, 175, 55, 0.5)';
       c.beginPath();
-      c.arc(0, -h / 2, 4, 0, Math.PI * 2);
+      c.arc(0, -h / 2, 4 * S, 0, Math.PI * 2);
       c.fill();
       c.beginPath();
-      c.arc(0, h / 2, 4, 0, Math.PI * 2);
+      c.arc(0, h / 2, 4 * S, 0, Math.PI * 2);
       c.fill();
       c.restore();
     }
