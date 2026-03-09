@@ -1922,7 +1922,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       // Draw ayah number badge (if enabled)
       if (displaySettings.showAyahNumber) {
         const badgeY = startY + totalHeight + 70 * S;
-        drawAyahBadge(ctx, canvas.width / 2, badgeY, currentAyah.numberInSurah, 36 * S, displaySettings.ayahNumberStyle);
+        drawAyahBadge(ctx, canvas.width / 2, badgeY, currentAyah.numberInSurah, 36 * S, displaySettings.ayahNumberStyle, displaySettings.ayahNumberColor);
       }
       ctx.restore(); // End verse transition transform
     }
