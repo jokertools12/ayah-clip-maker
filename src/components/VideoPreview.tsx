@@ -1346,7 +1346,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     // Detect ayah change and start transition
     if (currentAyah && prevAyahRef.current && 
         currentAyah.numberInSurah !== prevAyahRef.current.numberInSurah) {
-      transitionStartRef.current = Date.now();
+      transitionStartRef.current = renderTimestamp;
       isTransitioningRef.current = true;
       currentRandomTransitionRef.current = RANDOM_TRANSITIONS[Math.floor(Math.random() * RANDOM_TRANSITIONS.length)];
       // Reset chunk counter and adaptive timing for new verse
