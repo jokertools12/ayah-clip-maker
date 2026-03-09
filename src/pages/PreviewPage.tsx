@@ -667,13 +667,6 @@ export default function PreviewPage() {
               setCurrentAyahIndex(i);
             }
 
-            // Disable expensive word-by-word highlight updates during recording
-            if (isRecordingNow) {
-              setHighlightWordIndex(null);
-              setHighlightWordProgress(0);
-              break;
-            }
-
             // Word highlighting follows current ayah timeline (not fixed-speed animation)
             const ts = everyAyahTimestamps[i];
             const ayahDur = ts.to - ts.from;
