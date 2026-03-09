@@ -2010,7 +2010,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
             ctx.save();
             ctx.shadowBlur = 0;
             
-            if (displaySettings.highlightStyle === 'solid') {
+            if (effectiveHighlightStyle === 'solid') {
               const padX = 20 * S;
               const padY = 12 * S;
               ctx.fillStyle = highlightBg;
@@ -2021,11 +2021,11 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
               ctx.beginPath();
               ctx.roundRect(left, top, width, height, 24 * S);
               ctx.fill();
-            } else if (displaySettings.highlightStyle === 'glow') {
+            } else if (effectiveHighlightStyle === 'glow') {
               const glowPulse = 0.35 + Math.sin(Math.PI * Math.min(Math.max(highlightWordProgress, 0), 1)) * 0.65;
               ctx.shadowColor = '#FFD700';
               ctx.shadowBlur = (isAnyRecording ? (8 + glowPulse * 14) : (14 + glowPulse * 24)) * S;
-            } else if (displaySettings.highlightStyle === 'underline') {
+            } else if (effectiveHighlightStyle === 'underline') {
               ctx.strokeStyle = '#FFD700';
               ctx.lineWidth = 3 * S;
               ctx.beginPath();
