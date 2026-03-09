@@ -388,17 +388,6 @@ export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPane
                 </RadioGroup>
               </div>
 
-              {/* Word Scale Effect Toggle */}
-              <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border/50">
-                <div className="space-y-0.5">
-                  <Label className="text-sm font-medium">تأثير تكبير الكلمة</Label>
-                  <p className="text-xs text-muted-foreground">تكبير الكلمة المميزة أثناء النطق</p>
-                </div>
-                <Switch
-                  checked={settings.wordScaleEffect !== false}
-                  onCheckedChange={(checked) => onChange({ ...settings, wordScaleEffect: checked })}
-                />
-              </div>
             </AccordionContent>
           </AccordionItem>
 
