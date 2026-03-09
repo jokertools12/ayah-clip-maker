@@ -1585,35 +1585,50 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     else if (currentAyah && displaySettings.showAyahText) {
       const ayahY = canvas.height * 0.52;
       const maxWidth = canvas.width * 0.85;
-      const lineHeight = textSettings.fontSize * 3.2 * S;
       
-      ctx.font = `${textSettings.fontSize * 2 * S}px "${fontName}", "Noto Naskh Arabic", serif`;
+      // Apply verse display mode - chunk words differently
+      const verseMode = displaySettings.verseDisplayMode || 'full';
+      
+      // Dynamic font scaling based on verse display mode
+      const modeScales: Record<string, number> = {
+        wordByWord: 3.5,
+        twoWords: 2.8,
+        threeTwo: 2.4,
+        full: 2.0,
+      };
+      const fontScale = modeScales[verseMode] || 2.0;
+      const lineHeight = textSettings.fontSize * (verseMode === 'full' ? 3.2 : fontScale * 1.6) * S;
+      
+      ctx.font = `${textSettings.fontSize * fontScale * S}px "${fontName}", "Noto Naskh Arabic", serif`;
       ctx.fillStyle = textSettings.textColor;
       
       // Word wrap — with layout cache to avoid measureText every frame
       const allWords = (currentAyahWords?.length ? currentAyahWords : currentAyah.text.split(' ')).filter(Boolean);
       
-      // Apply verse display mode - chunk words differently
-      const verseMode = displaySettings.verseDisplayMode || 'full';
       let displayWords: string[];
+      
+      // Smooth chunk cycling: use a counter that advances at fixed intervals
+      const now = Date.now();
+      const chunkInterval = verseMode === 'wordByWord' ? 1200 : verseMode === 'twoWords' ? 2000 : 2500;
+      if (now - lastChunkTimeRef.current > chunkInterval) {
+        chunkCounterRef.current += 1;
+        lastChunkTimeRef.current = now;
+      }
       
       if (verseMode === 'full') {
         displayWords = allWords;
       } else if (verseMode === 'wordByWord') {
-        // Show only current highlighted word or cycle through
-        const wordIdx = highlightedWordIndex != null ? highlightedWordIndex : Math.floor((Date.now() / 1200) % allWords.length);
+        const wordIdx = highlightedWordIndex != null ? highlightedWordIndex : (chunkCounterRef.current % allWords.length);
         displayWords = allWords[wordIdx] ? [allWords[wordIdx]] : allWords.slice(0, 1);
       } else if (verseMode === 'twoWords') {
-        // Show 2 words at a time
         const chunkSize = 2;
         const totalChunks = Math.ceil(allWords.length / chunkSize);
         const chunkIdx = highlightedWordIndex != null
           ? Math.floor(highlightedWordIndex / chunkSize)
-          : Math.floor((Date.now() / 2000) % totalChunks);
+          : (chunkCounterRef.current % totalChunks);
         const start = chunkIdx * chunkSize;
         displayWords = allWords.slice(start, start + chunkSize);
       } else if (verseMode === 'threeTwo') {
-        // Alternating 3 then 2 words
         const pattern = [3, 2];
         let pos = 0, chunkIndex = 0;
         const chunks: string[][] = [];
