@@ -37,8 +37,11 @@ import {
   Filter,
   List,
   User,
+  Heart,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 
 type AspectRatio = '9:16' | '16:9';
 type BrowseMode = 'byPerformer' | 'byCategory' | 'search';
