@@ -1759,17 +1759,20 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       }
 
       // Draw decoration (side borders or separator) based on decorationStyle
-      const decoStyle = displaySettings.decorationStyle || 'none';
+      // Skip complex decorations in recordingLite mode for performance
+      if (!isLiteRecording) {
+        const decoStyle = displaySettings.decorationStyle || 'none';
 
-      // Draw side ornaments (left & right of ayah area)
-      if (decoStyle === 'sideBorder' || decoStyle === 'both') {
-        drawAyahSideOrnaments(ctx, canvas.width * 0.05, ayahY, totalHeight);
-        drawAyahSideOrnaments(ctx, canvas.width * 0.95, ayahY, totalHeight, true);
-      }
+        // Draw side ornaments (left & right of ayah area)
+        if (decoStyle === 'sideBorder' || decoStyle === 'both') {
+          drawAyahSideOrnaments(ctx, canvas.width * 0.05, ayahY, totalHeight);
+          drawAyahSideOrnaments(ctx, canvas.width * 0.95, ayahY, totalHeight, true);
+        }
 
-      // Draw separator line above the ayah
-      if (decoStyle === 'separator' || decoStyle === 'both') {
-        drawAyahSeparator(ctx, canvas.width / 2, startY - 40 * S, 180 * S);
+        // Draw separator line above the ayah
+        if (decoStyle === 'separator' || decoStyle === 'both') {
+          drawAyahSeparator(ctx, canvas.width / 2, startY - 40 * S, 180 * S);
+        }
       }
 
       // Draw frame around ayah text - centered properly
