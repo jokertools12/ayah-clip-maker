@@ -609,6 +609,7 @@ export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPane
 
         {/* Ayah Number Style */}
         {settings.showAyahNumber && (
+          <>
           <div className="space-y-3 pt-2 border-t">
             <Label className="text-sm flex items-center gap-2">
               <Hash className="h-4 w-4" />
@@ -655,6 +656,7 @@ export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPane
               ))}
             </RadioGroup>
           </div>
+          </>
         )}
 
         {settings.showSurahName && (
