@@ -1157,8 +1157,12 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       ctx.shadowOffsetY = 0;
     }
 
+    if (isAnyRecording) {
+      drawRecordingHeaderLayer(ctx, canvas, S, fontName);
+    }
+
     // Draw surah name badge (if enabled) based on surahNameStyle
-    if (displaySettings.showSurahName) {
+    if (!isAnyRecording && displaySettings.showSurahName) {
       const badgeY = canvas.height * 0.11;
       const nameStyle = displaySettings.surahNameStyle || 'classic';
 
