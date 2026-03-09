@@ -235,7 +235,7 @@ export function useVideoRecorder() {
 
             if (frameIndex > totalFrames) {
               stopFrameLoop();
-              if (mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+              mediaRecorder.stop();
               if (audioElement) audioElement.pause();
               return;
             }
