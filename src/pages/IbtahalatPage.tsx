@@ -359,19 +359,28 @@ export default function IbtahalatPage() {
                     </div>
                     <div className="flex gap-2 flex-wrap mb-4">
                       {filteredPerformers.map(p => (
-                        <Button
-                          key={p.id}
-                          variant={selectedPerformer === p.id ? 'default' : 'outline'}
-                          size="sm"
-                          onClick={() => setSelectedPerformer(p.id)}
-                          className="gap-1"
-                        >
-                          <Mic className="h-3 w-3" />
-                          {p.name}
-                          <Badge variant="secondary" className="mr-1 text-xs">
-                            {getTracksByPerformer(p.id).length}
-                          </Badge>
-                        </Button>
+                        <div key={p.id} className="flex items-center gap-1">
+                          <Button
+                            variant={selectedPerformer === p.id ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => setSelectedPerformer(p.id)}
+                            className="gap-1"
+                          >
+                            <Mic className="h-3 w-3" />
+                            {p.name}
+                            <Badge variant="secondary" className="mr-1 text-xs">
+                              {getTracksByPerformer(p.id).length}
+                            </Badge>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={(e) => { e.stopPropagation(); toggleFavPerformer(p.id); }}
+                          >
+                            <Heart className={`h-4 w-4 ${favPerformers.has(p.id) ? 'fill-destructive text-destructive' : 'text-muted-foreground'}`} />
+                          </Button>
+                        </div>
                       ))}
                     </div>
                   </div>
