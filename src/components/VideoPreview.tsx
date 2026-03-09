@@ -975,8 +975,26 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         }
       }
     } else if (videoReady && videoRef.current) {
-      // Draw video frame — NO Ken Burns for video backgrounds to prevent lag
-      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+      // Draw video frame via off-screen scale canvas for performance
+      const video = videoRef.current;
+      if (!videoScaleCanvasRef.current) {
+        videoScaleCanvasRef.current = document.createElement('canvas');
+      }
+      const sc = videoScaleCanvasRef.current;
+      // Use a smaller intermediate size to reduce GPU pixel processing
+      const scaleW = Math.min(video.videoWidth || 480, 480);
+      const scaleH = Math.round(scaleW * (canvas.height / canvas.width));
+      if (sc.width !== scaleW || sc.height !== scaleH) {
+        sc.width = scaleW;
+        sc.height = scaleH;
+      }
+      const sCtx = sc.getContext('2d');
+      if (sCtx) {
+        sCtx.drawImage(video, 0, 0, scaleW, scaleH);
+        ctx.drawImage(sc, 0, 0, canvas.width, canvas.height);
+      } else {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      }
     } else if (imageRef.current && imageLoaded) {
       // Draw single image with Ken Burns + cover-fit
       const img = imageRef.current;
