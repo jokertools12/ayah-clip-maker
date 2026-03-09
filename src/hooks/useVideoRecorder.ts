@@ -22,6 +22,10 @@ export interface RecordingOptions {
   mimeTypeCandidates?: string[];
   captureStreamFps?: number;
   frameRenderer?: (frameTimeMs: number, frameIndex: number) => void;
+  /** Drop stale frames when recorder lags behind to prevent UI freeze */
+  maxFrameCatchup?: number;
+  /** Minimum scheduler delay to keep main thread responsive */
+  minFrameDelayMs?: number;
 }
 
 export const QUALITY_PRESETS: Record<ExportQuality, QualitySettings> = {
