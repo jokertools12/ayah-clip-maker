@@ -37,14 +37,18 @@ import {
   Filter,
   List,
   User,
+  Heart,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 
 type AspectRatio = '9:16' | '16:9';
 type BrowseMode = 'byPerformer' | 'byCategory' | 'search';
 
 export default function IbtahalatPage() {
   const navigate = useNavigate();
+  const { user, isAuthenticated } = useAuth();
   const [searchParams] = useSearchParams();
   const [currentStep, setCurrentStep] = useState(1);
   
@@ -61,6 +65,16 @@ export default function IbtahalatPage() {
   const [browseMode, setBrowseMode] = useState<BrowseMode>('byCategory');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [favPerformers, setFavPerformers] = useState<Set<string>>(new Set());
+
+  // Load favorite performers
+  useEffect(() => {
+    if (!user) return;
+    supabase.from('favorite_performers' as any).select('performer_id').eq('user_id', user.id)
+      .then(({ data }) => {
+        if (data) setFavPerformers(new Set((data as any[]).map((f: any) => f.performer_id)));
+      });
+  }, [user]);
 
   // Initialize from URL params (e.g. coming from BrowsePage)
   useEffect(() => {
@@ -73,6 +87,22 @@ export default function IbtahalatPage() {
       setCurrentStep(2);
     }
   }, [searchParams]);
+
+  const toggleFavPerformer = async (performerId: string) => {
+    if (!isAuthenticated || !user) {
+      toast.error('سجل دخول لإضافة المفضلة');
+      return;
+    }
+    if (favPerformers.has(performerId)) {
+      await supabase.from('favorite_performers' as any).delete().eq('user_id', user.id).eq('performer_id', performerId);
+      setFavPerformers(prev => { const s = new Set(prev); s.delete(performerId); return s; });
+      toast.success('تمت الإزالة من المفضلة');
+    } else {
+      await supabase.from('favorite_performers' as any).insert({ user_id: user.id, performer_id: performerId } as any);
+      setFavPerformers(prev => new Set(prev).add(performerId));
+      toast.success('تمت الإضافة للمفضلة');
+    }
+  };
 
   const selectedPerformerData = performers.find(p => p.id === selectedPerformer);
   const selectedTrackData = ibtahalatTracks.find(t => t.id === selectedTrack);
@@ -329,19 +359,28 @@ export default function IbtahalatPage() {
                     </div>
                     <div className="flex gap-2 flex-wrap mb-4">
                       {filteredPerformers.map(p => (
-                        <Button
-                          key={p.id}
-                          variant={selectedPerformer === p.id ? 'default' : 'outline'}
-                          size="sm"
-                          onClick={() => setSelectedPerformer(p.id)}
-                          className="gap-1"
-                        >
-                          <Mic className="h-3 w-3" />
-                          {p.name}
-                          <Badge variant="secondary" className="mr-1 text-xs">
-                            {getTracksByPerformer(p.id).length}
-                          </Badge>
-                        </Button>
+                        <div key={p.id} className="flex items-center gap-1">
+                          <Button
+                            variant={selectedPerformer === p.id ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => setSelectedPerformer(p.id)}
+                            className="gap-1"
+                          >
+                            <Mic className="h-3 w-3" />
+                            {p.name}
+                            <Badge variant="secondary" className="mr-1 text-xs">
+                              {getTracksByPerformer(p.id).length}
+                            </Badge>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={(e) => { e.stopPropagation(); toggleFavPerformer(p.id); }}
+                          >
+                            <Heart className={`h-4 w-4 ${favPerformers.has(p.id) ? 'fill-destructive text-destructive' : 'text-muted-foreground'}`} />
+                          </Button>
+                        </div>
                       ))}
                     </div>
                   </div>

@@ -2,7 +2,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useAuth } from '@/hooks/useAuth';
-import { BookOpen, Video, Library, LogIn, LogOut, User, Music, Menu, X, Crown, Settings, Shield, CreditCard, BarChart3, Trophy, Compass, Heart } from 'lucide-react';
+import { BookOpen, Video, Library, LogIn, LogOut, User, Music, Menu, X, Crown, Settings, Shield, CreditCard, BarChart3, Trophy, Compass, Heart, Activity } from 'lucide-react';
 import { useAdmin } from '@/hooks/useAdmin';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
@@ -121,6 +121,12 @@ export function Navbar() {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
+                    <Link to="/activity" className="flex items-center gap-2">
+                      <Activity className="h-4 w-4" />
+                      <span>نشاط المتابَعين</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
                     <Link to="/favorites" className="flex items-center gap-2">
                       <Heart className="h-4 w-4" />
                       <span>المفضلة</span>
@@ -207,6 +213,22 @@ export function Navbar() {
                     >
                       <BarChart3 className="h-5 w-5 text-primary" />
                       <span className="font-medium">إحصائياتي</span>
+                    </Link>
+                    <Link
+                      to="/favorites"
+                      onClick={() => setMobileOpen(false)}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-foreground hover:bg-muted/50 transition-colors"
+                    >
+                      <Heart className="h-5 w-5 text-primary" />
+                      <span className="font-medium">المفضلة</span>
+                    </Link>
+                    <Link
+                      to="/activity"
+                      onClick={() => setMobileOpen(false)}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-foreground hover:bg-muted/50 transition-colors"
+                    >
+                      <Activity className="h-5 w-5 text-primary" />
+                      <span className="font-medium">نشاط المتابَعين</span>
                     </Link>
                     <Link
                       to="/achievements"
