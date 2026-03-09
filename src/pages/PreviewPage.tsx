@@ -717,11 +717,6 @@ export default function PreviewPage() {
           if (estimatedIndex !== currentAyahIndexRef.current) setCurrentAyahIndex(estimatedIndex);
 
           // Disable expensive word-by-word highlight updates during recording
-          if (isRecordingNow) {
-            setHighlightWordIndex(null);
-            setHighlightWordProgress(0);
-            return;
-          }
 
           const wordCount = (ayahsRef.current[estimatedIndex]?.text ?? '').split(' ').filter(Boolean).length;
           if (wordCount > 0) {
