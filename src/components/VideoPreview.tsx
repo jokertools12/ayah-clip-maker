@@ -158,8 +158,9 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     transition: SlideshowTransition;
   }>>([]);
 
-  // Floating particles state (golden dust)
-  const particlesRef = useRef<Array<{ x: number; y: number; vx: number; vy: number; size: number; alpha: number; life: number }>>([]);
+  // Smooth chunk cycling counter for non-full verse modes
+  const chunkCounterRef = useRef<number>(0);
+  const lastChunkTimeRef = useRef<number>(Date.now());
 
   // ── Text layout cache ───────────────────────────────────────────────────
   const textLayoutCacheRef = useRef<{
@@ -1002,90 +1003,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     ctx.fillStyle = bottomGradient;
     ctx.fillRect(0, canvas.height * 0.75, canvas.width, canvas.height * 0.25);
 
-    // ── Floating golden particles ──────────────────────────────────────────
-    // Enable particles during recording for ibtahalat mode for richer visuals
-    const particleDensity = displaySettings.particleDensity || 'medium';
-    const perfMode = displaySettings.performanceMode || 'balanced';
-    const isAnyRecording = !isPreviewRender;
-    const previewParticleMultiplier = isPreviewRender ? (isPlaying ? 0.6 : 0.15) : 0;
-    const perfMultiplier = perfMode === 'economy' ? 0.3 : perfMode === 'pro' ? 0.8 : 0.5;
-    const baseParticles = particleDensity === 'off' ? 0 : particleDensity === 'low' ? 8 : particleDensity === 'high' ? 25 : 14;
-    // Allow particles during recording
-    const recordingParticleMultiplier = 0.3;
-    const maxParticles = isAnyRecording
-      ? Math.round(baseParticles * perfMultiplier * recordingParticleMultiplier)
-      : Math.round(baseParticles * perfMultiplier * previewParticleMultiplier);
-
-    if (maxParticles > 0) {
-      if (particlesRef.current.length < maxParticles) {
-        // Spawn particles on left/right edges to avoid text area
-        const side = Math.random() > 0.5;
-        particlesRef.current.push({
-          x: side ? Math.random() * canvas.width * 0.2 : canvas.width * 0.8 + Math.random() * canvas.width * 0.2,
-          y: canvas.height + 10,
-          vx: (Math.random() - 0.5) * 0.6,
-          vy: -(0.3 + Math.random() * 0.6),
-          size: 1.2 + Math.random() * 2.5,
-          alpha: 0.12 + Math.random() * 0.25,
-          life: 0,
-        });
-      }
-      ctx.save();
-      const safeTop = canvas.height * 0.3;
-      const safeBottom = canvas.height * 0.72;
-      const safeLeft = canvas.width * 0.08;
-      const safeRight = canvas.width * 0.92;
-
-      particlesRef.current = particlesRef.current.filter((p) => {
-        p.x += p.vx;
-        p.y += p.vy;
-        p.life += 1;
-        p.alpha *= 0.997;
-        if (p.y < -20 || p.alpha < 0.01) return false;
-
-        let drawAlpha = p.alpha;
-        if (p.y > safeTop && p.y < safeBottom && p.x > safeLeft && p.x < safeRight) {
-          drawAlpha *= 0.08;
-        }
-
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size * S, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(212, 175, 55, ${drawAlpha})`;
-        ctx.fill();
-        return true;
-      });
-      ctx.restore();
-    } else if (particlesRef.current.length > 0) {
-      particlesRef.current = [];
-    }
-
-    // ── Twinkling stars effect (when playing) ──────────────────────
-    if (isPlaying && particleDensity !== 'off') {
-      ctx.save();
-      const starCount = isAnyRecording ? 6 : 12;
-      const time = Date.now() / 1000;
-      for (let i = 0; i < starCount; i++) {
-        // Deterministic positions based on index
-        const sx = ((i * 137.508) % canvas.width);
-        const sy = ((i * 97.31 + 50) % (canvas.height * 0.25));
-        const bottomSy = canvas.height * 0.78 + ((i * 83.7) % (canvas.height * 0.2));
-        const twinkle = 0.15 + Math.sin(time * (1.5 + i * 0.3) + i * 2.1) * 0.15;
-        const starSize = (1.5 + (i % 3)) * S;
-
-        // Top stars
-        ctx.beginPath();
-        ctx.arc(sx, sy, starSize, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255, 255, 255, ${twinkle})`;
-        ctx.fill();
-
-        // Bottom stars
-        ctx.beginPath();
-        ctx.arc(canvas.width - sx, bottomSy, starSize * 0.8, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(212, 175, 55, ${twinkle * 0.8})`;
-        ctx.fill();
-      }
-      ctx.restore();
-    }
+    // (Particles removed for performance — particleDensity defaults to 'off')
 
     // ── Subtle vignette effect (skip during recording to save GPU) ──────
     if (isPreviewRender && isPlaying) {
@@ -1102,14 +1020,34 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     // Get the font family for canvas
     const fontName = getCanvasFontFamily(textSettings.fontFamily);
 
-    // Text settings — reduce shadow cost during recording
+    // Text settings — apply textShadowStyle and reduce shadow cost during recording
+    const isAnyRecording = !isPreviewRender;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    const shadowMultiplier = isAnyRecording ? 0.3 : 1;
-    ctx.shadowColor = `rgba(0, 0, 0, ${textSettings.shadowIntensity * shadowMultiplier})`;
-    ctx.shadowBlur = isAnyRecording ? 4 : textSettings.shadowIntensity * 20;
-    ctx.shadowOffsetX = isAnyRecording ? 1 : 2;
-    ctx.shadowOffsetY = isAnyRecording ? 1 : 2;
+
+    // Apply textShadowStyle setting
+    const textShadowStyle = displaySettings.textShadowStyle || 'soft';
+    if (textShadowStyle === 'none') {
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+    } else if (textShadowStyle === 'soft') {
+      ctx.shadowColor = `rgba(0, 0, 0, ${isAnyRecording ? 0.3 : 0.4})`;
+      ctx.shadowBlur = isAnyRecording ? 4 : 6 * S;
+      ctx.shadowOffsetX = 1;
+      ctx.shadowOffsetY = 1;
+    } else if (textShadowStyle === 'strong') {
+      ctx.shadowColor = `rgba(0, 0, 0, ${isAnyRecording ? 0.5 : 0.8})`;
+      ctx.shadowBlur = isAnyRecording ? 8 : 16 * S;
+      ctx.shadowOffsetX = 2;
+      ctx.shadowOffsetY = 2;
+    } else if (textShadowStyle === 'glow') {
+      ctx.shadowColor = 'rgba(212, 175, 55, 0.6)';
+      ctx.shadowBlur = isAnyRecording ? 10 : 20 * S;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+    }
 
     // Draw surah name badge (if enabled) based on surahNameStyle
     if (displaySettings.showSurahName) {
@@ -1647,35 +1585,50 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     else if (currentAyah && displaySettings.showAyahText) {
       const ayahY = canvas.height * 0.52;
       const maxWidth = canvas.width * 0.85;
-      const lineHeight = textSettings.fontSize * 3.2 * S;
       
-      ctx.font = `${textSettings.fontSize * 2 * S}px "${fontName}", "Noto Naskh Arabic", serif`;
+      // Apply verse display mode - chunk words differently
+      const verseMode = displaySettings.verseDisplayMode || 'full';
+      
+      // Dynamic font scaling based on verse display mode
+      const modeScales: Record<string, number> = {
+        wordByWord: 3.5,
+        twoWords: 2.8,
+        threeTwo: 2.4,
+        full: 2.0,
+      };
+      const fontScale = modeScales[verseMode] || 2.0;
+      const lineHeight = textSettings.fontSize * (verseMode === 'full' ? 3.2 : fontScale * 1.6) * S;
+      
+      ctx.font = `${textSettings.fontSize * fontScale * S}px "${fontName}", "Noto Naskh Arabic", serif`;
       ctx.fillStyle = textSettings.textColor;
       
       // Word wrap — with layout cache to avoid measureText every frame
       const allWords = (currentAyahWords?.length ? currentAyahWords : currentAyah.text.split(' ')).filter(Boolean);
       
-      // Apply verse display mode - chunk words differently
-      const verseMode = displaySettings.verseDisplayMode || 'full';
       let displayWords: string[];
+      
+      // Smooth chunk cycling: use a counter that advances at fixed intervals
+      const now = Date.now();
+      const chunkInterval = verseMode === 'wordByWord' ? 1200 : verseMode === 'twoWords' ? 2000 : 2500;
+      if (now - lastChunkTimeRef.current > chunkInterval) {
+        chunkCounterRef.current += 1;
+        lastChunkTimeRef.current = now;
+      }
       
       if (verseMode === 'full') {
         displayWords = allWords;
       } else if (verseMode === 'wordByWord') {
-        // Show only current highlighted word or cycle through
-        const wordIdx = highlightedWordIndex != null ? highlightedWordIndex : Math.floor((Date.now() / 1200) % allWords.length);
+        const wordIdx = highlightedWordIndex != null ? highlightedWordIndex : (chunkCounterRef.current % allWords.length);
         displayWords = allWords[wordIdx] ? [allWords[wordIdx]] : allWords.slice(0, 1);
       } else if (verseMode === 'twoWords') {
-        // Show 2 words at a time
         const chunkSize = 2;
         const totalChunks = Math.ceil(allWords.length / chunkSize);
         const chunkIdx = highlightedWordIndex != null
           ? Math.floor(highlightedWordIndex / chunkSize)
-          : Math.floor((Date.now() / 2000) % totalChunks);
+          : (chunkCounterRef.current % totalChunks);
         const start = chunkIdx * chunkSize;
         displayWords = allWords.slice(start, start + chunkSize);
       } else if (verseMode === 'threeTwo') {
-        // Alternating 3 then 2 words
         const pattern = [3, 2];
         let pos = 0, chunkIndex = 0;
         const chunks: string[][] = [];
@@ -1687,7 +1640,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         }
         const cIdx = highlightedWordIndex != null
           ? (() => { let p = 0; for (let i = 0; i < chunks.length; i++) { if (highlightedWordIndex < p + chunks[i].length) return i; p += chunks[i].length; } return chunks.length - 1; })()
-          : Math.floor((Date.now() / 2500) % chunks.length);
+          : (chunkCounterRef.current % chunks.length);
         displayWords = chunks[cIdx] || allWords.slice(0, 3);
       } else {
         displayWords = allWords;
@@ -1768,19 +1721,19 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       c.translate(x, centerY);
       if (flipX) c.scale(-1, 1);
       c.strokeStyle = 'rgba(212, 175, 55, 0.4)';
-      c.lineWidth = 2;
+      c.lineWidth = 2 * S;
       c.beginPath();
       c.moveTo(0, -h / 2);
-      c.bezierCurveTo(30, -h / 4, 30, h / 4, 0, h / 2);
+      c.bezierCurveTo(30 * S, -h / 4, 30 * S, h / 4, 0, h / 2);
       c.stroke();
 
       // Small end circles
       c.fillStyle = 'rgba(212, 175, 55, 0.5)';
       c.beginPath();
-      c.arc(0, -h / 2, 4, 0, Math.PI * 2);
+      c.arc(0, -h / 2, 4 * S, 0, Math.PI * 2);
       c.fill();
       c.beginPath();
-      c.arc(0, h / 2, 4, 0, Math.PI * 2);
+      c.arc(0, h / 2, 4 * S, 0, Math.PI * 2);
       c.fill();
       c.restore();
     }
@@ -1789,21 +1742,21 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     function drawAyahSeparator(c: CanvasRenderingContext2D, cx: number, cy: number, width: number) {
       c.save();
       c.strokeStyle = 'rgba(212, 175, 55, 0.35)';
-      c.lineWidth = 1.5;
+      c.lineWidth = 1.5 * S;
       const hw = width / 2;
       c.beginPath();
       c.moveTo(cx - hw, cy);
-      c.bezierCurveTo(cx - hw + 30, cy - 6, cx - 30, cy + 6, cx, cy);
-      c.bezierCurveTo(cx + 30, cy - 6, cx + hw - 30, cy + 6, cx + hw, cy);
+      c.bezierCurveTo(cx - hw + 30 * S, cy - 6 * S, cx - 30 * S, cy + 6 * S, cx, cy);
+      c.bezierCurveTo(cx + 30 * S, cy - 6 * S, cx + hw - 30 * S, cy + 6 * S, cx + hw, cy);
       c.stroke();
 
       // End dots
       c.fillStyle = 'rgba(212, 175, 55, 0.5)';
       c.beginPath();
-      c.arc(cx - hw - 5, cy, 3, 0, Math.PI * 2);
+      c.arc(cx - hw - 5 * S, cy, 3 * S, 0, Math.PI * 2);
       c.fill();
       c.beginPath();
-      c.arc(cx + hw + 5, cy, 3, 0, Math.PI * 2);
+      c.arc(cx + hw + 5 * S, cy, 3 * S, 0, Math.PI * 2);
       c.fill();
       c.restore();
     }
@@ -1961,10 +1914,18 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         });
       });
 
-      // Draw ayah number badge (if enabled)
+      // Draw ayah number badge (if enabled) — position adapts to verse mode
       if (displaySettings.showAyahNumber) {
-        const badgeY = startY + totalHeight + 70 * S;
-        drawAyahBadge(ctx, canvas.width / 2, badgeY, currentAyah.numberInSurah, 36 * S, displaySettings.ayahNumberStyle, displaySettings.ayahNumberColor);
+        let badgeY: number;
+        let badgeSize = 36 * S;
+        if (verseMode !== 'full') {
+          // For chunk modes, place badge at a fixed lower position to prevent overlap with large text
+          badgeY = canvas.height * 0.72;
+          badgeSize = 30 * S; // slightly smaller for chunk modes
+        } else {
+          badgeY = startY + totalHeight + 70 * S;
+        }
+        drawAyahBadge(ctx, canvas.width / 2, badgeY, currentAyah.numberInSurah, badgeSize, displaySettings.ayahNumberStyle, displaySettings.ayahNumberColor);
       }
       ctx.restore(); // End verse transition transform
     }
