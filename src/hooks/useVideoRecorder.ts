@@ -21,6 +21,7 @@ export interface RecordingOptions {
   timesliceMs?: number;
   mimeTypeCandidates?: string[];
   captureStreamFps?: number;
+  frameRenderer?: (frameTimeMs: number, frameIndex: number) => void;
 }
 
 export const QUALITY_PRESETS: Record<ExportQuality, QualitySettings> = {
