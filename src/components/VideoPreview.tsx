@@ -1791,12 +1791,13 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         totalHeight = lines.length * lineHeight;
         startY = ayahY - totalHeight / 2;
 
-        // Pre-compute line totals to avoid per-frame measureText
-        const lineTotals = lines.map(wordsInLine =>
-          wordsInLine.reduce((sum, w) => sum + ctx.measureText(w).width, 0) +
-          Math.max(wordsInLine.length - 1, 0) * spaceWidth
+        // Pre-compute line totals AND individual word widths to avoid per-frame measureText
+        const wordWidths = lines.map(wordsInLine => wordsInLine.map(w => ctx.measureText(w).width));
+        const lineTotals = wordWidths.map((ww, i) =>
+          ww.reduce((sum, w) => sum + w, 0) +
+          Math.max(lines[i].length - 1, 0) * spaceWidth
         );
-        textLayoutCacheRef.current = { key: cacheKey, lines, spaceWidth, totalHeight, startY, lineHeight, lineTotals };
+        textLayoutCacheRef.current = { key: cacheKey, lines, spaceWidth, totalHeight, startY, lineHeight, lineTotals, wordWidths };
       }
 
       // Draw decoration (side borders or separator) based on decorationStyle
