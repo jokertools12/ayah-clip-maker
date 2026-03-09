@@ -211,7 +211,7 @@ export default function ActivityFeedPage() {
                             </Badge>
                           )}
                           {activity.type === 'achievement' && (
-                            <Badge className="gap-1 text-xs bg-amber-500 hover:bg-amber-600">
+                            <Badge className="gap-1 text-xs bg-primary hover:bg-primary/90">
                               <Trophy className="h-3 w-3" />
                               إنجاز
                             </Badge>
