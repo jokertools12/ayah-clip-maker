@@ -776,16 +776,20 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   };
 
   // Draw frame on canvas
-  const drawFrame = useCallback((targetCanvas?: HTMLCanvasElement, renderMode: 'preview' | 'recording' | 'recordingLite' = 'preview') => {
+  const drawFrame = useCallback((
+    targetCanvas?: HTMLCanvasElement,
+    renderMode: 'preview' | 'recording' | 'recordingLite' = 'preview',
+    forcedTimeMs?: number
+  ) => {
     const canvas = targetCanvas || canvasRef.current;
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
 
+    const renderTimestamp = forcedTimeMs ?? Date.now();
     const base = getRecordingDimensions();
     const previewScale = 0.38;
     const isPreviewRender = renderMode === 'preview';
     const isLiteRecording = renderMode === 'recordingLite';
-    const recordingScale = isLiteRecording ? 0.67 : 1;
 
     // For recording: the canvas dimensions are set by the caller (PreviewPage)
     // based on quality preset. We only resize for preview mode.
@@ -812,7 +816,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
 
     // Draw background motion (lighter in recordingLite)
     const motionFactor = isLiteRecording ? 0.55 : 1;
-    const t = (Date.now() / 1000) * motionSpeed * motionFactor;
+    const t = (renderTimestamp / 1000) * motionSpeed * motionFactor;
     const scale = 1.04 + Math.sin(t * 0.2) * (0.03 * motionFactor);
     const offsetX = Math.sin(t * 0.12) * (20 * motionFactor);
     const offsetY = Math.cos(t * 0.1) * (16 * motionFactor);
