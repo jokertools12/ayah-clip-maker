@@ -98,6 +98,7 @@ const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
   glowStyle: 'golden',
   lyricsDisplayStyle: 'scroll',
   slideshowTransition: 'crossfade',
+  wordScaleEffect: true,
 };
 
 // Note: frameStyle defaults to 'none' — user must explicitly select a frame
@@ -1045,9 +1046,13 @@ export default function PreviewPage() {
           let stopped = false;
 
           const drawIsolatedFrame = () => {
-            const livePreviewApi = videoPreviewRef.current;
-            const draw = livePreviewApi?.drawFrame ?? previewApi.drawFrame;
-            draw(recordingCanvas, attempt.renderMode);
+            try {
+              const livePreviewApi = videoPreviewRef.current;
+              const draw = livePreviewApi?.drawFrame ?? previewApi.drawFrame;
+              draw(recordingCanvas, attempt.renderMode);
+            } catch (e) {
+              console.warn('Frame draw error:', e);
+            }
           };
 
           const renderIsolatedFrame = (now: number) => {

@@ -65,6 +65,7 @@ interface VideoPreviewProps {
     glowStyle?: 'none' | 'golden' | 'soft' | 'neon' | 'pulse';
     lyricsDisplayStyle?: 'scroll' | 'single' | 'karaoke' | 'fade';
     slideshowTransition?: 'crossfade' | 'slideLeft' | 'slideRight' | 'slideUp' | 'zoomThrough' | 'wipe' | 'mixed';
+    wordScaleEffect?: boolean;
   };
   isPlaying: boolean;
   isRecording?: boolean;
@@ -1173,8 +1174,8 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       ctx.fillStyle = textSettings.textColor;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.shadowColor = 'rgba(212, 175, 55, 0.35)';
-      ctx.shadowBlur = 8 * S;
+       ctx.shadowColor = 'rgba(212, 175, 55, 0.35)';
+       ctx.shadowBlur = isAnyRecording ? 4 * S : 8 * S;
       ctx.fillText(surahName, canvas.width / 2, badgeY);
       ctx.shadowBlur = 0;
       ctx.restore();
@@ -1194,7 +1195,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         case 'elegant': {
           ctx.font = `italic ${textSettings.fontSize * 1.1 * S}px "Amiri", "Scheherazade New", serif`;
           ctx.shadowColor = 'rgba(212, 175, 55, 0.4)';
-          ctx.shadowBlur = 6 * S;
+           ctx.shadowBlur = isAnyRecording ? 3 * S : 6 * S;
           ctx.fillStyle = '#D4AF37';
           ctx.fillText(reciterText, canvas.width / 2, reciterY);
           break;
@@ -1241,11 +1242,11 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         case 'glow': {
           ctx.font = `${textSettings.fontSize * 1.0 * S}px "${fontName}", "Noto Naskh Arabic", serif`;
           ctx.shadowColor = '#D4AF37';
-          ctx.shadowBlur = 18 * S;
-          ctx.fillStyle = '#FFD700';
-          ctx.fillText(reciterText, canvas.width / 2, reciterY);
-          // Second pass for stronger glow
-          ctx.shadowBlur = 8 * S;
+           ctx.shadowBlur = isAnyRecording ? 6 * S : 18 * S;
+           ctx.fillStyle = '#FFD700';
+           ctx.fillText(reciterText, canvas.width / 2, reciterY);
+           // Second pass for stronger glow
+           ctx.shadowBlur = isAnyRecording ? 3 * S : 8 * S;
           ctx.fillText(reciterText, canvas.width / 2, reciterY);
           break;
         }
@@ -1360,7 +1361,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
           ctx.font = `bold ${fontSize * 1.1}px "${fontName}", "Noto Naskh Arabic", serif`;
           ctx.fillStyle = textSettings.textColor;
           ctx.shadowColor = `rgba(0, 0, 0, ${textSettings.shadowIntensity})`;
-          ctx.shadowBlur = 6 * S;
+          ctx.shadowBlur = isAnyRecording ? 3 * S : 6 * S;
           ctx.fillText(line, x, y);
           return;
         }
@@ -1981,16 +1982,18 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
 
           ctx.save();
           if (isWordHighlighted) {
-            // Subtle scale-up effect for the highlighted word
-            const scalePulse = 1.0 + 0.12 * Math.sin(Math.PI * Math.min(Math.max(highlightWordProgress ?? 0, 0), 1));
-            ctx.translate(cursorX - wWidth / 2, y);
-            ctx.scale(scalePulse, scalePulse);
-            ctx.translate(-(cursorX - wWidth / 2), -y);
+            // Subtle scale-up effect for the highlighted word (optional)
+            if (displaySettings.wordScaleEffect !== false) {
+              const scalePulse = 1.0 + 0.12 * Math.sin(Math.PI * Math.min(Math.max(highlightWordProgress ?? 0, 0), 1));
+              ctx.translate(cursorX - wWidth / 2, y);
+              ctx.scale(scalePulse, scalePulse);
+              ctx.translate(-(cursorX - wWidth / 2), -y);
+            }
 
             if (displaySettings.highlightStyle === 'glow') {
               const glowPulse = 0.35 + Math.sin(Math.PI * Math.min(Math.max(highlightWordProgress ?? 0, 0), 1)) * 0.65;
               ctx.shadowColor = '#FFD700';
-              ctx.shadowBlur = (18 + glowPulse * 28) * S;
+              ctx.shadowBlur = isAnyRecording ? (8 + glowPulse * 14) * S : (18 + glowPulse * 28) * S;
             }
           }
           ctx.fillStyle = isWordHighlighted ? highlightText : textSettings.textColor;
