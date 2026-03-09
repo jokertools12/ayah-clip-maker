@@ -135,7 +135,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   const imageRef = useRef<HTMLImageElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
-  const drawFrameRuntimeRef = useRef<(targetCanvas?: HTMLCanvasElement, renderMode?: 'preview' | 'recording' | 'recordingLite') => void>(() => {});
+  const drawFrameRuntimeRef = useRef<(targetCanvas?: HTMLCanvasElement, renderMode?: 'preview' | 'recording' | 'recordingLite', forcedTimeMs?: number) => void>(() => {});
   const [imageLoaded, setImageLoaded] = useState(false);
   const [videoReady, setVideoReady] = useState(false);
 
