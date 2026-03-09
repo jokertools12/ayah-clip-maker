@@ -1045,17 +1045,17 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       ctx.shadowOffsetY = 0;
     } else if (textShadowStyle === 'soft') {
       ctx.shadowColor = `rgba(0, 0, 0, ${isAnyRecording ? 0.3 : 0.4})`;
-      ctx.shadowBlur = isAnyRecording ? 4 : 6 * S;
+      ctx.shadowBlur = isAnyRecording ? 3 * S : 6 * S;
       ctx.shadowOffsetX = 1;
       ctx.shadowOffsetY = 1;
     } else if (textShadowStyle === 'strong') {
       ctx.shadowColor = `rgba(0, 0, 0, ${isAnyRecording ? 0.5 : 0.8})`;
-      ctx.shadowBlur = isAnyRecording ? 8 : 16 * S;
+      ctx.shadowBlur = isAnyRecording ? 6 * S : 16 * S;
       ctx.shadowOffsetX = 2;
       ctx.shadowOffsetY = 2;
     } else if (textShadowStyle === 'glow') {
       ctx.shadowColor = 'rgba(212, 175, 55, 0.6)';
-      ctx.shadowBlur = isAnyRecording ? 10 : 20 * S;
+      ctx.shadowBlur = isAnyRecording ? 8 * S : 20 * S;
       ctx.shadowOffsetX = 0;
       ctx.shadowOffsetY = 0;
     }
