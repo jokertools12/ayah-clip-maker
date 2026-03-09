@@ -182,7 +182,14 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     totalHeight: number;
     startY: number;
     lineHeight: number;
+    lineTotals: number[];
   } | null>(null);
+
+  // ── Performance caches (avoid per-frame DOM/gradient recreation) ──────
+  const primaryColorCacheRef = useRef<string | null>(null);
+  const gradientCacheSizeRef = useRef<{ w: number; h: number }>({ w: 0, h: 0 });
+  const topGradientCacheRef = useRef<CanvasGradient | null>(null);
+  const bottomGradientCacheRef = useRef<CanvasGradient | null>(null);
 
   // Verse transition state
   const prevAyahRef = useRef<{ numberInSurah: number; text: string } | null>(null);
