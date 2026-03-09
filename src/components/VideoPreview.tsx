@@ -1194,7 +1194,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         case 'elegant': {
           ctx.font = `italic ${textSettings.fontSize * 1.1 * S}px "Amiri", "Scheherazade New", serif`;
           ctx.shadowColor = 'rgba(212, 175, 55, 0.4)';
-          ctx.shadowBlur = 6 * S;
+           ctx.shadowBlur = isAnyRecording ? 3 * S : 6 * S;
           ctx.fillStyle = '#D4AF37';
           ctx.fillText(reciterText, canvas.width / 2, reciterY);
           break;
