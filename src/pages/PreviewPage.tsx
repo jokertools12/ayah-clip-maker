@@ -242,6 +242,7 @@ export default function PreviewPage() {
   const currentAyahIndexRef = useRef(0);
   const ayahsRef = useRef<{ numberInSurah: number; text: string }[]>([]);
   const recordingUiLastUpdateRef = useRef(0);
+  const recordingSyncLastUpdateRef = useRef(0);
 
   // ── Reset transcription state when switching ibtahalat tracks ────────────────
   const prevIbtAudioUrlRef = useRef(ibtAudioUrl);
