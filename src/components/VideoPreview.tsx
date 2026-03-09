@@ -441,10 +441,14 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     };
   }, [customBackground, background?.url, background?.type, background?.thumbnail, background?.slideImages]);
 
+  const tokenHslCacheRef = useRef<Record<string, string>>({});
   const getTokenHsl = useCallback((token: string, fallback: string) => {
+    if (tokenHslCacheRef.current[token]) return tokenHslCacheRef.current[token];
     try {
       const v = getComputedStyle(document.documentElement).getPropertyValue(token).trim();
-      return v ? `hsl(${v})` : fallback;
+      const result = v ? `hsl(${v})` : fallback;
+      tokenHslCacheRef.current[token] = result;
+      return result;
     } catch {
       return fallback;
     }
