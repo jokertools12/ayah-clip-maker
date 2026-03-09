@@ -121,6 +121,12 @@ export function Navbar() {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
+                    <Link to="/activity" className="flex items-center gap-2">
+                      <Activity className="h-4 w-4" />
+                      <span>نشاط المتابَعين</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
                     <Link to="/favorites" className="flex items-center gap-2">
                       <Heart className="h-4 w-4" />
                       <span>المفضلة</span>
