@@ -23,6 +23,7 @@ import LeaderboardPage from "./pages/LeaderboardPage";
 import ProfilePage from "./pages/ProfilePage";
 import FavoritesPage from "./pages/FavoritesPage";
 import ActivityFeedPage from "./pages/ActivityFeedPage";
+import VideoDetailPage from "./pages/VideoDetailPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
