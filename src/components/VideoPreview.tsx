@@ -1009,7 +1009,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Draw top/bottom gradients (skip during recording for performance)
-    if (!isAnyRecording) {
+    if (isPreviewRender) {
       const sizeChanged = gradientCacheSizeRef.current.w !== canvas.width || gradientCacheSizeRef.current.h !== canvas.height;
       if (sizeChanged || !topGradientCacheRef.current || !bottomGradientCacheRef.current) {
         const tg = ctx.createLinearGradient(0, 0, 0, canvas.height * 0.25);
