@@ -1624,11 +1624,14 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         lastChunkTimeRef.current = now;
       }
       
+      let currentChunkIndex = 0;
       if (verseMode === 'full') {
         displayWords = allWords;
+        currentChunkIndex = 0;
       } else if (verseMode === 'wordByWord') {
         const wordIdx = highlightedWordIndex != null ? highlightedWordIndex : (chunkCounterRef.current % allWords.length);
         displayWords = allWords[wordIdx] ? [allWords[wordIdx]] : allWords.slice(0, 1);
+        currentChunkIndex = wordIdx;
       } else if (verseMode === 'twoWords') {
         const chunkSize = 2;
         const totalChunks = Math.ceil(allWords.length / chunkSize);
@@ -1637,6 +1640,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
           : (chunkCounterRef.current % totalChunks);
         const start = chunkIdx * chunkSize;
         displayWords = allWords.slice(start, start + chunkSize);
+        currentChunkIndex = chunkIdx;
       } else if (verseMode === 'threeTwo') {
         const pattern = [3, 2];
         let pos = 0, chunkIndex = 0;
@@ -1651,8 +1655,20 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
           ? (() => { let p = 0; for (let i = 0; i < chunks.length; i++) { if (highlightedWordIndex < p + chunks[i].length) return i; p += chunks[i].length; } return chunks.length - 1; })()
           : (chunkCounterRef.current % chunks.length);
         displayWords = chunks[cIdx] || allWords.slice(0, 3);
+        currentChunkIndex = cIdx;
       } else {
         displayWords = allWords;
+      }
+
+      // Fade transition between chunks
+      if (verseMode !== 'full' && currentChunkIndex !== prevChunkIndexRef.current) {
+        prevChunkIndexRef.current = currentChunkIndex;
+        chunkFadeRef.current = 0;
+        chunkFadeStartRef.current = Date.now();
+      }
+      if (verseMode !== 'full' && chunkFadeRef.current < 1) {
+        const fadeElapsed = Date.now() - chunkFadeStartRef.current;
+        chunkFadeRef.current = Math.min(fadeElapsed / 300, 1);
       }
       
       const words = displayWords;
