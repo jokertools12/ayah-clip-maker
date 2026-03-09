@@ -1,9 +1,8 @@
-import { useState } from 'react';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Download, FileVideo, Settings2, Loader2, Cpu } from 'lucide-react';
+import { Download, FileVideo, Settings2, Loader2, Cpu, Film } from 'lucide-react';
 import { ExportQuality, QUALITY_PRESETS } from '@/hooks/useVideoRecorder';
 
 export type ExportFormat = 'mp4' | 'webm' | 'gif';
@@ -27,14 +26,15 @@ interface ExportFormatSelectorProps {
 }
 
 const FORMAT_OPTIONS: { id: ExportFormat; label: string; description: string; icon: typeof FileVideo }[] = [
-  { id: 'webm', label: 'WebM', description: 'الصيغة الأساسية - متوافقة مع كل المنصات', icon: FileVideo },
+  { id: 'webm', label: 'WebM', description: 'الصيغة الأساسية - جودة عالية وحجم صغير', icon: FileVideo },
+  { id: 'mp4', label: 'MP4', description: 'الأكثر توافقاً مع جميع المنصات والأجهزة', icon: Film },
 ];
 
 const RECORDING_METHOD_OPTIONS: { id: RecordingMethod; label: string; description: string }[] = [
-  { id: 'auto', label: '🤖 تلقائي ذكي', description: 'يجرب أكثر من محرك تلقائياً حتى ينجح التسجيل' },
-  { id: 'smooth', label: '⚡ سلس', description: 'الأفضل لمعظم الأجهزة (VP8 + حمل أقل)' },
+  { id: 'auto', label: '🤖 تلقائي ذكي', description: 'يختار أفضل طريقة تلقائياً' },
+  { id: 'smooth', label: '⚡ سلس', description: 'الأفضل لمعظم الأجهزة' },
   { id: 'compatibility', label: '🛟 توافق عالي', description: 'أخف وضع للأجهزة الضعيفة' },
-  { id: 'quality', label: '🎬 جودة قصوى', description: 'أفضل جودة للأجهزة القوية جداً' },
+  { id: 'quality', label: '🎬 جودة قصوى', description: 'أفضل جودة للأجهزة القوية' },
 ];
 
 export function ExportFormatSelector({
@@ -54,7 +54,7 @@ export function ExportFormatSelector({
     if (isRecording || isConverting) return false;
     if (format === 'webm') return !!videoBlob;
     if (format === 'mp4') return !!mp4Blob;
-    if (format === 'gif') return !!videoBlob; // GIF is derived from WebM
+    if (format === 'gif') return !!videoBlob;
     return false;
   };
 
@@ -160,7 +160,6 @@ export function ExportFormatSelector({
             ))}
           </RadioGroup>
         </div>
-
 
         {/* Status */}
         {isRecording && (
