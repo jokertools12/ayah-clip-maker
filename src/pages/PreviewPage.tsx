@@ -984,10 +984,12 @@ export default function PreviewPage() {
         targetFps,
         {
           strategy: 'compatibility',
-          bitrateMultiplier: isVeryLongRecording ? 0.58 : isLongRecording ? 0.68 : 0.78,
-          timesliceMs: isLongRecording ? 3000 : 2200,
+          bitrateMultiplier: isVeryLongRecording ? 0.5 : isPexelsBackground ? 0.58 : isLongRecording ? 0.64 : 0.74,
+          timesliceMs: isLongRecording || isPexelsBackground ? 3200 : 2200,
           mimeTypeCandidates: ['video/webm;codecs=vp8,opus', 'video/webm'],
           captureStreamFps: targetFps,
+          maxFrameCatchup: isPexelsBackground ? 1 : 2,
+          minFrameDelayMs: isPexelsBackground ? 8 : 6,
           frameRenderer: (frameTimeMs) => drawIsolatedFrame(frameTimeMs),
         }
       );
