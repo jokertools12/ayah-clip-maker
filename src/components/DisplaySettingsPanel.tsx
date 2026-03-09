@@ -18,6 +18,8 @@ export interface DisplaySettings {
   highlightStyle: 'none' | 'solid' | 'glow' | 'underline' | 'shadow';
   frameStyle: 'none' | 'simple' | 'ornate' | 'golden' | 'geometric' | 'modern' | 'minimal';
   ayahNumberStyle: 'circle' | 'star' | 'diamond' | 'octagon' | 'flower' | 'square' | 'hexagon';
+  ayahNumberColor: 'gold' | 'white' | 'silver' | 'emerald' | 'royal';
+  verseDisplayMode: 'full' | 'twoWords' | 'threeTwo' | 'wordByWord';
   surahNamePosition: 'top' | 'bottom' | 'topLeft' | 'topRight';
   surahNameStyle: 'classic' | 'banner' | 'calligraphy' | 'circle' | 'diamond' | 'ribbon';
   reciterNameStyle: 'simple' | 'elegant' | 'badge' | 'tag' | 'glow';
