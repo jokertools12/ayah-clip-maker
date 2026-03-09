@@ -1846,6 +1846,11 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         }
       }
 
+      // Apply chunk fade for non-full modes
+      if (verseMode !== 'full') {
+        ctx.globalAlpha = (ctx.globalAlpha || 1) * chunkFadeRef.current;
+      }
+
       // RTL text direction
       ctx.direction = 'rtl';
       ctx.textAlign = 'right';
