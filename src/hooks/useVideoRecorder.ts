@@ -65,7 +65,7 @@ export function useVideoRecorder() {
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
-  const animationFrameRef = useRef<number | null>(null);
+  
   const conversionInProgressRef = useRef<boolean>(false);
   const mp4BlobRef = useRef<Blob | null>(null);
 
