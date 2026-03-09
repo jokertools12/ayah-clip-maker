@@ -1045,7 +1045,15 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       }
       const sCtx = sc.getContext('2d');
       if (sCtx) {
-        sCtx.drawImage(video, 0, 0, scaleW, scaleH);
+        const refreshIntervalMs = isPreviewRender ? 0 : isLiteRecording ? 110 : 80;
+        const shouldRefreshVideoLayer =
+          refreshIntervalMs === 0 || (renderTimestamp - videoLayerLastUpdateRef.current) >= refreshIntervalMs;
+
+        if (shouldRefreshVideoLayer) {
+          sCtx.drawImage(video, 0, 0, scaleW, scaleH);
+          videoLayerLastUpdateRef.current = renderTimestamp;
+        }
+
         ctx.drawImage(sc, 0, 0, canvas.width, canvas.height);
       } else {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
