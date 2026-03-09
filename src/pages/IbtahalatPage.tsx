@@ -48,6 +48,7 @@ type BrowseMode = 'byPerformer' | 'byCategory' | 'search';
 
 export default function IbtahalatPage() {
   const navigate = useNavigate();
+  const { user, isAuthenticated } = useAuth();
   const [searchParams] = useSearchParams();
   const [currentStep, setCurrentStep] = useState(1);
   
@@ -64,6 +65,16 @@ export default function IbtahalatPage() {
   const [browseMode, setBrowseMode] = useState<BrowseMode>('byCategory');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [favPerformers, setFavPerformers] = useState<Set<string>>(new Set());
+
+  // Load favorite performers
+  useEffect(() => {
+    if (!user) return;
+    supabase.from('favorite_performers' as any).select('performer_id').eq('user_id', user.id)
+      .then(({ data }) => {
+        if (data) setFavPerformers(new Set((data as any[]).map((f: any) => f.performer_id)));
+      });
+  }, [user]);
 
   // Initialize from URL params (e.g. coming from BrowsePage)
   useEffect(() => {
@@ -76,6 +87,22 @@ export default function IbtahalatPage() {
       setCurrentStep(2);
     }
   }, [searchParams]);
+
+  const toggleFavPerformer = async (performerId: string) => {
+    if (!isAuthenticated || !user) {
+      toast.error('سجل دخول لإضافة المفضلة');
+      return;
+    }
+    if (favPerformers.has(performerId)) {
+      await supabase.from('favorite_performers' as any).delete().eq('user_id', user.id).eq('performer_id', performerId);
+      setFavPerformers(prev => { const s = new Set(prev); s.delete(performerId); return s; });
+      toast.success('تمت الإزالة من المفضلة');
+    } else {
+      await supabase.from('favorite_performers' as any).insert({ user_id: user.id, performer_id: performerId } as any);
+      setFavPerformers(prev => new Set(prev).add(performerId));
+      toast.success('تمت الإضافة للمفضلة');
+    }
+  };
 
   const selectedPerformerData = performers.find(p => p.id === selectedPerformer);
   const selectedTrackData = ibtahalatTracks.find(t => t.id === selectedTrack);
