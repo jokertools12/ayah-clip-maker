@@ -181,6 +181,11 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
 
   // ── Off-screen video scale canvas for performance ──────────────────────
   const videoScaleCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const videoLayerLastUpdateRef = useRef<number>(-Infinity);
+
+  // ── Recording layered header cache (static text layer) ─────────────────
+  const recordingHeaderLayerRef = useRef<HTMLCanvasElement | null>(null);
+  const recordingHeaderLayerKeyRef = useRef<string>('');
 
   // ── Performance caches (avoid per-frame DOM/gradient recreation) ──────
   const primaryColorCacheRef = useRef<string | null>(null);
