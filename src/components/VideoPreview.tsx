@@ -83,7 +83,7 @@ export interface VideoPreviewRef {
   ensureBackgroundPlayback: () => Promise<void>;
   getRecordingDimensions: () => { width: number; height: number };
   getRecommendedRecordingFps: () => number;
-  drawFrame: (targetCanvas?: HTMLCanvasElement, renderMode?: 'preview' | 'recording' | 'recordingLite') => void;
+  drawFrame: (targetCanvas?: HTMLCanvasElement, renderMode?: 'preview' | 'recording' | 'recordingLite', forcedTimeMs?: number) => void;
 }
 
 const DEFAULT_DISPLAY_SETTINGS = {
