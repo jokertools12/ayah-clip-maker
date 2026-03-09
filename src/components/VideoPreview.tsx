@@ -207,11 +207,8 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   }, [aspectRatio]);
 
   const getRecommendedRecordingFps = useCallback(() => {
-    const perfMode = displaySettings.performanceMode || 'balanced';
-    if (perfMode === 'economy') return 24;
-    if (perfMode === 'pro') return 30;
-    return 27;
-  }, [displaySettings.performanceMode]);
+    return 24; // Fixed cinematic FPS
+  }, []);
 
   const ensureBackgroundPlayback = useCallback(async () => {
     if ((background?.type || 'image') !== 'video') return;
