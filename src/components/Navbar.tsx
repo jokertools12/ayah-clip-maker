@@ -215,6 +215,22 @@ export function Navbar() {
                       <span className="font-medium">إحصائياتي</span>
                     </Link>
                     <Link
+                      to="/favorites"
+                      onClick={() => setMobileOpen(false)}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-foreground hover:bg-muted/50 transition-colors"
+                    >
+                      <Heart className="h-5 w-5 text-primary" />
+                      <span className="font-medium">المفضلة</span>
+                    </Link>
+                    <Link
+                      to="/activity"
+                      onClick={() => setMobileOpen(false)}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-foreground hover:bg-muted/50 transition-colors"
+                    >
+                      <Activity className="h-5 w-5 text-primary" />
+                      <span className="font-medium">نشاط المتابَعين</span>
+                    </Link>
+                    <Link
                       to="/achievements"
                       onClick={() => setMobileOpen(false)}
                       className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-foreground hover:bg-muted/50 transition-colors"
