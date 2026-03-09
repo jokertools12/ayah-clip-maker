@@ -1173,8 +1173,8 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       ctx.fillStyle = textSettings.textColor;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.shadowColor = 'rgba(212, 175, 55, 0.35)';
-      ctx.shadowBlur = 8 * S;
+       ctx.shadowColor = 'rgba(212, 175, 55, 0.35)';
+       ctx.shadowBlur = isAnyRecording ? 4 * S : 8 * S;
       ctx.fillText(surahName, canvas.width / 2, badgeY);
       ctx.shadowBlur = 0;
       ctx.restore();
