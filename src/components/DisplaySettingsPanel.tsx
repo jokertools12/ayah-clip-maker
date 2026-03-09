@@ -492,19 +492,6 @@ export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPane
                 />
               </div>
 
-              {/* Decoration Style */}
-              <div className="space-y-3">
-                <Label className="text-sm flex items-center gap-2">
-                  <Sparkles className="h-4 w-4" />
-                  زخرفة حول الآيات
-                </Label>
-                <RadioOptionGrid
-                  options={decorationOptions}
-                  value={settings.decorationStyle || 'none'}
-                  onChange={(v) => updateSetting('decorationStyle', v as DisplaySettings['decorationStyle'])}
-                  idPrefix="deco"
-                />
-              </div>
             </AccordionContent>
           </AccordionItem>
 
