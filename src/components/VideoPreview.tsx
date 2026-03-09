@@ -1044,7 +1044,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       ctx.fillRect(0, canvas.height * 0.75, canvas.width, canvas.height * 0.25);
     }
 
-    // (Particles removed for performance — particleDensity defaults to 'off')
+    
 
     // ── Subtle vignette effect (skip during recording to save GPU) ──────
     if (isPreviewRender && isPlaying) {
