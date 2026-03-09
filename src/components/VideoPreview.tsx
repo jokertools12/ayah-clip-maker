@@ -2119,7 +2119,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       ctx.fillText(wmText, wmX, wmY);
       ctx.restore();
     }
-  }, [background, customBackground, imageLoaded, videoReady, slideshowReady, surahName, reciterName, currentAyah, currentAyahWords, highlightedWordIndex, highlightWordProgress, textSettings, displaySettings, getRecordingDimensions, getTokenHsl, drawAyahBadge, getCanvasFontFamily, drawIslamicFrame, motionSpeed, isPlaying, ibtahalatLyricsMode, allLyricsLines, currentLyricsIndex]);
+  }, [background, customBackground, imageLoaded, videoReady, slideshowReady, surahName, reciterName, currentAyah, currentAyahWords, highlightedWordIndex, highlightWordProgress, textSettings, displaySettings, getRecordingDimensions, getTokenHsl, drawAyahBadge, getCanvasFontFamily, drawIslamicFrame, drawRecordingHeaderLayer, motionSpeed, isPlaying, ibtahalatLyricsMode, allLyricsLines, currentLyricsIndex]);
 
   useEffect(() => {
     drawFrameRuntimeRef.current = drawFrame;
