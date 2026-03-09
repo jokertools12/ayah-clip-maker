@@ -356,7 +356,6 @@ export function useVideoRecorder() {
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') mediaRecorderRef.current.stop();
-    if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
   }, []);
 
   const reset = useCallback(() => {
