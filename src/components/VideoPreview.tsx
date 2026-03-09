@@ -1930,10 +1930,18 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
           }
 
           ctx.save();
-          if (isWordHighlighted && displaySettings.highlightStyle === 'glow') {
-            const glowPulse = 0.35 + Math.sin(Math.PI * Math.min(Math.max(highlightWordProgress, 0), 1)) * 0.65;
-            ctx.shadowColor = '#FFD700';
-            ctx.shadowBlur = (18 + glowPulse * 28) * S;
+          if (isWordHighlighted) {
+            // Subtle scale-up effect for the highlighted word
+            const scalePulse = 1.0 + 0.12 * Math.sin(Math.PI * Math.min(Math.max(highlightWordProgress ?? 0, 0), 1));
+            ctx.translate(cursorX - wWidth / 2, y);
+            ctx.scale(scalePulse, scalePulse);
+            ctx.translate(-(cursorX - wWidth / 2), -y);
+
+            if (displaySettings.highlightStyle === 'glow') {
+              const glowPulse = 0.35 + Math.sin(Math.PI * Math.min(Math.max(highlightWordProgress ?? 0, 0), 1)) * 0.65;
+              ctx.shadowColor = '#FFD700';
+              ctx.shadowBlur = (18 + glowPulse * 28) * S;
+            }
           }
           ctx.fillStyle = isWordHighlighted ? highlightText : textSettings.textColor;
           ctx.fillText(w, cursorX, y);
@@ -1946,16 +1954,16 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
 
       // Draw ayah number badge (if enabled) — position adapts to verse mode
       if (displaySettings.showAyahNumber) {
-        let badgeY: number;
         let badgeSize = 36 * S;
-        // Always position badge relative to the text block
-        badgeY = startY + totalHeight + 40 * S;
+        let badgeGap = 40 * S;
         if (verseMode !== 'full') {
-          badgeSize = 30 * S;
+          badgeSize = 28 * S;
+          badgeGap = 24 * S; // Closer to text in chunk modes
         }
-        // Clamp to prevent going off-screen
+        let badgeY = startY + totalHeight + badgeGap;
+        // Clamp: stay on screen but close to text
         badgeY = Math.min(badgeY, canvas.height * 0.88);
-        badgeY = Math.max(badgeY, canvas.height * 0.55);
+        badgeY = Math.max(badgeY, startY + totalHeight + 16 * S);
         drawAyahBadge(ctx, canvas.width / 2, badgeY, currentAyah.numberInSurah, badgeSize, displaySettings.ayahNumberStyle, displaySettings.ayahNumberColor);
       }
       ctx.restore(); // End verse transition transform
