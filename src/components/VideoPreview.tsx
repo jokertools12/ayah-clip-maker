@@ -1800,33 +1800,17 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         textLayoutCacheRef.current = { key: cacheKey, lines, spaceWidth, totalHeight, startY, lineHeight, lineTotals, wordWidths };
       }
 
-      // Draw decoration (side borders or separator) based on decorationStyle
-      // Skip complex decorations in ALL recording modes for performance
-      if (!isAnyRecording) {
-        const decoStyle = displaySettings.decorationStyle || 'none';
-
-        // Draw side ornaments (left & right of ayah area)
-        if (decoStyle === 'sideBorder' || decoStyle === 'both') {
-          drawAyahSideOrnaments(ctx, canvas.width * 0.05, ayahY, totalHeight);
-          drawAyahSideOrnaments(ctx, canvas.width * 0.95, ayahY, totalHeight, true);
-        }
-
-        // Draw separator line above the ayah
-        if (decoStyle === 'separator' || decoStyle === 'both') {
-          drawAyahSeparator(ctx, canvas.width / 2, startY - 40 * S, 180 * S);
-        }
-      }
-
       // Draw frame around ayah text - centered properly
+      // During recording: force 'simple' frame for heavy styles to save GPU
       if (displaySettings.frameStyle !== 'none') {
         const framePadding = 40 * S;
-        // Center the frame horizontally
         const frameWidth = maxWidth + framePadding * 2;
         const frameX = (canvas.width - frameWidth) / 2;
         const frameY = startY - lineHeight / 2 - framePadding;
         const frameHeight = totalHeight + framePadding * 2;
-        
-        drawIslamicFrame(ctx, frameX, frameY, frameWidth, frameHeight, displaySettings.frameStyle);
+        const effectiveFrameStyle = isAnyRecording && (displaySettings.frameStyle === 'ornate' || displaySettings.frameStyle === 'golden' || displaySettings.frameStyle === 'geometric')
+          ? 'simple' : displaySettings.frameStyle;
+        drawIslamicFrame(ctx, frameX, frameY, frameWidth, frameHeight, effectiveFrameStyle);
       }
 
     // Helper: draw decorative vertical ornament on side
