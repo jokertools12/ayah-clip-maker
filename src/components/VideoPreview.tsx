@@ -161,6 +161,11 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   // Smooth chunk cycling counter for non-full verse modes
   const chunkCounterRef = useRef<number>(0);
   const lastChunkTimeRef = useRef<number>(Date.now());
+  // Fade transition between chunks
+  const prevChunkIndexRef = useRef<number>(-1);
+  const chunkFadeRef = useRef<number>(1);
+  const chunkFadeStartRef = useRef<number>(0);
+  const currentAyahIdRef = useRef<number>(-1);
 
   // ── Text layout cache ───────────────────────────────────────────────────
   const textLayoutCacheRef = useRef<{
@@ -1302,8 +1307,12 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         currentAyah.numberInSurah !== prevAyahRef.current.numberInSurah) {
       transitionStartRef.current = Date.now();
       isTransitioningRef.current = true;
-      // Pick a random transition for this verse change
       currentRandomTransitionRef.current = RANDOM_TRANSITIONS[Math.floor(Math.random() * RANDOM_TRANSITIONS.length)];
+      // Reset chunk counter for new verse
+      chunkCounterRef.current = 0;
+      lastChunkTimeRef.current = Date.now();
+      prevChunkIndexRef.current = -1;
+      chunkFadeRef.current = 1;
     }
     if (currentAyah) {
       prevAyahRef.current = currentAyah;
@@ -1609,17 +1618,20 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       
       // Smooth chunk cycling: use a counter that advances at fixed intervals
       const now = Date.now();
-      const chunkInterval = verseMode === 'wordByWord' ? 1200 : verseMode === 'twoWords' ? 2000 : 2500;
+      const chunkInterval = verseMode === 'wordByWord' ? 800 : verseMode === 'twoWords' ? 1500 : 1800;
       if (now - lastChunkTimeRef.current > chunkInterval) {
         chunkCounterRef.current += 1;
         lastChunkTimeRef.current = now;
       }
       
+      let currentChunkIndex = 0;
       if (verseMode === 'full') {
         displayWords = allWords;
+        currentChunkIndex = 0;
       } else if (verseMode === 'wordByWord') {
         const wordIdx = highlightedWordIndex != null ? highlightedWordIndex : (chunkCounterRef.current % allWords.length);
         displayWords = allWords[wordIdx] ? [allWords[wordIdx]] : allWords.slice(0, 1);
+        currentChunkIndex = wordIdx;
       } else if (verseMode === 'twoWords') {
         const chunkSize = 2;
         const totalChunks = Math.ceil(allWords.length / chunkSize);
@@ -1628,6 +1640,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
           : (chunkCounterRef.current % totalChunks);
         const start = chunkIdx * chunkSize;
         displayWords = allWords.slice(start, start + chunkSize);
+        currentChunkIndex = chunkIdx;
       } else if (verseMode === 'threeTwo') {
         const pattern = [3, 2];
         let pos = 0, chunkIndex = 0;
@@ -1642,8 +1655,20 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
           ? (() => { let p = 0; for (let i = 0; i < chunks.length; i++) { if (highlightedWordIndex < p + chunks[i].length) return i; p += chunks[i].length; } return chunks.length - 1; })()
           : (chunkCounterRef.current % chunks.length);
         displayWords = chunks[cIdx] || allWords.slice(0, 3);
+        currentChunkIndex = cIdx;
       } else {
         displayWords = allWords;
+      }
+
+      // Fade transition between chunks
+      if (verseMode !== 'full' && currentChunkIndex !== prevChunkIndexRef.current) {
+        prevChunkIndexRef.current = currentChunkIndex;
+        chunkFadeRef.current = 0;
+        chunkFadeStartRef.current = Date.now();
+      }
+      if (verseMode !== 'full' && chunkFadeRef.current < 1) {
+        const fadeElapsed = Date.now() - chunkFadeStartRef.current;
+        chunkFadeRef.current = Math.min(fadeElapsed / 300, 1);
       }
       
       const words = displayWords;
@@ -1821,6 +1846,11 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         }
       }
 
+      // Apply chunk fade for non-full modes
+      if (verseMode !== 'full') {
+        ctx.globalAlpha = (ctx.globalAlpha || 1) * chunkFadeRef.current;
+      }
+
       // RTL text direction
       ctx.direction = 'rtl';
       ctx.textAlign = 'right';
@@ -1918,13 +1948,14 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       if (displaySettings.showAyahNumber) {
         let badgeY: number;
         let badgeSize = 36 * S;
+        // Always position badge relative to the text block
+        badgeY = startY + totalHeight + 40 * S;
         if (verseMode !== 'full') {
-          // For chunk modes, place badge at a fixed lower position to prevent overlap with large text
-          badgeY = canvas.height * 0.72;
-          badgeSize = 30 * S; // slightly smaller for chunk modes
-        } else {
-          badgeY = startY + totalHeight + 70 * S;
+          badgeSize = 30 * S;
         }
+        // Clamp to prevent going off-screen
+        badgeY = Math.min(badgeY, canvas.height * 0.88);
+        badgeY = Math.max(badgeY, canvas.height * 0.55);
         drawAyahBadge(ctx, canvas.width / 2, badgeY, currentAyah.numberInSurah, badgeSize, displaySettings.ayahNumberStyle, displaySettings.ayahNumberColor);
       }
       ctx.restore(); // End verse transition transform
