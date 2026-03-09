@@ -125,33 +125,6 @@ export function ExportFormatSelector({
           </RadioGroup>
         </div>
 
-        {/* Recording Method */}
-        <div className="space-y-3 pt-2 border-t">
-          <Label className="text-sm flex items-center gap-2">
-            <Cpu className="h-4 w-4" />
-            طريقة إنشاء الفيديو
-          </Label>
-          <RadioGroup
-            value={settings.recordingMethod}
-            onValueChange={(value) => updateSetting('recordingMethod', value as RecordingMethod)}
-            className="space-y-2"
-          >
-            {RECORDING_METHOD_OPTIONS.map((option) => (
-              <div key={option.id} className="relative">
-                <RadioGroupItem value={option.id} id={`recording-${option.id}`} className="peer sr-only" />
-                <Label
-                  htmlFor={`recording-${option.id}`}
-                  className="flex items-start gap-3 rounded-lg border-2 border-muted p-3 hover:bg-muted/50 peer-data-[state=checked]:border-primary cursor-pointer transition-all"
-                >
-                  <div className="flex-1">
-                    <span className="font-medium text-sm">{option.label}</span>
-                    <p className="text-xs text-muted-foreground">{option.description}</p>
-                  </div>
-                </Label>
-              </div>
-            ))}
-          </RadioGroup>
-        </div>
 
         {/* Status */}
         {isRecording && (
