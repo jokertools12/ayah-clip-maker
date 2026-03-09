@@ -104,7 +104,6 @@ const DEFAULT_EXPORT_SETTINGS: ExportSettings = {
   format: 'mp4',
   quality: 'high',
   motionSpeed: 1.5,
-  recordingMethod: 'auto',
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
