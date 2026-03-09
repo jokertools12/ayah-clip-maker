@@ -28,12 +28,6 @@ const FORMAT_OPTIONS: { id: ExportFormat; label: string; description: string; ic
   { id: 'mp4', label: 'MP4', description: 'الأكثر توافقاً مع جميع المنصات والأجهزة', icon: Film },
 ];
 
-const RECORDING_METHOD_OPTIONS: { id: RecordingMethod; label: string; description: string }[] = [
-  { id: 'auto', label: '🤖 تلقائي ذكي', description: 'يختار أفضل طريقة تلقائياً' },
-  { id: 'smooth', label: '⚡ سلس', description: 'الأفضل لمعظم الأجهزة' },
-  { id: 'compatibility', label: '🛟 توافق عالي', description: 'أخف وضع للأجهزة الضعيفة' },
-  { id: 'quality', label: '🎬 جودة قصوى', description: 'أفضل جودة للأجهزة القوية' },
-];
 
 export function ExportFormatSelector({
   settings,
