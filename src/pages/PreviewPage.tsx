@@ -959,9 +959,10 @@ export default function PreviewPage() {
 
       const recordingCanvas = document.createElement('canvas');
       const recordingDimensions = getQualityDimensions(targetQuality, aspectRatio);
-      const resolutionScale = isVeryLongRecording ? 0.5 : isLongRecording ? 0.62 : isPexelsBackground ? 0.74 : 0.88;
-      recordingCanvas.width = Math.max(360, Math.round(recordingDimensions.width * resolutionScale));
-      recordingCanvas.height = Math.max(640, Math.round(recordingDimensions.height * resolutionScale));
+      // Use quality dimensions directly — no extra scaling down.
+      // The layered rendering in VideoPreview handles performance.
+      recordingCanvas.width = recordingDimensions.width;
+      recordingCanvas.height = recordingDimensions.height;
 
       if (audio) {
         audio.pause();
