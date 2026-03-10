@@ -325,8 +325,8 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         };
       });
     } else if (bgType === 'video') {
-      // Strategy: Try direct CORS load first (Pexels supports CORS headers).
-      // Only fall back to proxy if direct load taints canvas.
+      // Strategy: Always load as blob first (same-origin = no canvas taint ever).
+      // This guarantees captureStream() works during recording.
       const createVideoEl = (): HTMLVideoElement => {
         const video = document.createElement('video');
         video.muted = true;
@@ -377,37 +377,29 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         }
       };
 
-      const loadDirectVideo = () => {
-        const video = createVideoEl();
-        video.crossOrigin = 'anonymous';
-        video.src = bgUrl;
-
-        video.onloadeddata = () => {
-          if (cancelled) return;
-          // Test if canvas stays clean
-          try {
-            const tc = document.createElement('canvas');
-            tc.width = 2;
-            tc.height = 2;
-            const tctx = tc.getContext('2d');
-            tctx?.drawImage(video, 0, 0, 2, 2);
-            tc.toDataURL(); // Throws if tainted
-            activateVideo(video, '✅ Video loaded directly with CORS', 'direct');
-          } catch {
-            console.warn('Direct video taints canvas, trying proxy…');
-            video.pause();
-            video.src = '';
+      // Blob-first: download video as blob to make it same-origin (prevents canvas taint)
+      const loadAsBlobDirect = async () => {
+        try {
+          const resp = await fetch(bgUrl, { mode: 'cors' });
+          if (!resp.ok) throw new Error(`Direct fetch ${resp.status}`);
+          const blob = await resp.blob();
+          if (cancelled || !blob.size) return;
+          localBlobUrl = URL.createObjectURL(blob);
+          const video = createVideoEl();
+          video.src = localBlobUrl;
+          video.onloadeddata = () => activateVideo(video, '✅ Video loaded as direct blob (same-origin)', 'direct');
+          video.onerror = () => {
+            console.warn('Direct blob video element failed, trying proxy…');
+            if (localBlobUrl) { URL.revokeObjectURL(localBlobUrl); localBlobUrl = null; }
             loadViaProxy();
-          }
-        };
-
-        video.onerror = () => {
-          console.warn('Direct video load failed, trying proxy…');
+          };
+        } catch {
+          console.warn('Direct blob fetch failed, trying proxy…');
           loadViaProxy();
-        };
+        }
       };
 
-      loadDirectVideo();
+      loadAsBlobDirect();
     } else {
       loadImage(bgUrl);
     }
