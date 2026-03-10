@@ -325,8 +325,8 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         };
       });
     } else if (bgType === 'video') {
-      // Strategy: Try direct CORS load first (Pexels supports CORS headers).
-      // Only fall back to proxy if direct load taints canvas.
+      // Strategy: Always load as blob first (same-origin = no canvas taint ever).
+      // This guarantees captureStream() works during recording.
       const createVideoEl = (): HTMLVideoElement => {
         const video = document.createElement('video');
         video.muted = true;
@@ -377,37 +377,29 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         }
       };
 
-      const loadDirectVideo = () => {
-        const video = createVideoEl();
-        video.crossOrigin = 'anonymous';
-        video.src = bgUrl;
-
-        video.onloadeddata = () => {
-          if (cancelled) return;
-          // Test if canvas stays clean
-          try {
-            const tc = document.createElement('canvas');
-            tc.width = 2;
-            tc.height = 2;
-            const tctx = tc.getContext('2d');
-            tctx?.drawImage(video, 0, 0, 2, 2);
-            tc.toDataURL(); // Throws if tainted
-            activateVideo(video, '✅ Video loaded directly with CORS', 'direct');
-          } catch {
-            console.warn('Direct video taints canvas, trying proxy…');
-            video.pause();
-            video.src = '';
+      // Blob-first: download video as blob to make it same-origin (prevents canvas taint)
+      const loadAsBlobDirect = async () => {
+        try {
+          const resp = await fetch(bgUrl, { mode: 'cors' });
+          if (!resp.ok) throw new Error(`Direct fetch ${resp.status}`);
+          const blob = await resp.blob();
+          if (cancelled || !blob.size) return;
+          localBlobUrl = URL.createObjectURL(blob);
+          const video = createVideoEl();
+          video.src = localBlobUrl;
+          video.onloadeddata = () => activateVideo(video, '✅ Video loaded as direct blob (same-origin)', 'direct');
+          video.onerror = () => {
+            console.warn('Direct blob video element failed, trying proxy…');
+            if (localBlobUrl) { URL.revokeObjectURL(localBlobUrl); localBlobUrl = null; }
             loadViaProxy();
-          }
-        };
-
-        video.onerror = () => {
-          console.warn('Direct video load failed, trying proxy…');
+          };
+        } catch {
+          console.warn('Direct blob fetch failed, trying proxy…');
           loadViaProxy();
-        };
+        }
       };
 
-      loadDirectVideo();
+      loadAsBlobDirect();
     } else {
       loadImage(bgUrl);
     }
@@ -1030,32 +1022,35 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         }
       }
     } else if (videoReady && videoRef.current) {
-      // Draw video frame via off-screen scale canvas for performance
       const video = videoRef.current;
-      if (!videoScaleCanvasRef.current) {
-        videoScaleCanvasRef.current = document.createElement('canvas');
-      }
-      const sc = videoScaleCanvasRef.current;
-      // Use a smaller intermediate size to reduce GPU pixel processing
-      const scaleW = Math.min(video.videoWidth || 480, 480);
-      const scaleH = Math.round(scaleW * (canvas.height / canvas.width));
-      if (sc.width !== scaleW || sc.height !== scaleH) {
-        sc.width = scaleW;
-        sc.height = scaleH;
-      }
-      const sCtx = sc.getContext('2d');
-      if (sCtx) {
-        const refreshIntervalMs = isPreviewRender ? 0 : isLiteRecording ? 110 : 80;
-        const shouldRefreshVideoLayer =
-          refreshIntervalMs === 0 || (renderTimestamp - videoLayerLastUpdateRef.current) >= refreshIntervalMs;
 
-        if (shouldRefreshVideoLayer) {
-          sCtx.drawImage(video, 0, 0, scaleW, scaleH);
-          videoLayerLastUpdateRef.current = renderTimestamp;
+      // Ensure video keeps playing during recording
+      if (!isPreviewRender && video.paused) {
+        video.play().catch(() => {});
+      }
+
+      if (isPreviewRender) {
+        // Preview: use off-screen scale canvas for lower GPU cost
+        if (!videoScaleCanvasRef.current) {
+          videoScaleCanvasRef.current = document.createElement('canvas');
         }
-
-        ctx.drawImage(sc, 0, 0, canvas.width, canvas.height);
+        const sc = videoScaleCanvasRef.current;
+        const scaleW = Math.min(video.videoWidth || 480, 480);
+        const scaleH = Math.round(scaleW * (canvas.height / canvas.width));
+        if (sc.width !== scaleW || sc.height !== scaleH) {
+          sc.width = scaleW;
+          sc.height = scaleH;
+        }
+        const sCtx = sc.getContext('2d');
+        if (sCtx) {
+          sCtx.drawImage(video, 0, 0, scaleW, scaleH);
+          ctx.drawImage(sc, 0, 0, canvas.width, canvas.height);
+        } else {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        }
       } else {
+        // Recording: draw video DIRECTLY to recording canvas — no intermediate canvas
+        // This avoids any potential canvas taint propagation through the scale canvas
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       }
     } else if (imageRef.current && imageLoaded) {
