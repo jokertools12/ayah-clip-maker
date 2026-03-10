@@ -1022,32 +1022,35 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         }
       }
     } else if (videoReady && videoRef.current) {
-      // Draw video frame via off-screen scale canvas for performance
       const video = videoRef.current;
-      if (!videoScaleCanvasRef.current) {
-        videoScaleCanvasRef.current = document.createElement('canvas');
-      }
-      const sc = videoScaleCanvasRef.current;
-      // Use a smaller intermediate size to reduce GPU pixel processing
-      const scaleW = Math.min(video.videoWidth || 480, 480);
-      const scaleH = Math.round(scaleW * (canvas.height / canvas.width));
-      if (sc.width !== scaleW || sc.height !== scaleH) {
-        sc.width = scaleW;
-        sc.height = scaleH;
-      }
-      const sCtx = sc.getContext('2d');
-      if (sCtx) {
-        const refreshIntervalMs = isPreviewRender ? 0 : isLiteRecording ? 110 : 80;
-        const shouldRefreshVideoLayer =
-          refreshIntervalMs === 0 || (renderTimestamp - videoLayerLastUpdateRef.current) >= refreshIntervalMs;
 
-        if (shouldRefreshVideoLayer) {
-          sCtx.drawImage(video, 0, 0, scaleW, scaleH);
-          videoLayerLastUpdateRef.current = renderTimestamp;
+      // Ensure video keeps playing during recording
+      if (!isPreviewRender && video.paused) {
+        video.play().catch(() => {});
+      }
+
+      if (isPreviewRender) {
+        // Preview: use off-screen scale canvas for lower GPU cost
+        if (!videoScaleCanvasRef.current) {
+          videoScaleCanvasRef.current = document.createElement('canvas');
         }
-
-        ctx.drawImage(sc, 0, 0, canvas.width, canvas.height);
+        const sc = videoScaleCanvasRef.current;
+        const scaleW = Math.min(video.videoWidth || 480, 480);
+        const scaleH = Math.round(scaleW * (canvas.height / canvas.width));
+        if (sc.width !== scaleW || sc.height !== scaleH) {
+          sc.width = scaleW;
+          sc.height = scaleH;
+        }
+        const sCtx = sc.getContext('2d');
+        if (sCtx) {
+          sCtx.drawImage(video, 0, 0, scaleW, scaleH);
+          ctx.drawImage(sc, 0, 0, canvas.width, canvas.height);
+        } else {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        }
       } else {
+        // Recording: draw video DIRECTLY to recording canvas — no intermediate canvas
+        // This avoids any potential canvas taint propagation through the scale canvas
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       }
     } else if (imageRef.current && imageLoaded) {
