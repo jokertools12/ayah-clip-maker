@@ -444,6 +444,10 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       cancelled = true;
       if (videoRef.current) {
         videoRef.current.pause();
+        // Remove from DOM if attached
+        if (videoRef.current.parentNode) {
+          videoRef.current.parentNode.removeChild(videoRef.current);
+        }
         videoRef.current = null;
       }
       if (localBlobUrl) {
