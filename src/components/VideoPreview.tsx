@@ -2140,11 +2140,35 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     drawFrameRuntimeRef.current = drawFrame;
   }, [drawFrame]);
 
-  // Animation loop for preview canvas — lighter while idle and fully paused during isolated recording
+  // Animation loop for preview canvas
+  // During recording: run a lightweight keep-alive loop that forces the browser
+  // to keep decoding video frames (otherwise detached/hidden videos freeze).
   useEffect(() => {
     if (isRecording) {
+      // Keep-alive: tick at ~5 FPS just to keep the video element active
+      // We do NOT draw to the preview canvas — the recorder's frameRenderer handles that.
+      const keepAliveInterval = setInterval(() => {
+        const video = videoRef.current;
+        if (video) {
+          if (video.paused) {
+            video.play().catch(() => {});
+          }
+          // Force the browser to decode the current frame by reading a pixel
+          // This prevents frame freezing on some browsers
+          const sc = videoScaleCanvasRef.current;
+          if (sc) {
+            const sCtx = sc.getContext('2d');
+            if (sCtx) {
+              sCtx.drawImage(video, 0, 0, 2, 2);
+            }
+          }
+        }
+      }, 200); // 5 FPS keep-alive
+
+      // Draw one initial frame on the preview canvas
       drawFrameRuntimeRef.current();
-      return;
+
+      return () => clearInterval(keepAliveInterval);
     }
 
     const hasAnimatedBackground =
