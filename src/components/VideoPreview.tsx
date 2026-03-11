@@ -220,6 +220,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     const video = videoRef.current;
     if (!video) return;
 
+    // Wait until video has enough data
     if (video.readyState < 2) {
       await new Promise<void>((resolve) => {
         let timeoutId: number | null = null;
@@ -244,17 +245,27 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         video.addEventListener('loadeddata', onReady, { once: true });
         video.addEventListener('canplay', onReady, { once: true });
         video.addEventListener('error', onDone, { once: true });
-        timeoutId = window.setTimeout(onDone, 1200);
+        timeoutId = window.setTimeout(onDone, 3000);
       });
     }
 
+    // Start playback and wait for the 'playing' event to confirm frames are advancing
     if (video.paused) {
       try {
         await video.play();
+        // Wait for the browser to actually start decoding frames
+        await new Promise<void>((resolve) => {
+          const onPlaying = () => { resolve(); };
+          video.addEventListener('playing', onPlaying, { once: true });
+          // Fallback timeout
+          setTimeout(resolve, 500);
+        });
       } catch (err) {
         console.warn('Could not resume background video before recording:', err);
       }
     }
+
+    console.log('✅ ensureBackgroundPlayback: video playing =', !video.paused, 'readyState =', video.readyState, 'currentTime =', video.currentTime);
   }, [background?.type]);
 
   // Get the actual font name for canvas
@@ -335,6 +346,15 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         video.preload = 'auto';
         video.autoplay = true;
         video.setAttribute('playsinline', 'true');
+        // Attach to DOM hidden — prevents browsers from freezing detached videos
+        video.style.position = 'fixed';
+        video.style.top = '-9999px';
+        video.style.left = '-9999px';
+        video.style.width = '1px';
+        video.style.height = '1px';
+        video.style.opacity = '0.01';
+        video.style.pointerEvents = 'none';
+        document.body.appendChild(video);
         return video;
       };
 
@@ -424,6 +444,10 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       cancelled = true;
       if (videoRef.current) {
         videoRef.current.pause();
+        // Remove from DOM if attached
+        if (videoRef.current.parentNode) {
+          videoRef.current.parentNode.removeChild(videoRef.current);
+        }
         videoRef.current = null;
       }
       if (localBlobUrl) {
@@ -2120,11 +2144,35 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     drawFrameRuntimeRef.current = drawFrame;
   }, [drawFrame]);
 
-  // Animation loop for preview canvas — lighter while idle and fully paused during isolated recording
+  // Animation loop for preview canvas
+  // During recording: run a lightweight keep-alive loop that forces the browser
+  // to keep decoding video frames (otherwise detached/hidden videos freeze).
   useEffect(() => {
     if (isRecording) {
+      // Keep-alive: tick at ~5 FPS just to keep the video element active
+      // We do NOT draw to the preview canvas — the recorder's frameRenderer handles that.
+      const keepAliveInterval = setInterval(() => {
+        const video = videoRef.current;
+        if (video) {
+          if (video.paused) {
+            video.play().catch(() => {});
+          }
+          // Force the browser to decode the current frame by reading a pixel
+          // This prevents frame freezing on some browsers
+          const sc = videoScaleCanvasRef.current;
+          if (sc) {
+            const sCtx = sc.getContext('2d');
+            if (sCtx) {
+              sCtx.drawImage(video, 0, 0, 2, 2);
+            }
+          }
+        }
+      }, 200); // 5 FPS keep-alive
+
+      // Draw one initial frame on the preview canvas
       drawFrameRuntimeRef.current();
-      return;
+
+      return () => clearInterval(keepAliveInterval);
     }
 
     const hasAnimatedBackground =
