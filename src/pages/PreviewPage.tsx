@@ -950,7 +950,8 @@ export default function PreviewPage() {
       };
 
       const targetQuality = clampQualityForDuration(exportSettings.quality);
-      const targetFps = isVeryLongRecording ? 14 : isPexelsBackground ? 18 : isLongRecording ? 20 : 24;
+      // Real-time capture: browser auto-captures at this FPS from captureStream
+      const targetFps = isVeryLongRecording ? 18 : isLongRecording ? 22 : 24;
       const renderMode: 'recording' | 'recordingLite' = (isLongRecording || isVideoBackground) ? 'recordingLite' : 'recording';
 
       if (isLongRecording || isPexelsBackground) {
@@ -959,8 +960,6 @@ export default function PreviewPage() {
 
       const recordingCanvas = document.createElement('canvas');
       const recordingDimensions = getQualityDimensions(targetQuality, aspectRatio);
-      // Use quality dimensions directly — no extra scaling down.
-      // The layered rendering in VideoPreview handles performance.
       recordingCanvas.width = recordingDimensions.width;
       recordingCanvas.height = recordingDimensions.height;
 
@@ -969,8 +968,20 @@ export default function PreviewPage() {
         audio.currentTime = recordingStartAt;
       }
 
+      // ── Real-time drawing loop ──────────────────────────────────────────
+      // Instead of setTimeout-based frame-by-frame rendering (which causes choppiness),
+      // we use requestAnimationFrame to continuously draw to the recording canvas.
+      // captureStream(fps) then auto-captures smooth frames from this canvas.
       const frameTimelineOffsetMs = recordingStartAt * 1000;
-      const drawIsolatedFrame = (elapsedMs: number) => {
+      let rafId: number | null = null;
+      let loopStartTime: number | null = null;
+      let recordingStopped = false;
+
+      const drawLoop = (timestamp: number) => {
+        if (recordingStopped) return;
+        if (loopStartTime === null) loopStartTime = timestamp;
+        const elapsedMs = timestamp - loopStartTime;
+
         try {
           const livePreviewApi = videoPreviewRef.current;
           const draw = livePreviewApi?.drawFrame ?? previewApi.drawFrame;
@@ -978,11 +989,30 @@ export default function PreviewPage() {
         } catch (e) {
           console.warn('Frame draw error:', e);
         }
+
+        // Stop when duration exceeded
+        if (elapsedMs >= recordingDuration * 1000) {
+          recordingStopped = true;
+          return;
+        }
+
+        rafId = requestAnimationFrame(drawLoop);
       };
 
-      drawIsolatedFrame(0);
-      toast.info('بدء التسجيل بنظام الإطارات...');
+      // Draw first frame, then start the loop
+      try {
+        const livePreviewApi = videoPreviewRef.current;
+        const draw = livePreviewApi?.drawFrame ?? previewApi.drawFrame;
+        draw(recordingCanvas, renderMode, frameTimelineOffsetMs);
+      } catch {}
 
+      // Start the continuous drawing loop BEFORE recording starts
+      rafId = requestAnimationFrame(drawLoop);
+
+      toast.info('بدء التسجيل...');
+
+      // Use auto-capture mode (no frameRenderer) — captureStream(fps) captures
+      // frames automatically from the canvas that our rAF loop keeps updating.
       const blob = await videoRecorder.startRecording(
         recordingCanvas,
         audio,
@@ -996,11 +1026,13 @@ export default function PreviewPage() {
           timesliceMs: isLongRecording || isPexelsBackground ? 3200 : 2200,
           mimeTypeCandidates: ['video/webm;codecs=vp8,opus', 'video/webm'],
           captureStreamFps: targetFps,
-          maxFrameCatchup: isPexelsBackground ? 1 : 2,
-          minFrameDelayMs: isPexelsBackground ? 8 : 6,
-          frameRenderer: (frameTimeMs) => drawIsolatedFrame(frameTimeMs),
+          // No frameRenderer — real-time auto-capture mode
         }
       );
+
+      // Cleanup drawing loop
+      recordingStopped = true;
+      if (rafId !== null) cancelAnimationFrame(rafId);
 
       if (blob) {
         toast.success('تم إنشاء الفيديو بنجاح!');
