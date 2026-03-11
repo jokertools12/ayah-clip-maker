@@ -335,6 +335,15 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         video.preload = 'auto';
         video.autoplay = true;
         video.setAttribute('playsinline', 'true');
+        // Attach to DOM hidden — prevents browsers from freezing detached videos
+        video.style.position = 'fixed';
+        video.style.top = '-9999px';
+        video.style.left = '-9999px';
+        video.style.width = '1px';
+        video.style.height = '1px';
+        video.style.opacity = '0.01';
+        video.style.pointerEvents = 'none';
+        document.body.appendChild(video);
         return video;
       };
 
