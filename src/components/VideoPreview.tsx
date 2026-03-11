@@ -2145,34 +2145,39 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   }, [drawFrame]);
 
   // Animation loop for preview canvas
-  // During recording: run a lightweight keep-alive loop that forces the browser
-  // to keep decoding video frames (otherwise detached/hidden videos freeze).
+  // During recording: keep a low-frequency loop running to ensure the video
+  // element keeps advancing frames (browsers may freeze hidden/detached videos).
+  // The recording canvas is drawn by PreviewPage's own rAF loop.
   useEffect(() => {
     if (isRecording) {
-      // Keep-alive: tick at ~5 FPS just to keep the video element active
-      // We do NOT draw to the preview canvas — the recorder's frameRenderer handles that.
-      const keepAliveInterval = setInterval(() => {
+      // Keep video alive during recording — tick at ~10 FPS
+      let keepAliveRaf: number;
+      let lastTick = 0;
+
+      const tick = (now: number) => {
+        keepAliveRaf = requestAnimationFrame(tick);
+        if (now - lastTick < 100) return; // ~10 FPS
+        lastTick = now;
+
         const video = videoRef.current;
         if (video) {
-          if (video.paused) {
-            video.play().catch(() => {});
+          if (video.paused) video.play().catch(() => {});
+          // Force browser to decode current video frame
+          if (!videoScaleCanvasRef.current) {
+            videoScaleCanvasRef.current = document.createElement('canvas');
+            videoScaleCanvasRef.current.width = 4;
+            videoScaleCanvasRef.current.height = 4;
           }
-          // Force the browser to decode the current frame by reading a pixel
-          // This prevents frame freezing on some browsers
-          const sc = videoScaleCanvasRef.current;
-          if (sc) {
-            const sCtx = sc.getContext('2d');
-            if (sCtx) {
-              sCtx.drawImage(video, 0, 0, 2, 2);
-            }
-          }
+          const sCtx = videoScaleCanvasRef.current.getContext('2d');
+          if (sCtx) sCtx.drawImage(video, 0, 0, 4, 4);
         }
-      }, 200); // 5 FPS keep-alive
+      };
 
+      keepAliveRaf = requestAnimationFrame(tick);
       // Draw one initial frame on the preview canvas
       drawFrameRuntimeRef.current();
 
-      return () => clearInterval(keepAliveInterval);
+      return () => cancelAnimationFrame(keepAliveRaf);
     }
 
     const hasAnimatedBackground =
