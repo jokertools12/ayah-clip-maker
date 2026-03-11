@@ -220,6 +220,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     const video = videoRef.current;
     if (!video) return;
 
+    // Wait until video has enough data
     if (video.readyState < 2) {
       await new Promise<void>((resolve) => {
         let timeoutId: number | null = null;
@@ -244,17 +245,27 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         video.addEventListener('loadeddata', onReady, { once: true });
         video.addEventListener('canplay', onReady, { once: true });
         video.addEventListener('error', onDone, { once: true });
-        timeoutId = window.setTimeout(onDone, 1200);
+        timeoutId = window.setTimeout(onDone, 3000);
       });
     }
 
+    // Start playback and wait for the 'playing' event to confirm frames are advancing
     if (video.paused) {
       try {
         await video.play();
+        // Wait for the browser to actually start decoding frames
+        await new Promise<void>((resolve) => {
+          const onPlaying = () => { resolve(); };
+          video.addEventListener('playing', onPlaying, { once: true });
+          // Fallback timeout
+          setTimeout(resolve, 500);
+        });
       } catch (err) {
         console.warn('Could not resume background video before recording:', err);
       }
     }
+
+    console.log('✅ ensureBackgroundPlayback: video playing =', !video.paused, 'readyState =', video.readyState, 'currentTime =', video.currentTime);
   }, [background?.type]);
 
   // Get the actual font name for canvas
