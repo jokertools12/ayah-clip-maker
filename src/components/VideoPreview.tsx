@@ -852,7 +852,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   // Draw frame on canvas
   const drawFrame = useCallback((
     targetCanvas?: HTMLCanvasElement,
-    renderMode: 'preview' | 'recording' | 'recordingLite' = 'preview',
+    renderMode: 'preview' | 'recording' | 'recordingLite' | 'overlayOnly' = 'preview',
     forcedTimeMs?: number
   ) => {
     const canvas = targetCanvas || canvasRef.current;
