@@ -886,8 +886,13 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     const S = canvas.width / 1080;
 
     // Clear canvas
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (isOverlayOnlyRender) {
+      // Overlay-only: start with transparent canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    } else {
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
 
     // Draw background motion (lighter in recordingLite)
     const motionFactor = isLiteRecording ? 0.55 : 1;
