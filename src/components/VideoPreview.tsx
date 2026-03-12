@@ -894,6 +894,8 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
 
+    // ── Skip background drawing entirely in overlayOnly mode ──
+    if (!isOverlayOnlyRender) {
     // Draw background motion (lighter in recordingLite)
     const motionFactor = isLiteRecording ? 0.55 : 1;
     const t = (renderTimestamp / 1000) * motionSpeed * motionFactor;
