@@ -1115,6 +1115,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
+    } // end if (!isOverlayOnlyRender) — background drawing block
 
     // Draw overlay
     ctx.fillStyle = `rgba(0, 0, 0, ${textSettings.overlayOpacity})`;
