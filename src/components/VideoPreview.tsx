@@ -864,6 +864,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     const previewScale = 0.38;
     const isPreviewRender = renderMode === 'preview';
     const isLiteRecording = renderMode === 'recordingLite';
+    const isOverlayOnlyRender = renderMode === 'overlayOnly';
 
     // For recording: the canvas dimensions are set by the caller (PreviewPage)
     // based on quality preset. We only resize for preview mode.
