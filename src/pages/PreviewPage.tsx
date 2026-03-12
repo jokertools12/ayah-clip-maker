@@ -968,27 +968,62 @@ export default function PreviewPage() {
         audio.currentTime = recordingStartAt;
       }
 
-      // ── Real-time drawing loop ──────────────────────────────────────────
-      // Instead of setTimeout-based frame-by-frame rendering (which causes choppiness),
-      // we use requestAnimationFrame to continuously draw to the recording canvas.
-      // captureStream(fps) then auto-captures smooth frames from this canvas.
+      // ── Dual-layer recording loop ──────────────────────────────────────────
+      // Layer 1: Draw video background every frame (ultra-fast: single drawImage)
+      // Layer 2: Draw text overlay every ~150ms on a separate transparent canvas
+      // Combine: video + overlay = smooth final output
       const frameTimelineOffsetMs = recordingStartAt * 1000;
       let rafId: number | null = null;
       let loopStartTime: number | null = null;
       let recordingStopped = false;
+
+      // Create overlay canvas (transparent, same size as recording canvas)
+      const overlayCanvas = document.createElement('canvas');
+      overlayCanvas.width = recordingCanvas.width;
+      overlayCanvas.height = recordingCanvas.height;
+
+      // Pre-draw initial overlay
+      try {
+        const livePreviewApi = videoPreviewRef.current;
+        const drawOverlay = livePreviewApi?.drawFrame ?? previewApi.drawFrame;
+        drawOverlay(overlayCanvas, 'overlayOnly', frameTimelineOffsetMs);
+      } catch {}
+
+      // Update overlay at a lower frequency (every 150ms)
+      let lastOverlayUpdateMs = 0;
+      const OVERLAY_UPDATE_INTERVAL = 150;
 
       const drawLoop = (timestamp: number) => {
         if (recordingStopped) return;
         if (loopStartTime === null) loopStartTime = timestamp;
         const elapsedMs = timestamp - loopStartTime;
 
+        const ctx = recordingCanvas.getContext('2d');
+        if (!ctx) { rafId = requestAnimationFrame(drawLoop); return; }
+
+        // Layer 1: Draw video/image background directly (ultra-fast)
         try {
           const livePreviewApi = videoPreviewRef.current;
-          const draw = livePreviewApi?.drawFrame ?? previewApi.drawFrame;
-          draw(recordingCanvas, renderMode, frameTimelineOffsetMs + elapsedMs);
+          const drawVideo = livePreviewApi?.drawVideoFrame ?? previewApi.drawVideoFrame;
+          drawVideo(recordingCanvas);
         } catch (e) {
-          console.warn('Frame draw error:', e);
+          console.warn('Video frame draw error:', e);
         }
+
+        // Layer 2: Update overlay periodically (text, badges, watermark)
+        if (elapsedMs - lastOverlayUpdateMs >= OVERLAY_UPDATE_INTERVAL) {
+          lastOverlayUpdateMs = elapsedMs;
+          try {
+            const livePreviewApi = videoPreviewRef.current;
+            const drawOverlay = livePreviewApi?.drawFrame ?? previewApi.drawFrame;
+            drawOverlay(overlayCanvas, 'overlayOnly', frameTimelineOffsetMs + elapsedMs);
+          } catch (e) {
+            console.warn('Overlay draw error:', e);
+          }
+        }
+
+        // Composite: draw cached overlay on top of video
+        ctx.drawImage(overlayCanvas, 0, 0);
 
         // Stop when duration exceeded
         if (elapsedMs >= recordingDuration * 1000) {
@@ -999,11 +1034,13 @@ export default function PreviewPage() {
         rafId = requestAnimationFrame(drawLoop);
       };
 
-      // Draw first frame, then start the loop
+      // Draw first frame fully
       try {
         const livePreviewApi = videoPreviewRef.current;
-        const draw = livePreviewApi?.drawFrame ?? previewApi.drawFrame;
-        draw(recordingCanvas, renderMode, frameTimelineOffsetMs);
+        const drawVideo = livePreviewApi?.drawVideoFrame ?? previewApi.drawVideoFrame;
+        drawVideo(recordingCanvas);
+        const ctx = recordingCanvas.getContext('2d');
+        if (ctx) ctx.drawImage(overlayCanvas, 0, 0);
       } catch {}
 
       // Start the continuous drawing loop BEFORE recording starts
@@ -1011,7 +1048,7 @@ export default function PreviewPage() {
 
       toast.info('بدء التسجيل...');
 
-      // Use auto-capture mode (no frameRenderer) — captureStream(fps) captures
+      // Use auto-capture mode — captureStream(fps) captures
       // frames automatically from the canvas that our rAF loop keeps updating.
       const blob = await videoRecorder.startRecording(
         recordingCanvas,
@@ -1026,7 +1063,6 @@ export default function PreviewPage() {
           timesliceMs: isLongRecording || isPexelsBackground ? 3200 : 2200,
           mimeTypeCandidates: ['video/webm;codecs=vp8,opus', 'video/webm'],
           captureStreamFps: targetFps,
-          // No frameRenderer — real-time auto-capture mode
         }
       );
 

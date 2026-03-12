@@ -83,7 +83,9 @@ export interface VideoPreviewRef {
   ensureBackgroundPlayback: () => Promise<void>;
   getRecordingDimensions: () => { width: number; height: number };
   getRecommendedRecordingFps: () => number;
-  drawFrame: (targetCanvas?: HTMLCanvasElement, renderMode?: 'preview' | 'recording' | 'recordingLite', forcedTimeMs?: number) => void;
+  drawFrame: (targetCanvas?: HTMLCanvasElement, renderMode?: 'preview' | 'recording' | 'recordingLite' | 'overlayOnly', forcedTimeMs?: number) => void;
+  /** Draw ONLY the video element to a target canvas — ultra-lightweight */
+  drawVideoFrame: (targetCanvas: HTMLCanvasElement) => void;
 }
 
 const DEFAULT_DISPLAY_SETTINGS = {
@@ -135,7 +137,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   const imageRef = useRef<HTMLImageElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
-  const drawFrameRuntimeRef = useRef<(targetCanvas?: HTMLCanvasElement, renderMode?: 'preview' | 'recording' | 'recordingLite', forcedTimeMs?: number) => void>(() => {});
+  const drawFrameRuntimeRef = useRef<(targetCanvas?: HTMLCanvasElement, renderMode?: 'preview' | 'recording' | 'recordingLite' | 'overlayOnly', forcedTimeMs?: number) => void>(() => {});
   const [imageLoaded, setImageLoaded] = useState(false);
   const [videoReady, setVideoReady] = useState(false);
 
@@ -850,7 +852,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   // Draw frame on canvas
   const drawFrame = useCallback((
     targetCanvas?: HTMLCanvasElement,
-    renderMode: 'preview' | 'recording' | 'recordingLite' = 'preview',
+    renderMode: 'preview' | 'recording' | 'recordingLite' | 'overlayOnly' = 'preview',
     forcedTimeMs?: number
   ) => {
     const canvas = targetCanvas || canvasRef.current;
@@ -862,6 +864,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     const previewScale = 0.38;
     const isPreviewRender = renderMode === 'preview';
     const isLiteRecording = renderMode === 'recordingLite';
+    const isOverlayOnlyRender = renderMode === 'overlayOnly';
 
     // For recording: the canvas dimensions are set by the caller (PreviewPage)
     // based on quality preset. We only resize for preview mode.
@@ -883,9 +886,16 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     const S = canvas.width / 1080;
 
     // Clear canvas
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (isOverlayOnlyRender) {
+      // Overlay-only: start with transparent canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    } else {
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
 
+    // ── Skip background drawing entirely in overlayOnly mode ──
+    if (!isOverlayOnlyRender) {
     // Draw background motion (lighter in recordingLite)
     const motionFactor = isLiteRecording ? 0.55 : 1;
     const t = (renderTimestamp / 1000) * motionSpeed * motionFactor;
@@ -1105,6 +1115,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
+    } // end if (!isOverlayOnlyRender) — background drawing block
 
     // Draw overlay
     ctx.fillStyle = `rgba(0, 0, 0, ${textSettings.overlayOpacity})`;
@@ -2216,6 +2227,30 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     }
   }, [onCanvasReady]);
 
+  // Ultra-lightweight: draw ONLY the video element to a target canvas
+  const drawVideoFrame = useCallback((targetCanvas: HTMLCanvasElement) => {
+    const ctx = targetCanvas.getContext('2d');
+    if (!ctx) return;
+    const video = videoRef.current;
+    if (video && video.readyState >= 2 && !video.paused) {
+      ctx.drawImage(video, 0, 0, targetCanvas.width, targetCanvas.height);
+    } else if (imageRef.current && imageLoaded) {
+      // Fallback for image backgrounds
+      const img = imageRef.current;
+      const imgRatio = img.naturalWidth / img.naturalHeight;
+      const canvasRatio = targetCanvas.width / targetCanvas.height;
+      let sw = img.naturalWidth, sh = img.naturalHeight, sx = 0, sy = 0;
+      if (imgRatio > canvasRatio) {
+        sw = img.naturalHeight * canvasRatio;
+        sx = (img.naturalWidth - sw) / 2;
+      } else {
+        sh = img.naturalWidth / canvasRatio;
+        sy = (img.naturalHeight - sh) / 2;
+      }
+      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, targetCanvas.width, targetCanvas.height);
+    }
+  }, [imageLoaded]);
+
   useImperativeHandle(ref, () => ({
     getContainer: () => containerRef.current,
     getCanvas: () => canvasRef.current,
@@ -2227,9 +2262,9 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     ensureBackgroundPlayback,
     getRecordingDimensions,
     getRecommendedRecordingFps,
-    // Always route through the live draw function ref to avoid stale closure
-    drawFrame: (targetCanvas?: HTMLCanvasElement, renderMode?: 'preview' | 'recording' | 'recordingLite', forcedTimeMs?: number) =>
+    drawFrame: (targetCanvas?: HTMLCanvasElement, renderMode?: 'preview' | 'recording' | 'recordingLite' | 'overlayOnly', forcedTimeMs?: number) =>
       drawFrameRuntimeRef.current(targetCanvas, renderMode, forcedTimeMs),
+    drawVideoFrame,
   }));
 
   const containerClass = aspectRatio === '9:16'
