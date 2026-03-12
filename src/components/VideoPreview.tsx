@@ -2227,6 +2227,30 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     }
   }, [onCanvasReady]);
 
+  // Ultra-lightweight: draw ONLY the video element to a target canvas
+  const drawVideoFrame = useCallback((targetCanvas: HTMLCanvasElement) => {
+    const ctx = targetCanvas.getContext('2d');
+    if (!ctx) return;
+    const video = videoRef.current;
+    if (video && video.readyState >= 2 && !video.paused) {
+      ctx.drawImage(video, 0, 0, targetCanvas.width, targetCanvas.height);
+    } else if (imageRef.current && imageLoaded) {
+      // Fallback for image backgrounds
+      const img = imageRef.current;
+      const imgRatio = img.naturalWidth / img.naturalHeight;
+      const canvasRatio = targetCanvas.width / targetCanvas.height;
+      let sw = img.naturalWidth, sh = img.naturalHeight, sx = 0, sy = 0;
+      if (imgRatio > canvasRatio) {
+        sw = img.naturalHeight * canvasRatio;
+        sx = (img.naturalWidth - sw) / 2;
+      } else {
+        sh = img.naturalWidth / canvasRatio;
+        sy = (img.naturalHeight - sh) / 2;
+      }
+      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, targetCanvas.width, targetCanvas.height);
+    }
+  }, [imageLoaded]);
+
   useImperativeHandle(ref, () => ({
     getContainer: () => containerRef.current,
     getCanvas: () => canvasRef.current,
@@ -2238,9 +2262,9 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     ensureBackgroundPlayback,
     getRecordingDimensions,
     getRecommendedRecordingFps,
-    // Always route through the live draw function ref to avoid stale closure
-    drawFrame: (targetCanvas?: HTMLCanvasElement, renderMode?: 'preview' | 'recording' | 'recordingLite', forcedTimeMs?: number) =>
+    drawFrame: (targetCanvas?: HTMLCanvasElement, renderMode?: 'preview' | 'recording' | 'recordingLite' | 'overlayOnly', forcedTimeMs?: number) =>
       drawFrameRuntimeRef.current(targetCanvas, renderMode, forcedTimeMs),
+    drawVideoFrame,
   }));
 
   const containerClass = aspectRatio === '9:16'
