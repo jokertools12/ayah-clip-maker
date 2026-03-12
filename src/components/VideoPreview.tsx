@@ -83,7 +83,9 @@ export interface VideoPreviewRef {
   ensureBackgroundPlayback: () => Promise<void>;
   getRecordingDimensions: () => { width: number; height: number };
   getRecommendedRecordingFps: () => number;
-  drawFrame: (targetCanvas?: HTMLCanvasElement, renderMode?: 'preview' | 'recording' | 'recordingLite', forcedTimeMs?: number) => void;
+  drawFrame: (targetCanvas?: HTMLCanvasElement, renderMode?: 'preview' | 'recording' | 'recordingLite' | 'overlayOnly', forcedTimeMs?: number) => void;
+  /** Draw ONLY the video element to a target canvas — ultra-lightweight */
+  drawVideoFrame: (targetCanvas: HTMLCanvasElement) => void;
 }
 
 const DEFAULT_DISPLAY_SETTINGS = {
