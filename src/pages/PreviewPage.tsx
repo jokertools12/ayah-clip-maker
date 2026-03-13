@@ -1072,9 +1072,9 @@ export default function PreviewPage() {
         targetQuality,
         targetFps,
         {
-          strategy: 'compatibility',
-          bitrateMultiplier: isVeryLongRecording ? 0.5 : isPexelsBackground ? 0.58 : isLongRecording ? 0.64 : 0.74,
-          timesliceMs: isLongRecording || isPexelsBackground ? 3200 : 2200,
+          strategy: 'smooth',
+          bitrateMultiplier: isVeryLongRecording ? 0.55 : isPexelsBackground ? 0.7 : isLongRecording ? 0.7 : 0.85,
+          timesliceMs: 2500,
           mimeTypeCandidates: ['video/webm;codecs=vp8,opus', 'video/webm'],
           captureStreamFps: targetFps,
         }
@@ -1085,7 +1085,16 @@ export default function PreviewPage() {
       if (rafId !== null) cancelAnimationFrame(rafId);
 
       if (blob) {
-        toast.success('تم إنشاء الفيديو بنجاح!');
+        toast.success('تم إنشاء الفيديو! جاري تحويله إلى MP4 (CFR 30fps)...');
+        // Auto-convert to MP4 with CFR normalization
+        try {
+          const mp4 = await videoRecorder.convertToMp4();
+          if (mp4) {
+            toast.success('✅ تم تجهيز الفيديو بصيغة MP4 (H.264, 30fps)');
+          }
+        } catch (e) {
+          console.warn('Auto MP4 conversion failed:', e);
+        }
         return;
       }
 
