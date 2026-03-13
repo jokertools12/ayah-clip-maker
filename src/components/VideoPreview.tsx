@@ -142,6 +142,9 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   const drawFrameRuntimeRef = useRef<(targetCanvas?: HTMLCanvasElement, renderMode?: 'preview' | 'recording' | 'recordingLite' | 'overlayOnly', forcedTimeMs?: number) => void>(() => {});
   const [imageLoaded, setImageLoaded] = useState(false);
   const [videoReady, setVideoReady] = useState(false);
+  const [videoNormalized, setVideoNormalized] = useState(false);
+  const [normalizingVideo, setNormalizingVideo] = useState(false);
+  const normalizedBlobUrlRef = useRef<string | null>(null);
 
   // Slideshow state
   const slideshowImagesRef = useRef<HTMLImageElement[]>([]);
