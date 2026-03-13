@@ -902,7 +902,26 @@ export default function PreviewPage() {
       return;
     }
 
-    // Check daily usage limit - enforce strictly by pre-checking
+    // Check if video needs normalization (Pexels videos)
+    const backgroundUrl = customBackground || background?.url || '';
+    const isVideoBackground = (background?.type || backgroundType) === 'video';
+    const isPexelsBackground = isVideoBackground && /pexels/i.test(backgroundUrl);
+
+    if (isPexelsBackground && !previewApi.isVideoNormalized()) {
+      toast.info('⏳ جاري تطبيع الفيديو (30fps, H.264)... يرجى الانتظار');
+      // Wait up to 60s for normalization to complete
+      const waitStart = Date.now();
+      while (!videoPreviewRef.current?.isVideoNormalized() && Date.now() - waitStart < 60000) {
+        await new Promise(r => setTimeout(r, 500));
+      }
+      if (!videoPreviewRef.current?.isVideoNormalized()) {
+        toast.warning('تم تجاوز وقت التطبيع — سيتم استخدام الفيديو الخام');
+      } else {
+        toast.success('✅ تم تطبيع الفيديو بنجاح');
+      }
+    }
+
+    // Check daily usage limit
     if (isAuthenticated && user) {
       const canCreate = await incrementUsage();
       if (!canCreate) {
@@ -915,12 +934,10 @@ export default function PreviewPage() {
       await audioEffects.resumeContext();
       await previewApi.ensureBackgroundPlayback();
 
-      // Determine recording duration based on playback mode
       const audio = audioRef.current;
       let recordingDuration: number;
       let recordingStartAt = 0;
 
-      // Ibtahalat trim mode
       if (isIbtahalatMode && trimEnabled && trimEnd > trimStart) {
         recordingDuration = trimEnd - trimStart;
         recordingStartAt = trimStart;
@@ -937,9 +954,6 @@ export default function PreviewPage() {
 
       const isLongRecording = recordingDuration >= 45;
       const isVeryLongRecording = recordingDuration >= 90;
-      const backgroundUrl = customBackground || background?.url || '';
-      const isVideoBackground = (background?.type || backgroundType) === 'video';
-      const isPexelsBackground = isVideoBackground && /pexels/i.test(backgroundUrl);
 
       const clampQualityForDuration = (quality: ExportQuality): ExportQuality => {
         if (isVeryLongRecording) return 'low';
@@ -950,12 +964,12 @@ export default function PreviewPage() {
       };
 
       const targetQuality = clampQualityForDuration(exportSettings.quality);
-      // Real-time capture: browser auto-captures at this FPS from captureStream
-      const targetFps = isVeryLongRecording ? 18 : isLongRecording ? 22 : 24;
+      // Default 30fps for smooth video — normalized Pexels videos are already CFR 30fps
+      const targetFps = isVeryLongRecording ? 24 : 30;
       const renderMode: 'recording' | 'recordingLite' = (isLongRecording || isVideoBackground) ? 'recordingLite' : 'recording';
 
-      if (isLongRecording || isPexelsBackground) {
-        toast.info('تم تفعيل نمط التصدير الطبقي الخفيف لتقليل التهنيج أثناء التسجيل.');
+      if (isPexelsBackground) {
+        toast.info('تم تفعيل نمط التصدير المُحسّن (30fps سلس) لفيديوهات Pexels.');
       }
 
       const recordingCanvas = document.createElement('canvas');
@@ -1058,9 +1072,9 @@ export default function PreviewPage() {
         targetQuality,
         targetFps,
         {
-          strategy: 'compatibility',
-          bitrateMultiplier: isVeryLongRecording ? 0.5 : isPexelsBackground ? 0.58 : isLongRecording ? 0.64 : 0.74,
-          timesliceMs: isLongRecording || isPexelsBackground ? 3200 : 2200,
+          strategy: 'smooth',
+          bitrateMultiplier: isVeryLongRecording ? 0.55 : isPexelsBackground ? 0.7 : isLongRecording ? 0.7 : 0.85,
+          timesliceMs: 2500,
           mimeTypeCandidates: ['video/webm;codecs=vp8,opus', 'video/webm'],
           captureStreamFps: targetFps,
         }
@@ -1071,7 +1085,16 @@ export default function PreviewPage() {
       if (rafId !== null) cancelAnimationFrame(rafId);
 
       if (blob) {
-        toast.success('تم إنشاء الفيديو بنجاح!');
+        toast.success('تم إنشاء الفيديو! جاري تحويله إلى MP4 (CFR 30fps)...');
+        // Auto-convert to MP4 with CFR normalization
+        try {
+          const mp4 = await videoRecorder.convertToMp4();
+          if (mp4) {
+            toast.success('✅ تم تجهيز الفيديو بصيغة MP4 (H.264, 30fps)');
+          }
+        } catch (e) {
+          console.warn('Auto MP4 conversion failed:', e);
+        }
         return;
       }
 

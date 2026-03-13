@@ -1,5 +1,6 @@
 import { useRef, useEffect, forwardRef, useImperativeHandle, useCallback, useState } from 'react';
 import { BackgroundItem } from '@/data/backgrounds';
+import { normalizeBackgroundVideo } from '@/lib/ffmpeg';
 
 // Font family mapping for canvas
 const FONT_MAP: Record<string, string> = {
@@ -80,6 +81,7 @@ export interface VideoPreviewRef {
   getContainer: () => HTMLDivElement | null;
   getCanvas: () => HTMLCanvasElement | null;
   isBackgroundReady: () => boolean;
+  isVideoNormalized: () => boolean;
   ensureBackgroundPlayback: () => Promise<void>;
   getRecordingDimensions: () => { width: number; height: number };
   getRecommendedRecordingFps: () => number;
@@ -140,6 +142,9 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   const drawFrameRuntimeRef = useRef<(targetCanvas?: HTMLCanvasElement, renderMode?: 'preview' | 'recording' | 'recordingLite' | 'overlayOnly', forcedTimeMs?: number) => void>(() => {});
   const [imageLoaded, setImageLoaded] = useState(false);
   const [videoReady, setVideoReady] = useState(false);
+  const [videoNormalized, setVideoNormalized] = useState(false);
+  const [normalizingVideo, setNormalizingVideo] = useState(false);
+  const normalizedBlobUrlRef = useRef<string | null>(null);
 
   // Slideshow state
   const slideshowImagesRef = useRef<HTMLImageElement[]>([]);
@@ -213,7 +218,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   }, [aspectRatio]);
 
   const getRecommendedRecordingFps = useCallback(() => {
-    return 24; // Fixed cinematic FPS
+    return 30; // Smooth 30fps CFR for normalized videos
   }, []);
 
   const ensureBackgroundPlayback = useCallback(async () => {
@@ -286,8 +291,14 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
 
     setImageLoaded(false);
     setVideoReady(false);
+    setVideoNormalized(false);
+    setNormalizingVideo(false);
     setSlideshowReady(false);
     slideshowImagesRef.current = [];
+    if (normalizedBlobUrlRef.current) {
+      URL.revokeObjectURL(normalizedBlobUrlRef.current);
+      normalizedBlobUrlRef.current = null;
+    }
 
     let cancelled = false;
     let localBlobUrl: string | null = null;
@@ -364,9 +375,65 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         if (cancelled) return;
         videoRef.current = video;
         setVideoReady(true);
+        // Don't set normalized yet — that happens after FFmpeg normalization
         video.play().catch((err) => console.warn('Video play warning:', err));
         console.log(successLog);
         onBackgroundLoadMethod?.(method);
+      };
+
+      // After raw video is loaded, normalize it in background for recording
+      const normalizeInBackground = async (rawBlob: Blob) => {
+        if (cancelled) return;
+        const isPexels = /pexels/i.test(bgUrl);
+        if (!isPexels) {
+          // Non-Pexels videos: skip normalization, mark as ready
+          setVideoNormalized(true);
+          return;
+        }
+        
+        setNormalizingVideo(true);
+        console.log('🔄 Starting background video normalization for recording...');
+        
+        try {
+          const normalized = await normalizeBackgroundVideo(rawBlob, aspectRatio, {
+            maxWidth: aspectRatio === '9:16' ? 720 : 1280,
+            maxHeight: aspectRatio === '9:16' ? 1280 : 720,
+            onProgress: (ratio) => {
+              console.log(`🔄 Normalize progress: ${Math.round(ratio * 100)}%`);
+            },
+          });
+
+          if (cancelled) return;
+
+          // Replace video source with normalized version
+          if (normalizedBlobUrlRef.current) {
+            URL.revokeObjectURL(normalizedBlobUrlRef.current);
+          }
+          const normalizedUrl = URL.createObjectURL(normalized);
+          normalizedBlobUrlRef.current = normalizedUrl;
+
+          const video = videoRef.current;
+          if (video) {
+            const wasPlaying = !video.paused;
+            video.src = normalizedUrl;
+            video.load();
+            await new Promise<void>((resolve) => {
+              video.onloadeddata = () => resolve();
+              setTimeout(resolve, 3000); // timeout fallback
+            });
+            if (wasPlaying) {
+              try { await video.play(); } catch {}
+            }
+          }
+
+          setVideoNormalized(true);
+          setNormalizingVideo(false);
+          console.log('✅ Background video normalized successfully (CFR 30fps, H.264)');
+        } catch (err) {
+          console.warn('⚠️ Video normalization failed, using raw video:', err);
+          setVideoNormalized(true); // fallback: use raw
+          setNormalizingVideo(false);
+        }
       };
 
       const loadViaProxy = async () => {
@@ -392,7 +459,10 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
           localBlobUrl = URL.createObjectURL(blob);
           const video = createVideoEl();
           video.src = localBlobUrl;
-          video.onloadeddata = () => activateVideo(video, '✅ Video loaded via proxy blob', 'proxy');
+          video.onloadeddata = () => {
+            activateVideo(video, '✅ Video loaded via proxy blob', 'proxy');
+            normalizeInBackground(blob);
+          };
           video.onerror = () => { onBackgroundLoadMethod?.('fallback'); loadImage(fallbackThumb || bgUrl); };
         } catch {
           loadImage(fallbackThumb || bgUrl);
@@ -409,7 +479,10 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
           localBlobUrl = URL.createObjectURL(blob);
           const video = createVideoEl();
           video.src = localBlobUrl;
-          video.onloadeddata = () => activateVideo(video, '✅ Video loaded as direct blob (same-origin)', 'direct');
+          video.onloadeddata = () => {
+            activateVideo(video, '✅ Video loaded as direct blob (same-origin)', 'direct');
+            normalizeInBackground(blob);
+          };
           video.onerror = () => {
             console.warn('Direct blob video element failed, trying proxy…');
             if (localBlobUrl) { URL.revokeObjectURL(localBlobUrl); localBlobUrl = null; }
@@ -446,7 +519,6 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       cancelled = true;
       if (videoRef.current) {
         videoRef.current.pause();
-        // Remove from DOM if attached
         if (videoRef.current.parentNode) {
           videoRef.current.parentNode.removeChild(videoRef.current);
         }
@@ -454,6 +526,10 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       }
       if (localBlobUrl) {
         URL.revokeObjectURL(localBlobUrl);
+      }
+      if (normalizedBlobUrlRef.current) {
+        URL.revokeObjectURL(normalizedBlobUrlRef.current);
+        normalizedBlobUrlRef.current = null;
       }
       slideshowImagesRef.current = [];
       kenBurnsPresetsRef.current = [];
@@ -2259,6 +2335,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       if ((background?.type || 'image') === 'animated') return slideshowReady || imageLoaded;
       return imageLoaded || Boolean(customBackground);
     },
+    isVideoNormalized: () => videoNormalized,
     ensureBackgroundPlayback,
     getRecordingDimensions,
     getRecommendedRecordingFps,
