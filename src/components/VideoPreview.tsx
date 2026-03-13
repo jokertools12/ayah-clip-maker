@@ -459,7 +459,10 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
           localBlobUrl = URL.createObjectURL(blob);
           const video = createVideoEl();
           video.src = localBlobUrl;
-          video.onloadeddata = () => activateVideo(video, '✅ Video loaded via proxy blob', 'proxy');
+          video.onloadeddata = () => {
+            activateVideo(video, '✅ Video loaded via proxy blob', 'proxy');
+            normalizeInBackground(blob);
+          };
           video.onerror = () => { onBackgroundLoadMethod?.('fallback'); loadImage(fallbackThumb || bgUrl); };
         } catch {
           loadImage(fallbackThumb || bgUrl);
