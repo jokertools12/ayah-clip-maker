@@ -2264,6 +2264,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       if ((background?.type || 'image') === 'animated') return slideshowReady || imageLoaded;
       return imageLoaded || Boolean(customBackground);
     },
+    isVideoNormalized: () => videoNormalized,
     ensureBackgroundPlayback,
     getRecordingDimensions,
     getRecommendedRecordingFps,
