@@ -375,9 +375,65 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         if (cancelled) return;
         videoRef.current = video;
         setVideoReady(true);
+        // Don't set normalized yet — that happens after FFmpeg normalization
         video.play().catch((err) => console.warn('Video play warning:', err));
         console.log(successLog);
         onBackgroundLoadMethod?.(method);
+      };
+
+      // After raw video is loaded, normalize it in background for recording
+      const normalizeInBackground = async (rawBlob: Blob) => {
+        if (cancelled) return;
+        const isPexels = /pexels/i.test(bgUrl);
+        if (!isPexels) {
+          // Non-Pexels videos: skip normalization, mark as ready
+          setVideoNormalized(true);
+          return;
+        }
+        
+        setNormalizingVideo(true);
+        console.log('🔄 Starting background video normalization for recording...');
+        
+        try {
+          const normalized = await normalizeBackgroundVideo(rawBlob, aspectRatio, {
+            maxWidth: aspectRatio === '9:16' ? 720 : 1280,
+            maxHeight: aspectRatio === '9:16' ? 1280 : 720,
+            onProgress: (ratio) => {
+              console.log(`🔄 Normalize progress: ${Math.round(ratio * 100)}%`);
+            },
+          });
+
+          if (cancelled) return;
+
+          // Replace video source with normalized version
+          if (normalizedBlobUrlRef.current) {
+            URL.revokeObjectURL(normalizedBlobUrlRef.current);
+          }
+          const normalizedUrl = URL.createObjectURL(normalized);
+          normalizedBlobUrlRef.current = normalizedUrl;
+
+          const video = videoRef.current;
+          if (video) {
+            const wasPlaying = !video.paused;
+            video.src = normalizedUrl;
+            video.load();
+            await new Promise<void>((resolve) => {
+              video.onloadeddata = () => resolve();
+              setTimeout(resolve, 3000); // timeout fallback
+            });
+            if (wasPlaying) {
+              try { await video.play(); } catch {}
+            }
+          }
+
+          setVideoNormalized(true);
+          setNormalizingVideo(false);
+          console.log('✅ Background video normalized successfully (CFR 30fps, H.264)');
+        } catch (err) {
+          console.warn('⚠️ Video normalization failed, using raw video:', err);
+          setVideoNormalized(true); // fallback: use raw
+          setNormalizingVideo(false);
+        }
       };
 
       const loadViaProxy = async () => {
