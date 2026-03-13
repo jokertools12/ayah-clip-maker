@@ -519,7 +519,6 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       cancelled = true;
       if (videoRef.current) {
         videoRef.current.pause();
-        // Remove from DOM if attached
         if (videoRef.current.parentNode) {
           videoRef.current.parentNode.removeChild(videoRef.current);
         }
@@ -527,6 +526,10 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       }
       if (localBlobUrl) {
         URL.revokeObjectURL(localBlobUrl);
+      }
+      if (normalizedBlobUrlRef.current) {
+        URL.revokeObjectURL(normalizedBlobUrlRef.current);
+        normalizedBlobUrlRef.current = null;
       }
       slideshowImagesRef.current = [];
       kenBurnsPresetsRef.current = [];
