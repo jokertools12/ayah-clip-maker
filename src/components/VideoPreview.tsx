@@ -218,7 +218,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   }, [aspectRatio]);
 
   const getRecommendedRecordingFps = useCallback(() => {
-    return 24; // Fixed cinematic FPS
+    return 30; // Smooth 30fps CFR for normalized videos
   }, []);
 
   const ensureBackgroundPlayback = useCallback(async () => {
