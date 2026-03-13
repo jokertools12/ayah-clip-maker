@@ -291,8 +291,14 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
 
     setImageLoaded(false);
     setVideoReady(false);
+    setVideoNormalized(false);
+    setNormalizingVideo(false);
     setSlideshowReady(false);
     slideshowImagesRef.current = [];
+    if (normalizedBlobUrlRef.current) {
+      URL.revokeObjectURL(normalizedBlobUrlRef.current);
+      normalizedBlobUrlRef.current = null;
+    }
 
     let cancelled = false;
     let localBlobUrl: string | null = null;
