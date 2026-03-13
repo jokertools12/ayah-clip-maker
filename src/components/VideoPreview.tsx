@@ -1,5 +1,6 @@
 import { useRef, useEffect, forwardRef, useImperativeHandle, useCallback, useState } from 'react';
 import { BackgroundItem } from '@/data/backgrounds';
+import { normalizeBackgroundVideo } from '@/lib/ffmpeg';
 
 // Font family mapping for canvas
 const FONT_MAP: Record<string, string> = {
