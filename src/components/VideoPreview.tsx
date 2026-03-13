@@ -479,7 +479,10 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
           localBlobUrl = URL.createObjectURL(blob);
           const video = createVideoEl();
           video.src = localBlobUrl;
-          video.onloadeddata = () => activateVideo(video, '✅ Video loaded as direct blob (same-origin)', 'direct');
+          video.onloadeddata = () => {
+            activateVideo(video, '✅ Video loaded as direct blob (same-origin)', 'direct');
+            normalizeInBackground(blob);
+          };
           video.onerror = () => {
             console.warn('Direct blob video element failed, trying proxy…');
             if (localBlobUrl) { URL.revokeObjectURL(localBlobUrl); localBlobUrl = null; }
