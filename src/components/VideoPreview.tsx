@@ -81,6 +81,7 @@ export interface VideoPreviewRef {
   getContainer: () => HTMLDivElement | null;
   getCanvas: () => HTMLCanvasElement | null;
   isBackgroundReady: () => boolean;
+  isVideoNormalized: () => boolean;
   ensureBackgroundPlayback: () => Promise<void>;
   getRecordingDimensions: () => { width: number; height: number };
   getRecommendedRecordingFps: () => number;
