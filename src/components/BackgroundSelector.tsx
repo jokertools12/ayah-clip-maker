@@ -171,7 +171,7 @@ export function BackgroundSelector({
           {!canUseFeature('pexelsVideos') ? (
             <div className="text-center py-8 space-y-3">
               <Lock className="h-8 w-8 mx-auto text-muted-foreground" />
-              <p className="text-muted-foreground">فيديوهات Pexels متاحة للأعضاء المميزين فقط</p>
+              <p className="text-muted-foreground">فيديوهات Pixabay متاحة للأعضاء المميزين فقط</p>
               <PremiumBadge showLock />
             </div>
           ) : (
