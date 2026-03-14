@@ -902,14 +902,14 @@ export default function PreviewPage() {
       return;
     }
 
-    // Check if video needs normalization (Pexels videos)
+    // Check if video needs normalization (only Pexels videos need it, Pixabay is pre-standardized)
     const backgroundUrl = customBackground || background?.url || '';
     const isVideoBackground = (background?.type || backgroundType) === 'video';
     const isPexelsBackground = isVideoBackground && /pexels/i.test(backgroundUrl);
+    const isPixabayBackground = isVideoBackground && /pixabay/i.test(backgroundUrl);
 
     if (isPexelsBackground && !previewApi.isVideoNormalized()) {
       toast.info('⏳ جاري تطبيع الفيديو (30fps, H.264)... يرجى الانتظار');
-      // Wait up to 60s for normalization to complete
       const waitStart = Date.now();
       while (!videoPreviewRef.current?.isVideoNormalized() && Date.now() - waitStart < 60000) {
         await new Promise(r => setTimeout(r, 500));
@@ -964,12 +964,15 @@ export default function PreviewPage() {
       };
 
       const targetQuality = clampQualityForDuration(exportSettings.quality);
-      // Default 30fps for smooth video — normalized Pexels videos are already CFR 30fps
+      // Default 30fps for smooth video
       const targetFps = isVeryLongRecording ? 24 : 30;
       const renderMode: 'recording' | 'recordingLite' = (isLongRecording || isVideoBackground) ? 'recordingLite' : 'recording';
 
       if (isPexelsBackground) {
         toast.info('تم تفعيل نمط التصدير المُحسّن (30fps سلس) لفيديوهات Pexels.');
+      }
+      if (isPixabayBackground) {
+        toast.info('فيديوهات Pixabay جاهزة مباشرة — لا تحتاج تطبيع.');
       }
 
       const recordingCanvas = document.createElement('canvas');

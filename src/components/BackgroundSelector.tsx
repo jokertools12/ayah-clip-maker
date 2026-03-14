@@ -92,24 +92,24 @@ export function BackgroundSelector({
   };
 
   const handlePexelsVideoSelect = (videoUrl: string, thumbnailUrl: string) => {
-    // Create a custom background item for the Pexels video
-    const pexelsBackground: BackgroundItem = {
-      id: `pexels-${Date.now()}`,
-      name: 'فيديو Pexels',
+    // Create a custom background item for the Pixabay video
+    const pixabayBackground: BackgroundItem = {
+      id: `pixabay-${Date.now()}`,
+      name: 'فيديو Pixabay',
       url: videoUrl,
       thumbnail: thumbnailUrl,
       type: 'video',
       category: 'nature',
     };
     onCustomBackgroundChange?.(null);
-    onSelect(pexelsBackground);
+    onSelect(pixabayBackground);
   };
 
   const tabDescriptions: Record<string, string> = {
     custom: 'ارفع صورة أو فيديو من جهازك',
     image: 'صور طبيعية عالية الجودة مع تأثير Ken Burns للحركة',
     slideshow: 'صور متغيرة ومتنوعة تتحرك وتتبدل تلقائياً',
-    pexels: 'فيديوهات احترافية من Pexels',
+    pexels: 'فيديوهات احترافية من Pixabay',
   };
 
   return (
@@ -171,7 +171,7 @@ export function BackgroundSelector({
           {!canUseFeature('pexelsVideos') ? (
             <div className="text-center py-8 space-y-3">
               <Lock className="h-8 w-8 mx-auto text-muted-foreground" />
-              <p className="text-muted-foreground">فيديوهات Pexels متاحة للأعضاء المميزين فقط</p>
+              <p className="text-muted-foreground">فيديوهات Pixabay متاحة للأعضاء المميزين فقط</p>
               <PremiumBadge showLock />
             </div>
           ) : (
