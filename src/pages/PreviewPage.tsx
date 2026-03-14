@@ -902,14 +902,14 @@ export default function PreviewPage() {
       return;
     }
 
-    // Check if video needs normalization (Pexels videos)
+    // Check if video needs normalization (only Pexels videos need it, Pixabay is pre-standardized)
     const backgroundUrl = customBackground || background?.url || '';
     const isVideoBackground = (background?.type || backgroundType) === 'video';
     const isPexelsBackground = isVideoBackground && /pexels/i.test(backgroundUrl);
+    const isPixabayBackground = isVideoBackground && /pixabay/i.test(backgroundUrl);
 
     if (isPexelsBackground && !previewApi.isVideoNormalized()) {
       toast.info('⏳ جاري تطبيع الفيديو (30fps, H.264)... يرجى الانتظار');
-      // Wait up to 60s for normalization to complete
       const waitStart = Date.now();
       while (!videoPreviewRef.current?.isVideoNormalized() && Date.now() - waitStart < 60000) {
         await new Promise(r => setTimeout(r, 500));
