@@ -6,19 +6,19 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import {
-  searchPexelsVideos,
-  PexelsVideo,
+  searchPixabayVideos,
+  PixabayVideo,
   VIDEO_CATEGORIES,
   VideoCategory,
   getBestVideoUrl,
-} from '@/lib/pexelsApi';
+} from '@/lib/pixabayApi';
 
 interface PexelsVideoSelectorProps {
   onSelect: (videoUrl: string, thumbnailUrl: string) => void;
 }
 
 export function PexelsVideoSelector({ onSelect }: PexelsVideoSelectorProps) {
-  const [videos, setVideos] = useState<PexelsVideo[]>([]);
+  const [videos, setVideos] = useState<PixabayVideo[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<VideoCategory>('nature');
@@ -27,8 +27,7 @@ export function PexelsVideoSelector({ onSelect }: PexelsVideoSelectorProps) {
   const fetchVideos = useCallback(async (query: string) => {
     setLoading(true);
     try {
-      const results = await searchPexelsVideos(query, {
-        orientation: 'portrait',
+      const results = await searchPixabayVideos(query, {
         perPage: 12,
       });
       setVideos(results);
@@ -58,10 +57,13 @@ export function PexelsVideoSelector({ onSelect }: PexelsVideoSelectorProps) {
     setSearchQuery('');
   };
 
-  const handleVideoSelect = (video: PexelsVideo) => {
+  const handleVideoSelect = (video: PixabayVideo) => {
     setSelectedVideoId(video.id);
-    const videoUrl = getBestVideoUrl(video);
-    onSelect(videoUrl, video.image);
+    // Use medium quality for preview, large will be used during recording if needed
+    const videoUrl = getBestVideoUrl(video, 'medium');
+    // Pixabay thumbnail from picture_id
+    const thumbnailUrl = `https://i.vimeocdn.com/video/${video.picture_id}_295x166.jpg`;
+    onSelect(videoUrl, thumbnailUrl);
   };
 
   return (
@@ -120,56 +122,59 @@ export function PexelsVideoSelector({ onSelect }: PexelsVideoSelectorProps) {
           </div>
         ) : (
           <div className="grid grid-cols-3 gap-2 p-1">
-            {videos.map((video) => (
-              <motion.div
-                key={video.id}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => handleVideoSelect(video)}
-                className={`relative cursor-pointer rounded-lg overflow-hidden aspect-[9/16] border-2 transition-all ${
-                  selectedVideoId === video.id
-                    ? 'border-primary ring-2 ring-primary/30'
-                    : 'border-transparent hover:border-primary/50'
-                }`}
-              >
-                <img
-                  src={video.image}
-                  alt="Video thumbnail"
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                
-                {/* Play indicator */}
-                <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity bg-black/30">
-                  <Play className="h-8 w-8 text-white" />
-                </div>
+            {videos.map((video) => {
+              const thumbUrl = `https://i.vimeocdn.com/video/${video.picture_id}_295x166.jpg`;
+              return (
+                <motion.div
+                  key={video.id}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => handleVideoSelect(video)}
+                  className={`relative cursor-pointer rounded-lg overflow-hidden aspect-[9/16] border-2 transition-all ${
+                    selectedVideoId === video.id
+                      ? 'border-primary ring-2 ring-primary/30'
+                      : 'border-transparent hover:border-primary/50'
+                  }`}
+                >
+                  <img
+                    src={thumbUrl}
+                    alt={video.tags}
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                  
+                  {/* Play indicator */}
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity bg-black/30">
+                    <Play className="h-8 w-8 text-white" />
+                  </div>
 
-                {/* Duration */}
-                <div className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/70 text-white text-xs">
-                  {Math.floor(video.duration / 60)}:{String(video.duration % 60).padStart(2, '0')}
-                </div>
+                  {/* Duration */}
+                  <div className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/70 text-white text-xs">
+                    {Math.floor(video.duration / 60)}:{String(video.duration % 60).padStart(2, '0')}
+                  </div>
 
-                {/* Selected indicator */}
-                {selectedVideoId === video.id && (
-                  <motion.div
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    className="absolute top-1 left-1 p-1 rounded-full bg-primary text-primary-foreground"
-                  >
-                    <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                  </motion.div>
-                )}
-              </motion.div>
-            ))}
+                  {/* Selected indicator */}
+                  {selectedVideoId === video.id && (
+                    <motion.div
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      className="absolute top-1 left-1 p-1 rounded-full bg-primary text-primary-foreground"
+                    >
+                      <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    </motion.div>
+                  )}
+                </motion.div>
+              );
+            })}
           </div>
         )}
       </ScrollArea>
 
       <p className="text-xs text-muted-foreground text-center">
-        مقاطع فيديو مقدمة من <a href="https://www.pexels.com" target="_blank" rel="noopener noreferrer" className="underline">Pexels</a>
+        مقاطع فيديو مقدمة من <a href="https://pixabay.com" target="_blank" rel="noopener noreferrer" className="underline">Pixabay</a>
       </p>
     </div>
   );
