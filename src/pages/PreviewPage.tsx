@@ -964,12 +964,15 @@ export default function PreviewPage() {
       };
 
       const targetQuality = clampQualityForDuration(exportSettings.quality);
-      // Default 30fps for smooth video — normalized Pexels videos are already CFR 30fps
+      // Default 30fps for smooth video
       const targetFps = isVeryLongRecording ? 24 : 30;
       const renderMode: 'recording' | 'recordingLite' = (isLongRecording || isVideoBackground) ? 'recordingLite' : 'recording';
 
       if (isPexelsBackground) {
         toast.info('تم تفعيل نمط التصدير المُحسّن (30fps سلس) لفيديوهات Pexels.');
+      }
+      if (isPixabayBackground) {
+        toast.info('فيديوهات Pixabay جاهزة مباشرة — لا تحتاج تطبيع.');
       }
 
       const recordingCanvas = document.createElement('canvas');

@@ -385,8 +385,10 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       const normalizeInBackground = async (rawBlob: Blob) => {
         if (cancelled) return;
         const isPexels = /pexels/i.test(bgUrl);
-        if (!isPexels) {
-          // Non-Pexels videos: skip normalization, mark as ready
+        const isPixabay = /pixabay/i.test(bgUrl);
+        
+        // Pixabay videos are already standardized (CFR, pre-sized) — skip normalization
+        if (isPixabay || !isPexels) {
           setVideoNormalized(true);
           return;
         }
