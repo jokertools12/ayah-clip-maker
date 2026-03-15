@@ -985,12 +985,12 @@ export default function PreviewPage() {
         audio.currentTime = recordingStartAt;
       }
 
-      // ── Dual-layer recording loop ──────────────────────────────────────────
-      // Layer 1: Draw video background every frame (ultra-fast: single drawImage)
-      // Layer 2: Draw text overlay every ~150ms on a separate transparent canvas
-      // Combine: video + overlay = smooth final output
+      // ── Smart recording loop with requestVideoFrameCallback ─────────────
+      // For video backgrounds: use rVFC to sync canvas draws with actual video frames
+      // For image/slideshow backgrounds: use rAF with full drawVideoFrame (includes Ken Burns)
       const frameTimelineOffsetMs = recordingStartAt * 1000;
       let rafId: number | null = null;
+      let rVFCId: number | null = null;
       let loopStartTime: number | null = null;
       let recordingStopped = false;
 
@@ -1010,58 +1010,97 @@ export default function PreviewPage() {
       let lastOverlayUpdateMs = 0;
       const OVERLAY_UPDATE_INTERVAL = 150;
 
-      const drawLoop = (timestamp: number) => {
-        if (recordingStopped) return;
-        if (loopStartTime === null) loopStartTime = timestamp;
-        const elapsedMs = timestamp - loopStartTime;
-
-        const ctx = recordingCanvas.getContext('2d');
-        if (!ctx) { rafId = requestAnimationFrame(drawLoop); return; }
-
-        // Layer 1: Draw video/image background directly (ultra-fast)
+      // Check if the background video element supports rVFC
+      const bgVideoEl = (() => {
         try {
-          const livePreviewApi = videoPreviewRef.current;
-          const drawVideo = livePreviewApi?.drawVideoFrame ?? previewApi.drawVideoFrame;
-          drawVideo(recordingCanvas);
-        } catch (e) {
-          console.warn('Video frame draw error:', e);
-        }
+          // Access the video element via the preview API's drawVideoFrame context
+          const container = videoPreviewRef.current?.getContainer();
+          if (!container) return null;
+          // The video is attached to document.body (hidden), find it
+          const videos = document.querySelectorAll('video[style*="fixed"]');
+          for (const v of videos) {
+            if ((v as HTMLVideoElement).readyState >= 2 && !(v as HTMLVideoElement).paused) {
+              return v as HTMLVideoElement;
+            }
+          }
+          return null;
+        } catch { return null; }
+      })();
+      
+      const useRVFC = isVideoBackground && bgVideoEl && 'requestVideoFrameCallback' in bgVideoEl;
 
-        // Layer 2: Update overlay periodically (text, badges, watermark)
+      const updateOverlayIfNeeded = (elapsedMs: number) => {
         if (elapsedMs - lastOverlayUpdateMs >= OVERLAY_UPDATE_INTERVAL) {
           lastOverlayUpdateMs = elapsedMs;
           try {
             const livePreviewApi = videoPreviewRef.current;
             const drawOverlay = livePreviewApi?.drawFrame ?? previewApi.drawFrame;
             drawOverlay(overlayCanvas, 'overlayOnly', frameTimelineOffsetMs + elapsedMs);
-          } catch (e) {
-            console.warn('Overlay draw error:', e);
-          }
+          } catch {}
+        }
+      };
+
+      const drawComposite = (elapsedMs: number) => {
+        const ctx = recordingCanvas.getContext('2d');
+        if (!ctx) return;
+
+        // Layer 1: Draw background (video/image/slideshow with Ken Burns)
+        try {
+          const livePreviewApi = videoPreviewRef.current;
+          const drawBg = livePreviewApi?.drawVideoFrame ?? previewApi.drawVideoFrame;
+          drawBg(recordingCanvas);
+        } catch (e) {
+          console.warn('Background frame draw error:', e);
         }
 
-        // Composite: draw cached overlay on top of video
+        // Layer 2: Update overlay periodically
+        updateOverlayIfNeeded(elapsedMs);
+
+        // Composite overlay on top
         ctx.drawImage(overlayCanvas, 0, 0);
 
         // Stop when duration exceeded
         if (elapsedMs >= recordingDuration * 1000) {
           recordingStopped = true;
-          return;
         }
-
-        rafId = requestAnimationFrame(drawLoop);
       };
+
+      if (useRVFC) {
+        // requestVideoFrameCallback path — only draw when a real video frame arrives
+        console.log('🎬 Using requestVideoFrameCallback for recording sync');
+        const rVFCLoop = (_now: DOMHighResTimeStamp, _metadata: any) => {
+          if (recordingStopped) return;
+          if (loopStartTime === null) loopStartTime = performance.now();
+          const elapsedMs = performance.now() - loopStartTime;
+          drawComposite(elapsedMs);
+          if (!recordingStopped) {
+            rVFCId = (bgVideoEl as any).requestVideoFrameCallback(rVFCLoop);
+          }
+        };
+        rVFCId = (bgVideoEl as any).requestVideoFrameCallback(rVFCLoop);
+      } else {
+        // Standard rAF path — for image/slideshow backgrounds or fallback
+        console.log('🎬 Using requestAnimationFrame for recording sync');
+        const drawLoop = (timestamp: number) => {
+          if (recordingStopped) return;
+          if (loopStartTime === null) loopStartTime = timestamp;
+          const elapsedMs = timestamp - loopStartTime;
+          drawComposite(elapsedMs);
+          if (!recordingStopped) {
+            rafId = requestAnimationFrame(drawLoop);
+          }
+        };
+        rafId = requestAnimationFrame(drawLoop);
+      }
 
       // Draw first frame fully
       try {
         const livePreviewApi = videoPreviewRef.current;
-        const drawVideo = livePreviewApi?.drawVideoFrame ?? previewApi.drawVideoFrame;
-        drawVideo(recordingCanvas);
+        const drawBg = livePreviewApi?.drawVideoFrame ?? previewApi.drawVideoFrame;
+        drawBg(recordingCanvas);
         const ctx = recordingCanvas.getContext('2d');
         if (ctx) ctx.drawImage(overlayCanvas, 0, 0);
       } catch {}
-
-      // Start the continuous drawing loop BEFORE recording starts
-      rafId = requestAnimationFrame(drawLoop);
 
       toast.info('بدء التسجيل...');
 

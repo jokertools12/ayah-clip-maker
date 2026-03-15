@@ -2305,15 +2305,74 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     }
   }, [onCanvasReady]);
 
-  // Ultra-lightweight: draw ONLY the video element to a target canvas
+  // Ultra-lightweight: draw ONLY the background to a target canvas (video, image with Ken Burns, or slideshow)
   const drawVideoFrame = useCallback((targetCanvas: HTMLCanvasElement) => {
     const ctx = targetCanvas.getContext('2d');
     if (!ctx) return;
     const video = videoRef.current;
+
+    // Priority 1: Video background
     if (video && video.readyState >= 2 && !video.paused) {
       ctx.drawImage(video, 0, 0, targetCanvas.width, targetCanvas.height);
-    } else if (imageRef.current && imageLoaded) {
-      // Fallback for image backgrounds
+      return;
+    }
+
+    // Priority 2: Slideshow background with Ken Burns
+    const slides = slideshowImagesRef.current;
+    if (slides.length > 1 && slideshowReady) {
+      const now = performance.now();
+      const totalCycleDuration = SLIDESHOW_DISPLAY_DURATION + SLIDESHOW_TRANSITION_DURATION;
+      const elapsed = now - slideshowStartTimeRef.current;
+      const currentIndex = Math.floor(elapsed / totalCycleDuration) % slides.length;
+      const nextIndex = (currentIndex + 1) % slides.length;
+      const withinCycle = elapsed % totalCycleDuration;
+      const isTransitioning = withinCycle > SLIDESHOW_DISPLAY_DURATION;
+      const transitionProgress = isTransitioning
+        ? (withinCycle - SLIDESHOW_DISPLAY_DURATION) / SLIDESHOW_TRANSITION_DURATION
+        : 0;
+
+      // Progress within current image display (0→1)
+      const displayProgress = Math.min(withinCycle / SLIDESHOW_DISPLAY_DURATION, 1);
+
+      const drawSlideWithKenBurns = (img: HTMLImageElement, idx: number, progress: number, alpha: number) => {
+        const preset = kenBurnsPresetsRef.current[idx % kenBurnsPresetsRef.current.length];
+        if (!preset || !img) return;
+        const zoom = preset.zoomStart + (preset.zoomEnd - preset.zoomStart) * progress;
+        const panX = preset.panXStart + (preset.panXEnd - preset.panXStart) * progress;
+        const panY = preset.panYStart + (preset.panYEnd - preset.panYStart) * progress;
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        const cw = targetCanvas.width;
+        const ch = targetCanvas.height;
+        const imgRatio = img.naturalWidth / img.naturalHeight;
+        const canvasRatio = cw / ch;
+        let sw = img.naturalWidth, sh = img.naturalHeight, sx = 0, sy = 0;
+        if (imgRatio > canvasRatio) {
+          sw = img.naturalHeight * canvasRatio;
+          sx = (img.naturalWidth - sw) / 2;
+        } else {
+          sh = img.naturalWidth / canvasRatio;
+          sy = (img.naturalHeight - sh) / 2;
+        }
+        ctx.translate(cw / 2 + panX, ch / 2 + panY);
+        ctx.scale(zoom, zoom);
+        ctx.translate(-cw / 2, -ch / 2);
+        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, cw, ch);
+        ctx.restore();
+      };
+
+      // Draw current image
+      drawSlideWithKenBurns(slides[currentIndex], currentIndex, displayProgress, isTransitioning ? 1 - transitionProgress : 1);
+      // Draw next image during transition
+      if (isTransitioning && slides[nextIndex]) {
+        drawSlideWithKenBurns(slides[nextIndex], nextIndex, 0, transitionProgress);
+      }
+      return;
+    }
+
+    // Priority 3: Static image with Ken Burns motion
+    if (imageRef.current && imageLoaded) {
       const img = imageRef.current;
       const imgRatio = img.naturalWidth / img.naturalHeight;
       const canvasRatio = targetCanvas.width / targetCanvas.height;
@@ -2325,9 +2384,19 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         sh = img.naturalWidth / canvasRatio;
         sy = (img.naturalHeight - sh) / 2;
       }
+      // Apply subtle Ken Burns to static images during recording
+      const t = (performance.now() % 20000) / 20000; // 20s cycle
+      const zoom = 1.0 + 0.08 * Math.sin(t * Math.PI * 2);
+      const panX = 10 * Math.sin(t * Math.PI * 2 * 0.7);
+      const panY = 6 * Math.cos(t * Math.PI * 2 * 0.5);
+      ctx.save();
+      ctx.translate(targetCanvas.width / 2 + panX, targetCanvas.height / 2 + panY);
+      ctx.scale(zoom, zoom);
+      ctx.translate(-targetCanvas.width / 2, -targetCanvas.height / 2);
       ctx.drawImage(img, sx, sy, sw, sh, 0, 0, targetCanvas.width, targetCanvas.height);
+      ctx.restore();
     }
-  }, [imageLoaded]);
+  }, [imageLoaded, slideshowReady]);
 
   useImperativeHandle(ref, () => ({
     getContainer: () => containerRef.current,
