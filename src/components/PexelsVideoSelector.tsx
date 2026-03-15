@@ -59,11 +59,15 @@ export function PexelsVideoSelector({ onSelect }: PexelsVideoSelectorProps) {
 
   const handleVideoSelect = (video: PixabayVideo) => {
     setSelectedVideoId(video.id);
-    // Use medium quality for preview, large will be used during recording if needed
+    // Use medium quality for preview
     const videoUrl = getBestVideoUrl(video, 'medium');
-    // Pixabay thumbnail from picture_id
-    const thumbnailUrl = `https://i.vimeocdn.com/video/${video.picture_id}_295x166.jpg`;
+    // Store large URL in a data attribute for recording quality upgrade
+    const thumbnailUrl = video.videos.tiny?.url || video.videos.small?.url || '';
+    // Pass both medium (preview) and large (recording) URLs via a separator
+    const largeUrl = getBestVideoUrl(video, 'large');
     onSelect(videoUrl, thumbnailUrl);
+    // Store pixabay metadata for quality switching
+    (window as any).__pixabayLargeUrl = largeUrl;
   };
 
   return (
