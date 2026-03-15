@@ -127,7 +127,7 @@ export function PexelsVideoSelector({ onSelect }: PexelsVideoSelectorProps) {
         ) : (
           <div className="grid grid-cols-3 gap-2 p-1">
             {videos.map((video) => {
-              const thumbUrl = `https://i.vimeocdn.com/video/${video.picture_id}_295x166.jpg`;
+              const tinyUrl = video.videos.tiny?.url || video.videos.small?.url || '';
               return (
                 <motion.div
                   key={video.id}
@@ -140,11 +140,13 @@ export function PexelsVideoSelector({ onSelect }: PexelsVideoSelectorProps) {
                       : 'border-transparent hover:border-primary/50'
                   }`}
                 >
-                  <img
-                    src={thumbUrl}
-                    alt={video.tags}
+                  <video
+                    src={tinyUrl}
+                    muted
+                    loop
+                    playsInline
+                    autoPlay
                     className="w-full h-full object-cover"
-                    loading="lazy"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                   
