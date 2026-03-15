@@ -59,11 +59,15 @@ export function PexelsVideoSelector({ onSelect }: PexelsVideoSelectorProps) {
 
   const handleVideoSelect = (video: PixabayVideo) => {
     setSelectedVideoId(video.id);
-    // Use medium quality for preview, large will be used during recording if needed
+    // Use medium quality for preview
     const videoUrl = getBestVideoUrl(video, 'medium');
-    // Pixabay thumbnail from picture_id
-    const thumbnailUrl = `https://i.vimeocdn.com/video/${video.picture_id}_295x166.jpg`;
+    // Store large URL in a data attribute for recording quality upgrade
+    const thumbnailUrl = video.videos.tiny?.url || video.videos.small?.url || '';
+    // Pass both medium (preview) and large (recording) URLs via a separator
+    const largeUrl = getBestVideoUrl(video, 'large');
     onSelect(videoUrl, thumbnailUrl);
+    // Store pixabay metadata for quality switching
+    (window as any).__pixabayLargeUrl = largeUrl;
   };
 
   return (
@@ -123,7 +127,7 @@ export function PexelsVideoSelector({ onSelect }: PexelsVideoSelectorProps) {
         ) : (
           <div className="grid grid-cols-3 gap-2 p-1">
             {videos.map((video) => {
-              const thumbUrl = `https://i.vimeocdn.com/video/${video.picture_id}_295x166.jpg`;
+              const tinyUrl = video.videos.tiny?.url || video.videos.small?.url || '';
               return (
                 <motion.div
                   key={video.id}
@@ -136,11 +140,13 @@ export function PexelsVideoSelector({ onSelect }: PexelsVideoSelectorProps) {
                       : 'border-transparent hover:border-primary/50'
                   }`}
                 >
-                  <img
-                    src={thumbUrl}
-                    alt={video.tags}
+                  <video
+                    src={tinyUrl}
+                    muted
+                    loop
+                    playsInline
+                    autoPlay
                     className="w-full h-full object-cover"
-                    loading="lazy"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                   

@@ -88,11 +88,11 @@ export async function searchPixabayVideos(
 }
 
 /**
- * Get the thumbnail URL for a Pixabay video
+ * Get the thumbnail URL for a Pixabay video.
+ * Uses the tiny video URL as a poster source (Pixabay doesn't provide static thumbnails).
  */
 export function getVideoThumbnail(video: PixabayVideo): string {
-  // Pixabay provides picture_id for thumbnails
-  return `https://i.vimeocdn.com/video/${video.picture_id}_295x166.jpg`;
+  return video.videos.tiny?.url || video.videos.small?.url || '';
 }
 
 /**
