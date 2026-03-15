@@ -1125,6 +1125,9 @@ export default function PreviewPage() {
       // Cleanup drawing loop
       recordingStopped = true;
       if (rafId !== null) cancelAnimationFrame(rafId);
+      if (rVFCId !== null && bgVideoEl && 'cancelVideoFrameCallback' in bgVideoEl) {
+        (bgVideoEl as any).cancelVideoFrameCallback(rVFCId);
+      }
 
       if (blob) {
         toast.success('تم إنشاء الفيديو! جاري تحويله إلى MP4 (CFR 30fps)...');
