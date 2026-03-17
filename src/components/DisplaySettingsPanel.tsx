@@ -25,13 +25,17 @@ export interface DisplaySettings {
   surahNameStyle: 'classic' | 'banner' | 'calligraphy' | 'circle' | 'diamond' | 'ribbon';
   reciterNameStyle: 'simple' | 'elegant' | 'badge' | 'tag' | 'glow';
   textShadowStyle: 'soft' | 'strong' | 'none' | 'glow';
+  decorationStyle: 'none' | 'sideBorder' | 'separator' | 'both';
   ayahTransition: 'none' | 'fade' | 'slide' | 'zoom' | 'blur' | 'rise' | 'rotate' | 'cinematic' | 'elastic' | 'random';
+  particleDensity: 'off' | 'low' | 'medium' | 'high';
   watermarkEnabled: boolean;
   watermarkText: string;
   watermarkPosition: 'bottomLeft' | 'bottomRight' | 'topLeft' | 'topRight' | 'bottomCenter';
+  performanceMode: 'economy' | 'balanced' | 'pro';
   glowStyle: 'none' | 'golden' | 'soft' | 'neon' | 'pulse';
   lyricsDisplayStyle: 'scroll' | 'single' | 'karaoke' | 'fade';
   slideshowTransition: 'crossfade' | 'slideLeft' | 'slideRight' | 'slideUp' | 'zoomThrough' | 'wipe' | 'mixed';
+  wordScaleEffect: boolean;
 }
 
 interface DisplaySettingsPanelProps {
@@ -81,6 +85,12 @@ const textShadowOptions = [
   { value: 'none', label: 'بدون ظل', description: 'نص مسطح' },
 ];
 
+const decorationOptions = [
+  { value: 'none', label: 'نظيف', description: 'بدون زخرفة' },
+  { value: 'sideBorder', label: 'زخارف جانبية', description: 'رموز يمين/يسار' },
+  { value: 'separator', label: 'فاصل علوي', description: 'خط/موجة فوق الآيات' },
+  { value: 'both', label: 'كلاهما', description: 'جانبية + فاصل' },
+];
 
 const transitionOptions = [
   { value: 'none', label: 'بدون انتقال', description: 'ظهور مباشر' },
@@ -160,6 +170,11 @@ const watermarkPositionOptions = [
   { value: 'topLeft', label: 'أعلى يسار' },
 ];
 
+const performanceModeOptions = [
+  { value: 'economy', label: '🔋 اقتصادي', description: 'أداء أخف وأسرع' },
+  { value: 'balanced', label: '⚖️ متوازن', description: 'توازن جودة وأداء' },
+  { value: 'pro', label: '🎬 احترافي', description: 'أعلى جودة بصرية' },
+];
 
 const TEMPLATES_KEY = 'ayah-clip-display-templates';
 
@@ -388,6 +403,17 @@ export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPane
                 </RadioGroup>
               </div>
 
+              {/* Word Scale Effect Toggle */}
+              <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border/50">
+                <div className="space-y-0.5">
+                  <Label className="text-sm font-medium">تأثير تكبير الكلمة</Label>
+                  <p className="text-xs text-muted-foreground">تكبير الكلمة المميزة أثناء النطق</p>
+                </div>
+                <Switch
+                  checked={settings.wordScaleEffect !== false}
+                  onCheckedChange={(checked) => onChange({ ...settings, wordScaleEffect: checked })}
+                />
+              </div>
             </AccordionContent>
           </AccordionItem>
 
@@ -469,6 +495,19 @@ export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPane
                 />
               </div>
 
+              {/* Decoration Style */}
+              <div className="space-y-3">
+                <Label className="text-sm flex items-center gap-2">
+                  <Sparkles className="h-4 w-4" />
+                  زخرفة حول الآيات
+                </Label>
+                <RadioOptionGrid
+                  options={decorationOptions}
+                  value={settings.decorationStyle || 'none'}
+                  onChange={(v) => updateSetting('decorationStyle', v as DisplaySettings['decorationStyle'])}
+                  idPrefix="deco"
+                />
+              </div>
             </AccordionContent>
           </AccordionItem>
 
@@ -506,6 +545,17 @@ export function DisplaySettingsPanel({ settings, onChange }: DisplaySettingsPane
                 />
               </div>
 
+              {/* Performance Mode */}
+              <div className="space-y-3">
+                <Label className="text-sm">⚡ وضع الأداء</Label>
+                <RadioOptionGrid
+                  options={performanceModeOptions}
+                  value={settings.performanceMode || 'balanced'}
+                  onChange={(v) => updateSetting('performanceMode', v as DisplaySettings['performanceMode'])}
+                  idPrefix="perf"
+                  columns={3}
+                />
+              </div>
             </AccordionContent>
           </AccordionItem>
 

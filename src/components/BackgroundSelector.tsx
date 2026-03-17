@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Check, Image as ImageIcon, Sparkles, Upload, Video, Film, Lock } from 'lucide-react';
+import { Check, Image as ImageIcon, Sparkles, Upload, Video, Lock } from 'lucide-react';
 import { BackgroundItem, backgroundImages, slideshowBackgrounds } from '@/data/backgrounds';
 import { CustomBackgroundUploader } from '@/components/CustomBackgroundUploader';
 import { PexelsVideoSelector } from '@/components/PexelsVideoSelector';
-import { PexelsOriginalVideoSelector } from '@/components/PexelsOriginalVideoSelector';
 import { PremiumBadge } from '@/components/PremiumBadge';
 import { useSubscription } from '@/hooks/useSubscription';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -24,7 +23,7 @@ export function BackgroundSelector({
   customBackground, 
   onCustomBackgroundChange 
 }: BackgroundSelectorProps) {
-  const [activeTab, setActiveTab] = useState<'custom' | 'image' | 'slideshow' | 'pixabay' | 'pexels'>('image');
+  const [activeTab, setActiveTab] = useState<'custom' | 'image' | 'slideshow' | 'pexels'>('image');
   const { canUseFeature, isPremium } = useSubscription();
 
   const renderBackgroundCard = (bg: BackgroundItem) => {
@@ -92,20 +91,8 @@ export function BackgroundSelector({
     );
   };
 
-  const handlePixabayVideoSelect = (videoUrl: string, thumbnailUrl: string) => {
-    const pixabayBackground: BackgroundItem = {
-      id: `pixabay-${Date.now()}`,
-      name: 'فيديو Pixabay',
-      url: videoUrl,
-      thumbnail: thumbnailUrl,
-      type: 'video',
-      category: 'nature',
-    };
-    onCustomBackgroundChange?.(null);
-    onSelect(pixabayBackground);
-  };
-
   const handlePexelsVideoSelect = (videoUrl: string, thumbnailUrl: string) => {
+    // Create a custom background item for the Pexels video
     const pexelsBackground: BackgroundItem = {
       id: `pexels-${Date.now()}`,
       name: 'فيديو Pexels',
@@ -122,14 +109,13 @@ export function BackgroundSelector({
     custom: 'ارفع صورة أو فيديو من جهازك',
     image: 'صور طبيعية عالية الجودة مع تأثير Ken Burns للحركة',
     slideshow: 'صور متغيرة ومتنوعة تتحرك وتتبدل تلقائياً',
-    pixabay: 'فيديوهات احترافية من Pixabay',
     pexels: 'فيديوهات احترافية من Pexels',
   };
 
   return (
     <div className="space-y-4">
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
-        <TabsList className="w-full grid grid-cols-5">
+        <TabsList className="w-full grid grid-cols-4">
           <TabsTrigger value="custom" className="gap-1 text-xs sm:text-sm">
             <Upload className="h-4 w-4" />
             <span className="hidden sm:inline">رفع</span>
@@ -143,14 +129,9 @@ export function BackgroundSelector({
             <span className="hidden sm:inline">متغيرة</span>
             {!isPremium && <Lock className="h-3 w-3 opacity-60" />}
           </TabsTrigger>
-          <TabsTrigger value="pixabay" className="gap-1 text-xs sm:text-sm">
-            <Video className="h-4 w-4" />
-            <span className="hidden sm:inline">Pixabay</span>
-            {!isPremium && <Lock className="h-3 w-3 opacity-60" />}
-          </TabsTrigger>
           <TabsTrigger value="pexels" className="gap-1 text-xs sm:text-sm">
-            <Film className="h-4 w-4" />
-            <span className="hidden sm:inline">Pexels</span>
+            <Video className="h-4 w-4" />
+            <span className="hidden sm:inline">فيديو</span>
             {!isPremium && <Lock className="h-3 w-3 opacity-60" />}
           </TabsTrigger>
         </TabsList>
@@ -186,18 +167,6 @@ export function BackgroundSelector({
           )}
         </TabsContent>
 
-        <TabsContent value="pixabay" className="mt-4">
-          {!canUseFeature('pexelsVideos') ? (
-            <div className="text-center py-8 space-y-3">
-              <Lock className="h-8 w-8 mx-auto text-muted-foreground" />
-              <p className="text-muted-foreground">فيديوهات Pixabay متاحة للأعضاء المميزين فقط</p>
-              <PremiumBadge showLock />
-            </div>
-          ) : (
-            <PexelsVideoSelector onSelect={handlePixabayVideoSelect} />
-          )}
-        </TabsContent>
-
         <TabsContent value="pexels" className="mt-4">
           {!canUseFeature('pexelsVideos') ? (
             <div className="text-center py-8 space-y-3">
@@ -206,7 +175,7 @@ export function BackgroundSelector({
               <PremiumBadge showLock />
             </div>
           ) : (
-            <PexelsOriginalVideoSelector onSelect={handlePexelsVideoSelect} />
+            <PexelsVideoSelector onSelect={handlePexelsVideoSelect} />
           )}
         </TabsContent>
       </Tabs>

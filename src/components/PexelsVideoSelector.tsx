@@ -6,19 +6,19 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import {
-  searchPixabayVideos,
-  PixabayVideo,
+  searchPexelsVideos,
+  PexelsVideo,
   VIDEO_CATEGORIES,
   VideoCategory,
   getBestVideoUrl,
-} from '@/lib/pixabayApi';
+} from '@/lib/pexelsApi';
 
 interface PexelsVideoSelectorProps {
   onSelect: (videoUrl: string, thumbnailUrl: string) => void;
 }
 
 export function PexelsVideoSelector({ onSelect }: PexelsVideoSelectorProps) {
-  const [videos, setVideos] = useState<PixabayVideo[]>([]);
+  const [videos, setVideos] = useState<PexelsVideo[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<VideoCategory>('nature');
@@ -27,7 +27,8 @@ export function PexelsVideoSelector({ onSelect }: PexelsVideoSelectorProps) {
   const fetchVideos = useCallback(async (query: string) => {
     setLoading(true);
     try {
-      const results = await searchPixabayVideos(query, {
+      const results = await searchPexelsVideos(query, {
+        orientation: 'portrait',
         perPage: 12,
       });
       setVideos(results);
@@ -57,17 +58,10 @@ export function PexelsVideoSelector({ onSelect }: PexelsVideoSelectorProps) {
     setSearchQuery('');
   };
 
-  const handleVideoSelect = (video: PixabayVideo) => {
+  const handleVideoSelect = (video: PexelsVideo) => {
     setSelectedVideoId(video.id);
-    // Use medium quality for preview
-    const videoUrl = getBestVideoUrl(video, 'medium');
-    // Store large URL in a data attribute for recording quality upgrade
-    const thumbnailUrl = video.videos.tiny?.url || video.videos.small?.url || '';
-    // Pass both medium (preview) and large (recording) URLs via a separator
-    const largeUrl = getBestVideoUrl(video, 'large');
-    onSelect(videoUrl, thumbnailUrl);
-    // Store pixabay metadata for quality switching
-    (window as any).__pixabayLargeUrl = largeUrl;
+    const videoUrl = getBestVideoUrl(video);
+    onSelect(videoUrl, video.image);
   };
 
   return (
@@ -126,61 +120,56 @@ export function PexelsVideoSelector({ onSelect }: PexelsVideoSelectorProps) {
           </div>
         ) : (
           <div className="grid grid-cols-3 gap-2 p-1">
-            {videos.map((video) => {
-              const tinyUrl = video.videos.tiny?.url || video.videos.small?.url || '';
-              return (
-                <motion.div
-                  key={video.id}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => handleVideoSelect(video)}
-                  className={`relative cursor-pointer rounded-lg overflow-hidden aspect-[9/16] border-2 transition-all ${
-                    selectedVideoId === video.id
-                      ? 'border-primary ring-2 ring-primary/30'
-                      : 'border-transparent hover:border-primary/50'
-                  }`}
-                >
-                  <video
-                    src={tinyUrl}
-                    muted
-                    loop
-                    playsInline
-                    autoPlay
-                    className="w-full h-full object-cover"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                  
-                  {/* Play indicator */}
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity bg-black/30">
-                    <Play className="h-8 w-8 text-white" />
-                  </div>
+            {videos.map((video) => (
+              <motion.div
+                key={video.id}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => handleVideoSelect(video)}
+                className={`relative cursor-pointer rounded-lg overflow-hidden aspect-[9/16] border-2 transition-all ${
+                  selectedVideoId === video.id
+                    ? 'border-primary ring-2 ring-primary/30'
+                    : 'border-transparent hover:border-primary/50'
+                }`}
+              >
+                <img
+                  src={video.image}
+                  alt="Video thumbnail"
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                
+                {/* Play indicator */}
+                <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity bg-black/30">
+                  <Play className="h-8 w-8 text-white" />
+                </div>
 
-                  {/* Duration */}
-                  <div className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/70 text-white text-xs">
-                    {Math.floor(video.duration / 60)}:{String(video.duration % 60).padStart(2, '0')}
-                  </div>
+                {/* Duration */}
+                <div className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/70 text-white text-xs">
+                  {Math.floor(video.duration / 60)}:{String(video.duration % 60).padStart(2, '0')}
+                </div>
 
-                  {/* Selected indicator */}
-                  {selectedVideoId === video.id && (
-                    <motion.div
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      className="absolute top-1 left-1 p-1 rounded-full bg-primary text-primary-foreground"
-                    >
-                      <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
-                    </motion.div>
-                  )}
-                </motion.div>
-              );
-            })}
+                {/* Selected indicator */}
+                {selectedVideoId === video.id && (
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    className="absolute top-1 left-1 p-1 rounded-full bg-primary text-primary-foreground"
+                  >
+                    <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  </motion.div>
+                )}
+              </motion.div>
+            ))}
           </div>
         )}
       </ScrollArea>
 
       <p className="text-xs text-muted-foreground text-center">
-        مقاطع فيديو مقدمة من <a href="https://pixabay.com" target="_blank" rel="noopener noreferrer" className="underline">Pixabay</a>
+        مقاطع فيديو مقدمة من <a href="https://www.pexels.com" target="_blank" rel="noopener noreferrer" className="underline">Pexels</a>
       </p>
     </div>
   );

@@ -88,13 +88,17 @@ const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
   surahNameStyle: 'classic',
   reciterNameStyle: 'simple',
   textShadowStyle: 'soft',
+  decorationStyle: 'none',
   ayahTransition: 'fade',
+  particleDensity: 'off',
   watermarkEnabled: false,
   watermarkText: '',
   watermarkPosition: 'bottomRight',
+  performanceMode: 'balanced',
   glowStyle: 'golden',
   lyricsDisplayStyle: 'scroll',
   slideshowTransition: 'crossfade',
+  wordScaleEffect: true,
 };
 
 // Note: frameStyle defaults to 'none' — user must explicitly select a frame
@@ -103,6 +107,7 @@ const DEFAULT_EXPORT_SETTINGS: ExportSettings = {
   format: 'mp4',
   quality: 'high',
   motionSpeed: 1.5,
+  recordingMethod: 'auto',
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -242,7 +247,6 @@ export default function PreviewPage() {
   const currentAyahIndexRef = useRef(0);
   const ayahsRef = useRef<{ numberInSurah: number; text: string }[]>([]);
   const recordingUiLastUpdateRef = useRef(0);
-  const recordingSyncLastUpdateRef = useRef(0);
 
   // ── Reset transcription state when switching ibtahalat tracks ────────────────
   const prevIbtAudioUrlRef = useRef(ibtAudioUrl);
@@ -529,12 +533,6 @@ export default function PreviewPage() {
       const nowSec = audio.currentTime;
       const nowMs = nowSec * 1000;
       const isRecordingNow = videoRecorder.isRecording;
-
-      if (isRecordingNow) {
-        const syncTs = performance.now();
-        if (syncTs - recordingSyncLastUpdateRef.current < 120) return;
-        recordingSyncLastUpdateRef.current = syncTs;
-      }
 
       const updateTimeline = (timeSec: number, percent: number) => {
         if (isRecordingNow) {
@@ -902,26 +900,7 @@ export default function PreviewPage() {
       return;
     }
 
-    // Check if video needs normalization (only Pexels videos need it, Pixabay is pre-standardized)
-    const backgroundUrl = customBackground || background?.url || '';
-    const isVideoBackground = (background?.type || backgroundType) === 'video';
-    const isPexelsBackground = isVideoBackground && /pexels/i.test(backgroundUrl);
-    const isPixabayBackground = isVideoBackground && /pixabay/i.test(backgroundUrl);
-
-    if (isPexelsBackground && !previewApi.isVideoNormalized()) {
-      toast.info('⏳ جاري تطبيع الفيديو (30fps, H.264)... يرجى الانتظار');
-      const waitStart = Date.now();
-      while (!videoPreviewRef.current?.isVideoNormalized() && Date.now() - waitStart < 60000) {
-        await new Promise(r => setTimeout(r, 500));
-      }
-      if (!videoPreviewRef.current?.isVideoNormalized()) {
-        toast.warning('تم تجاوز وقت التطبيع — سيتم استخدام الفيديو الخام');
-      } else {
-        toast.success('✅ تم تطبيع الفيديو بنجاح');
-      }
-    }
-
-    // Check daily usage limit
+    // Check daily usage limit - enforce strictly by pre-checking
     if (isAuthenticated && user) {
       const canCreate = await incrementUsage();
       if (!canCreate) {
@@ -934,10 +913,12 @@ export default function PreviewPage() {
       await audioEffects.resumeContext();
       await previewApi.ensureBackgroundPlayback();
 
+      // Determine recording duration based on playback mode
       const audio = audioRef.current;
       let recordingDuration: number;
       let recordingStartAt = 0;
 
+      // Ibtahalat trim mode
       if (isIbtahalatMode && trimEnabled && trimEnd > trimStart) {
         recordingDuration = trimEnd - trimStart;
         recordingStartAt = trimStart;
@@ -954,196 +935,190 @@ export default function PreviewPage() {
 
       const isLongRecording = recordingDuration >= 45;
       const isVeryLongRecording = recordingDuration >= 90;
-
+      const longRecordingFpsCap = isVeryLongRecording ? 18 : isLongRecording ? 20 : 30;
       const clampQualityForDuration = (quality: ExportQuality): ExportQuality => {
         if (isVeryLongRecording) return 'low';
-        if (isPexelsBackground && recordingDuration >= 45) return 'low';
-        if (isLongRecording && (quality === 'ultra' || quality === 'high')) return 'medium';
-        if (isPexelsBackground && quality === 'ultra') return 'medium';
+        if (!isLongRecording) return quality;
+        if (quality === 'ultra' || quality === 'high') return 'medium';
         return quality;
       };
 
-      const targetQuality = clampQualityForDuration(exportSettings.quality);
-      // Default 30fps for smooth video
-      const targetFps = isVeryLongRecording ? 24 : 30;
-      const renderMode: 'recording' | 'recordingLite' = (isLongRecording || isVideoBackground) ? 'recordingLite' : 'recording';
-
-      if (isPexelsBackground) {
-        toast.info('تم تفعيل نمط التصدير المُحسّن (30fps سلس) لفيديوهات Pexels.');
-      }
-      if (isPixabayBackground) {
-        toast.info('فيديوهات Pixabay جاهزة مباشرة — لا تحتاج تطبيع.');
-      }
-
-      const recordingCanvas = document.createElement('canvas');
-      const recordingDimensions = getQualityDimensions(targetQuality, aspectRatio);
-      recordingCanvas.width = recordingDimensions.width;
-      recordingCanvas.height = recordingDimensions.height;
-
-      if (audio) {
-        audio.pause();
-        audio.currentTime = recordingStartAt;
-      }
-
-      // ── Smart recording loop with requestVideoFrameCallback ─────────────
-      // For video backgrounds: use rVFC to sync canvas draws with actual video frames
-      // For image/slideshow backgrounds: use rAF with full drawVideoFrame (includes Ken Burns)
-      const frameTimelineOffsetMs = recordingStartAt * 1000;
-      let rafId: number | null = null;
-      let rVFCId: number | null = null;
-      let loopStartTime: number | null = null;
-      let recordingStopped = false;
-
-      // Create overlay canvas (transparent, same size as recording canvas)
-      const overlayCanvas = document.createElement('canvas');
-      overlayCanvas.width = recordingCanvas.width;
-      overlayCanvas.height = recordingCanvas.height;
-
-      // Pre-draw initial overlay
-      try {
-        const livePreviewApi = videoPreviewRef.current;
-        const drawOverlay = livePreviewApi?.drawFrame ?? previewApi.drawFrame;
-        drawOverlay(overlayCanvas, 'overlayOnly', frameTimelineOffsetMs);
-      } catch {}
-
-      // Update overlay at a lower frequency (every 150ms)
-      let lastOverlayUpdateMs = 0;
-      const OVERLAY_UPDATE_INTERVAL = 150;
-
-      // Check if the background video element supports rVFC
-      const bgVideoEl = (() => {
-        try {
-          // Access the video element via the preview API's drawVideoFrame context
-          const container = videoPreviewRef.current?.getContainer();
-          if (!container) return null;
-          // The video is attached to document.body (hidden), find it
-          const videos = document.querySelectorAll('video[style*="fixed"]');
-          for (const v of videos) {
-            if ((v as HTMLVideoElement).readyState >= 2 && !(v as HTMLVideoElement).paused) {
-              return v as HTMLVideoElement;
-            }
-          }
-          return null;
-        } catch { return null; }
-      })();
-      
-      const useRVFC = isVideoBackground && bgVideoEl && 'requestVideoFrameCallback' in bgVideoEl;
-
-      const updateOverlayIfNeeded = (elapsedMs: number) => {
-        if (elapsedMs - lastOverlayUpdateMs >= OVERLAY_UPDATE_INTERVAL) {
-          lastOverlayUpdateMs = elapsedMs;
-          try {
-            const livePreviewApi = videoPreviewRef.current;
-            const drawOverlay = livePreviewApi?.drawFrame ?? previewApi.drawFrame;
-            drawOverlay(overlayCanvas, 'overlayOnly', frameTimelineOffsetMs + elapsedMs);
-          } catch {}
-        }
+      type RecordingAttemptKey = 'smooth' | 'compatibility' | 'quality';
+      type RecordingAttempt = {
+        id: RecordingAttemptKey;
+        label: string;
+        renderMode: 'recording' | 'recordingLite';
+        fps: number;
+        quality: ExportQuality;
+        recorderOptions: {
+          strategy: 'smooth' | 'compatibility' | 'quality';
+          bitrateMultiplier: number;
+          timesliceMs: number;
+          mimeTypeCandidates: string[];
+          captureStreamFps: number;
+        };
       };
 
-      const drawComposite = (elapsedMs: number) => {
-        const ctx = recordingCanvas.getContext('2d');
-        if (!ctx) return;
-
-        // Layer 1: Draw background (video/image/slideshow with Ken Burns)
-        try {
-          const livePreviewApi = videoPreviewRef.current;
-          const drawBg = livePreviewApi?.drawVideoFrame ?? previewApi.drawVideoFrame;
-          drawBg(recordingCanvas);
-        } catch (e) {
-          console.warn('Background frame draw error:', e);
-        }
-
-        // Layer 2: Update overlay periodically
-        updateOverlayIfNeeded(elapsedMs);
-
-        // Composite overlay on top
-        ctx.drawImage(overlayCanvas, 0, 0);
-
-        // Stop when duration exceeded
-        if (elapsedMs >= recordingDuration * 1000) {
-          recordingStopped = true;
-        }
-      };
-
-      if (useRVFC) {
-        // requestVideoFrameCallback path — only draw when a real video frame arrives
-        console.log('🎬 Using requestVideoFrameCallback for recording sync');
-        const rVFCLoop = (_now: DOMHighResTimeStamp, _metadata: any) => {
-          if (recordingStopped) return;
-          if (loopStartTime === null) loopStartTime = performance.now();
-          const elapsedMs = performance.now() - loopStartTime;
-          drawComposite(elapsedMs);
-          if (!recordingStopped) {
-            rVFCId = (bgVideoEl as any).requestVideoFrameCallback(rVFCLoop);
-          }
-        };
-        rVFCId = (bgVideoEl as any).requestVideoFrameCallback(rVFCLoop);
-      } else {
-        // Standard rAF path — for image/slideshow backgrounds or fallback
-        console.log('🎬 Using requestAnimationFrame for recording sync');
-        const drawLoop = (timestamp: number) => {
-          if (recordingStopped) return;
-          if (loopStartTime === null) loopStartTime = timestamp;
-          const elapsedMs = timestamp - loopStartTime;
-          drawComposite(elapsedMs);
-          if (!recordingStopped) {
-            rafId = requestAnimationFrame(drawLoop);
-          }
-        };
-        rafId = requestAnimationFrame(drawLoop);
-      }
-
-      // Draw first frame fully
-      try {
-        const livePreviewApi = videoPreviewRef.current;
-        const drawBg = livePreviewApi?.drawVideoFrame ?? previewApi.drawVideoFrame;
-        drawBg(recordingCanvas);
-        const ctx = recordingCanvas.getContext('2d');
-        if (ctx) ctx.drawImage(overlayCanvas, 0, 0);
-      } catch {}
-
-      toast.info('بدء التسجيل...');
-
-      // Use auto-capture mode — captureStream(fps) captures
-      // frames automatically from the canvas that our rAF loop keeps updating.
-      const blob = await videoRecorder.startRecording(
-        recordingCanvas,
-        audio,
-        recordingDuration,
-        undefined,
-        targetQuality,
-        targetFps,
-        {
-          strategy: 'smooth',
-          bitrateMultiplier: isVeryLongRecording ? 0.55 : isPexelsBackground ? 0.7 : isLongRecording ? 0.7 : 0.85,
-          timesliceMs: 2500,
-          mimeTypeCandidates: ['video/webm;codecs=vp8,opus', 'video/webm'],
-          captureStreamFps: targetFps,
-        }
+      const baseFps = previewApi.getRecommendedRecordingFps();
+      const selectedQuality = clampQualityForDuration(exportSettings.quality);
+      const compatibilityQuality: ExportQuality = clampQualityForDuration(
+        exportSettings.quality === 'ultra'
+          ? 'medium'
+          : exportSettings.quality === 'high'
+          ? 'medium'
+          : exportSettings.quality
       );
 
-      // Cleanup drawing loop
-      recordingStopped = true;
-      if (rafId !== null) cancelAnimationFrame(rafId);
-      if (rVFCId !== null && bgVideoEl && 'cancelVideoFrameCallback' in bgVideoEl) {
-        (bgVideoEl as any).cancelVideoFrameCallback(rVFCId);
+      const attemptsByMode: Record<RecordingAttemptKey, RecordingAttempt> = {
+        smooth: {
+          id: 'smooth',
+          label: 'سلس',
+          renderMode: isLongRecording ? 'recordingLite' : 'recording',
+          fps: Math.max(18, Math.min(baseFps, isLongRecording ? 22 : 26, longRecordingFpsCap)),
+          quality: selectedQuality,
+          recorderOptions: {
+            strategy: 'smooth',
+            bitrateMultiplier: isLongRecording ? 0.82 : 0.9,
+            timesliceMs: isLongRecording ? 2600 : 1800,
+            mimeTypeCandidates: ['video/webm;codecs=vp8,opus', 'video/webm;codecs=vp9,opus', 'video/webm'],
+            captureStreamFps: Math.max(18, Math.min(baseFps, isLongRecording ? 22 : 26, longRecordingFpsCap)),
+          },
+        },
+        compatibility: {
+          id: 'compatibility',
+          label: 'توافق عالي',
+          renderMode: 'recordingLite',
+          fps: Math.max(16, Math.min(baseFps - 2, isLongRecording ? 20 : 22, longRecordingFpsCap)),
+          quality: compatibilityQuality,
+          recorderOptions: {
+            strategy: 'compatibility',
+            bitrateMultiplier: isVeryLongRecording ? 0.6 : 0.72,
+            timesliceMs: isLongRecording ? 2800 : 2200,
+            mimeTypeCandidates: ['video/webm;codecs=vp8,opus', 'video/webm'],
+            captureStreamFps: Math.max(16, Math.min(baseFps - 2, isLongRecording ? 20 : 22, longRecordingFpsCap)),
+          },
+        },
+        quality: {
+          id: 'quality',
+          label: 'جودة قصوى',
+          renderMode: isLongRecording ? 'recordingLite' : 'recording',
+          fps: Math.max(20, Math.min(baseFps + 1, isLongRecording ? 24 : 30, longRecordingFpsCap)),
+          quality: selectedQuality,
+          recorderOptions: {
+            strategy: isLongRecording ? 'smooth' : 'quality',
+            bitrateMultiplier: isLongRecording ? 0.86 : 1,
+            timesliceMs: isLongRecording ? 2200 : 1400,
+            mimeTypeCandidates: isLongRecording
+              ? ['video/webm;codecs=vp8,opus', 'video/webm']
+              : ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'],
+            captureStreamFps: Math.max(20, Math.min(baseFps + 1, isLongRecording ? 24 : 30, longRecordingFpsCap)),
+          },
+        },
+      };
+
+      // Start with compatibility for auto mode (least CPU), only try heavier if it fails
+      const selectedMode: RecordingAttemptKey = exportSettings.recordingMethod === 'auto' ? 'compatibility' : exportSettings.recordingMethod;
+      const attempts = exportSettings.recordingMethod === 'auto'
+        ? [attemptsByMode.compatibility, attemptsByMode.smooth, attemptsByMode.quality]
+        : [attemptsByMode[selectedMode]];
+
+      if (isLongRecording) {
+        toast.info('تم تفعيل وضع التسجيل الطويل تلقائيًا لتجنب التهنيج.');
       }
 
-      if (blob) {
-        toast.success('تم إنشاء الفيديو! جاري تحويله إلى MP4 (CFR 30fps)...');
-        // Auto-convert to MP4 with CFR normalization
+      let lastError: unknown = null;
+
+      for (let i = 0; i < attempts.length; i++) {
+        const attempt = attempts[i];
+        let stopIsolatedLoop: (() => void) | null = null;
+
         try {
-          const mp4 = await videoRecorder.convertToMp4();
-          if (mp4) {
-            toast.success('✅ تم تجهيز الفيديو بصيغة MP4 (H.264, 30fps)');
+          const recordingCanvas = document.createElement('canvas');
+          // Use quality-based dimensions; for lite mode, scale down once here
+          const recordingDimensions = getQualityDimensions(attempt.quality, aspectRatio);
+          const liteScale = attempt.renderMode === 'recordingLite' ? 0.67 : 1;
+          recordingCanvas.width = Math.round(recordingDimensions.width * liteScale);
+          recordingCanvas.height = Math.round(recordingDimensions.height * liteScale);
+
+          const frameInterval = Math.max(1000 / attempt.fps, 16);
+          let rafId: number | null = null;
+          let lastFrameTime = 0;
+          let stopped = false;
+
+          const drawIsolatedFrame = () => {
+            try {
+              const livePreviewApi = videoPreviewRef.current;
+              const draw = livePreviewApi?.drawFrame ?? previewApi.drawFrame;
+              draw(recordingCanvas, attempt.renderMode);
+            } catch (e) {
+              console.warn('Frame draw error:', e);
+            }
+          };
+
+          const renderIsolatedFrame = (now: number) => {
+            if (stopped) return;
+            rafId = requestAnimationFrame(renderIsolatedFrame);
+            if (now - lastFrameTime < frameInterval) return;
+            lastFrameTime = now;
+            drawIsolatedFrame();
+          };
+
+          drawIsolatedFrame();
+          rafId = requestAnimationFrame(renderIsolatedFrame);
+
+          stopIsolatedLoop = () => {
+            stopped = true;
+            if (rafId !== null) {
+              cancelAnimationFrame(rafId);
+              rafId = null;
+            }
+          };
+
+          // Warm up isolated canvas before captureStream starts
+          await new Promise((resolve) => setTimeout(resolve, 120));
+          drawIsolatedFrame();
+
+          if (audio) {
+            audio.pause();
+            audio.currentTime = recordingStartAt;
           }
-        } catch (e) {
-          console.warn('Auto MP4 conversion failed:', e);
+
+          toast.info(
+            exportSettings.recordingMethod === 'auto'
+              ? `بدء التسجيل (${attempt.label})...`
+              : 'بدء التسجيل...'
+          );
+
+          const blob = await videoRecorder.startRecording(
+            recordingCanvas,
+            audio,
+            recordingDuration,
+            audioEffects.getRecordingStream(),
+            attempt.quality,
+            attempt.fps,
+            attempt.recorderOptions
+          );
+
+          if (blob) {
+            toast.success('تم إنشاء الفيديو بنجاح!');
+            return;
+          }
+
+          lastError = new Error('لم يتم إنشاء ملف فيديو');
+        } catch (error) {
+          lastError = error;
+
+          if (i < attempts.length - 1) {
+            videoRecorder.reset();
+            toast.warning(`فشل وضع "${attempt.label}"، سيتم تجربة وضع بديل...`);
+            await previewApi.ensureBackgroundPlayback();
+          }
+        } finally {
+          stopIsolatedLoop?.();
         }
-        return;
       }
 
-      throw new Error('لم يتم إنشاء ملف فيديو');
+      throw lastError instanceof Error ? lastError : new Error('حدث خطأ في التسجيل');
     } catch (error) {
       console.error('Recording error:', error);
       toast.error('فشل التسجيل على هذا الوضع. جرّب طريقة توافق أعلى أو جودة أقل.');

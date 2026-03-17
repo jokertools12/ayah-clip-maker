@@ -21,11 +21,6 @@ export interface RecordingOptions {
   timesliceMs?: number;
   mimeTypeCandidates?: string[];
   captureStreamFps?: number;
-  frameRenderer?: (frameTimeMs: number, frameIndex: number) => void;
-  /** Drop stale frames when recorder lags behind to prevent UI freeze */
-  maxFrameCatchup?: number;
-  /** Minimum scheduler delay to keep main thread responsive */
-  minFrameDelayMs?: number;
 }
 
 export const QUALITY_PRESETS: Record<ExportQuality, QualitySettings> = {
@@ -69,7 +64,7 @@ export function useVideoRecorder() {
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
-  
+  const animationFrameRef = useRef<number | null>(null);
   const conversionInProgressRef = useRef<boolean>(false);
   const mp4BlobRef = useRef<Blob | null>(null);
 
@@ -97,39 +92,11 @@ export function useVideoRecorder() {
         conversionInProgressRef.current = false;
 
         const safeFps = Number.isFinite(captureFps) ? Math.min(Math.max(captureFps, 12), 30) : 24;
-        const frameRenderer = options?.frameRenderer;
-        let enableFrameByFrame = Boolean(frameRenderer);
-
         const requestedStreamFps = options?.captureStreamFps;
-        const fallbackStreamFps = Number.isFinite(requestedStreamFps)
+        const streamFps = Number.isFinite(requestedStreamFps)
           ? Math.min(Math.max(requestedStreamFps as number, 1), 30)
           : safeFps;
-
-        type RequestFrameVideoTrack = MediaStreamTrack & {
-          requestFrame?: () => void;
-          contentHint?: string;
-        };
-
-        const createCanvasStream = (fps: number) => canvas.captureStream(fps);
-        let canvasStream = createCanvasStream(enableFrameByFrame ? 0 : fallbackStreamFps);
-        let videoTrack = canvasStream.getVideoTracks()[0] as RequestFrameVideoTrack | undefined;
-
-        if (enableFrameByFrame && (!videoTrack || typeof videoTrack.requestFrame !== 'function')) {
-          canvasStream.getTracks().forEach((track) => {
-            try { track.stop(); } catch {}
-          });
-          enableFrameByFrame = false;
-          canvasStream = createCanvasStream(fallbackStreamFps);
-          videoTrack = canvasStream.getVideoTracks()[0] as RequestFrameVideoTrack | undefined;
-        }
-
-        if (videoTrack) {
-          try {
-            videoTrack.contentHint = 'motion';
-          } catch {
-            // Ignore unsupported contentHint
-          }
-        }
+        const canvasStream = canvas.captureStream(streamFps);
 
         const tracks = [...canvasStream.getVideoTracks()];
         if (audioStream && audioStream.getAudioTracks().length) {
@@ -170,18 +137,10 @@ export function useVideoRecorder() {
 
         const startTime = Date.now();
         let progressIntervalId: number | null = null;
-        let frameLoopTimerId: number | null = null;
         let lastProgressStep = -1;
 
-        const stopFrameLoop = () => {
-          if (frameLoopTimerId !== null) {
-            window.clearTimeout(frameLoopTimerId);
-            frameLoopTimerId = null;
-          }
-        };
-
         mediaRecorder.onstop = async () => {
-          stopFrameLoop();
+          if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
           if (progressIntervalId !== null) { window.clearInterval(progressIntervalId); progressIntervalId = null; }
 
           const rawBlob = new Blob(chunksRef.current, { type: mimeType });
@@ -198,7 +157,6 @@ export function useVideoRecorder() {
         };
 
         mediaRecorder.onerror = (e) => {
-          stopFrameLoop();
           if (progressIntervalId !== null) { window.clearInterval(progressIntervalId); progressIntervalId = null; }
           console.error('MediaRecorder error:', e);
           stopTracks();
@@ -207,71 +165,24 @@ export function useVideoRecorder() {
         };
 
         // Larger timeslice = fewer interruptions = less jank
-        const chunkIntervalMs = Math.min(Math.max(options?.timesliceMs ?? 2200, 500), 5000);
-        setState((prev) => ({
-          ...prev,
-          stage: enableFrameByFrame ? 'جاري بدء التسجيل بنظام الإطارات...' : 'جاري بدء التسجيل...',
-        }));
+        const chunkIntervalMs = Math.min(Math.max(options?.timesliceMs ?? 2000, 500), 5000);
+        setState((prev) => ({ ...prev, stage: 'جاري بدء التسجيل...' }));
         mediaRecorder.start(chunkIntervalMs);
 
         if (audioElement) {
           try { await audioElement.play(); } catch (err) { console.warn('Audio play warning:', err); }
         }
 
-        if (enableFrameByFrame && frameRenderer) {
-          const frameIntervalMs = 1000 / safeFps;
-          const totalFrames = Math.max(1, Math.ceil(duration * safeFps));
-          const maxFrameCatchup = Math.min(Math.max(options?.maxFrameCatchup ?? 2, 0), 8);
-          const minFrameDelayMs = Math.min(Math.max(options?.minFrameDelayMs ?? 6, 0), 20);
-          let frameIndex = 0;
-          const loopStart = performance.now();
-
-          const renderNextFrame = () => {
-            if (mediaRecorder.state === 'inactive') return;
-
-            // If rendering falls behind, skip stale frames instead of blocking the browser.
-            const elapsedRealMs = performance.now() - loopStart;
-            const expectedFrame = Math.floor(elapsedRealMs / frameIntervalMs);
-            if (expectedFrame - frameIndex > maxFrameCatchup) {
-              frameIndex = expectedFrame - maxFrameCatchup;
-            }
-
-            const frameTimeMs = Math.min(frameIndex * frameIntervalMs, duration * 1000);
-            try {
-              frameRenderer(frameTimeMs, frameIndex);
-              videoTrack?.requestFrame?.();
-            } catch (frameError) {
-              console.warn('Frame renderer error:', frameError);
-            }
-
-            frameIndex += 1;
-
-            if (frameIndex > totalFrames) {
-              stopFrameLoop();
-              mediaRecorder.stop();
-              if (audioElement) audioElement.pause();
-              return;
-            }
-
-            const nextTarget = loopStart + frameIndex * frameIntervalMs;
-            const driftMs = performance.now() - nextTarget;
-            const delay = Math.max(minFrameDelayMs, frameIntervalMs - Math.max(driftMs, 0));
-            frameLoopTimerId = window.setTimeout(renderNextFrame, delay);
-          };
-
-          renderNextFrame();
-        }
-
-        // Throttled progress — update every 400ms to reduce React re-renders
+        // Throttled progress — update every 500ms to reduce React re-renders
         progressIntervalId = window.setInterval(() => {
           const elapsed = (Date.now() - startTime) / 1000;
           const progress = Math.min((elapsed / duration) * 100, 100);
           const progressStep = Math.round(progress);
 
-          let stage = enableFrameByFrame ? 'جاري التسجيل بالإطارات...' : 'جاري التسجيل...';
-          if (progress < 25) stage = enableFrameByFrame ? 'جاري تجهيز الإطارات...' : 'جاري تسجيل الخلفية...';
-          else if (progress < 50) stage = enableFrameByFrame ? 'جاري رسم الإطارات...' : 'جاري تسجيل الصوت...';
-          else if (progress < 75) stage = enableFrameByFrame ? 'جاري ضغط الإطارات...' : 'جاري معالجة الآيات...';
+          let stage = 'جاري التسجيل...';
+          if (progress < 25) stage = 'جاري تسجيل الخلفية...';
+          else if (progress < 50) stage = 'جاري تسجيل الصوت...';
+          else if (progress < 75) stage = 'جاري معالجة الآيات...';
           else stage = 'جاري إنهاء الفيديو...';
 
           if (progressStep !== lastProgressStep) {
@@ -279,12 +190,12 @@ export function useVideoRecorder() {
             setState((prev) => ({ ...prev, progress, stage }));
           }
 
-          if (!enableFrameByFrame && elapsed >= duration) {
+          if (elapsed >= duration) {
             if (progressIntervalId !== null) { window.clearInterval(progressIntervalId); progressIntervalId = null; }
             mediaRecorder.stop();
             if (audioElement) audioElement.pause();
           }
-        }, 400);
+        }, 500); // was 250, now 500 to reduce render load
 
       } catch (error) {
         console.error('Recording error:', error);
@@ -370,6 +281,7 @@ export function useVideoRecorder() {
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') mediaRecorderRef.current.stop();
+    if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
   }, []);
 
   const reset = useCallback(() => {

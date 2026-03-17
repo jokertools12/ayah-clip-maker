@@ -1,6 +1,5 @@
 import { useRef, useEffect, forwardRef, useImperativeHandle, useCallback, useState } from 'react';
 import { BackgroundItem } from '@/data/backgrounds';
-import { normalizeBackgroundVideo } from '@/lib/ffmpeg';
 
 // Font family mapping for canvas
 const FONT_MAP: Record<string, string> = {
@@ -56,13 +55,17 @@ interface VideoPreviewProps {
     surahNameStyle?: 'classic' | 'banner' | 'calligraphy' | 'circle' | 'diamond' | 'ribbon';
     reciterNameStyle?: 'simple' | 'elegant' | 'badge' | 'tag' | 'glow';
     textShadowStyle?: 'soft' | 'strong' | 'none' | 'glow';
+    decorationStyle?: 'none' | 'sideBorder' | 'separator' | 'both';
     ayahTransition?: 'none' | 'fade' | 'slide' | 'zoom' | 'blur' | 'rise' | 'rotate' | 'cinematic' | 'elastic' | 'random';
+    particleDensity?: 'off' | 'low' | 'medium' | 'high';
     watermarkEnabled?: boolean;
     watermarkText?: string;
     watermarkPosition?: 'bottomLeft' | 'bottomRight' | 'topLeft' | 'topRight' | 'bottomCenter';
+    performanceMode?: 'economy' | 'balanced' | 'pro';
     glowStyle?: 'none' | 'golden' | 'soft' | 'neon' | 'pulse';
     lyricsDisplayStyle?: 'scroll' | 'single' | 'karaoke' | 'fade';
     slideshowTransition?: 'crossfade' | 'slideLeft' | 'slideRight' | 'slideUp' | 'zoomThrough' | 'wipe' | 'mixed';
+    wordScaleEffect?: boolean;
   };
   isPlaying: boolean;
   isRecording?: boolean;
@@ -81,13 +84,10 @@ export interface VideoPreviewRef {
   getContainer: () => HTMLDivElement | null;
   getCanvas: () => HTMLCanvasElement | null;
   isBackgroundReady: () => boolean;
-  isVideoNormalized: () => boolean;
   ensureBackgroundPlayback: () => Promise<void>;
   getRecordingDimensions: () => { width: number; height: number };
   getRecommendedRecordingFps: () => number;
-  drawFrame: (targetCanvas?: HTMLCanvasElement, renderMode?: 'preview' | 'recording' | 'recordingLite' | 'overlayOnly', forcedTimeMs?: number) => void;
-  /** Draw ONLY the video element to a target canvas — ultra-lightweight */
-  drawVideoFrame: (targetCanvas: HTMLCanvasElement) => void;
+  drawFrame: (targetCanvas?: HTMLCanvasElement, renderMode?: 'preview' | 'recording' | 'recordingLite') => void;
 }
 
 const DEFAULT_DISPLAY_SETTINGS = {
@@ -104,10 +104,13 @@ const DEFAULT_DISPLAY_SETTINGS = {
   surahNameStyle: 'classic' as const,
   reciterNameStyle: 'simple' as const,
   textShadowStyle: 'soft' as const,
+  decorationStyle: 'separator' as const,
   ayahTransition: 'fade' as const,
+  particleDensity: 'off' as const,
   watermarkEnabled: false,
   watermarkText: '',
   watermarkPosition: 'bottomRight' as const,
+  performanceMode: 'balanced' as const,
   glowStyle: 'golden' as const,
   lyricsDisplayStyle: 'scroll' as const,
   slideshowTransition: 'crossfade' as const,
@@ -139,12 +142,9 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   const imageRef = useRef<HTMLImageElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
-  const drawFrameRuntimeRef = useRef<(targetCanvas?: HTMLCanvasElement, renderMode?: 'preview' | 'recording' | 'recordingLite' | 'overlayOnly', forcedTimeMs?: number) => void>(() => {});
+  const drawFrameRuntimeRef = useRef<(targetCanvas?: HTMLCanvasElement, renderMode?: 'preview' | 'recording' | 'recordingLite') => void>(() => {});
   const [imageLoaded, setImageLoaded] = useState(false);
   const [videoReady, setVideoReady] = useState(false);
-  const [videoNormalized, setVideoNormalized] = useState(false);
-  const [normalizingVideo, setNormalizingVideo] = useState(false);
-  const normalizedBlobUrlRef = useRef<string | null>(null);
 
   // Slideshow state
   const slideshowImagesRef = useRef<HTMLImageElement[]>([]);
@@ -182,23 +182,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     totalHeight: number;
     startY: number;
     lineHeight: number;
-    lineTotals: number[];
-    wordWidths: number[][];
   } | null>(null);
-
-  // ── Off-screen video scale canvas for performance ──────────────────────
-  const videoScaleCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const videoLayerLastUpdateRef = useRef<number>(-Infinity);
-
-  // ── Recording layered header cache (static text layer) ─────────────────
-  const recordingHeaderLayerRef = useRef<HTMLCanvasElement | null>(null);
-  const recordingHeaderLayerKeyRef = useRef<string>('');
-
-  // ── Performance caches (avoid per-frame DOM/gradient recreation) ──────
-  const primaryColorCacheRef = useRef<string | null>(null);
-  const gradientCacheSizeRef = useRef<{ w: number; h: number }>({ w: 0, h: 0 });
-  const topGradientCacheRef = useRef<CanvasGradient | null>(null);
-  const bottomGradientCacheRef = useRef<CanvasGradient | null>(null);
 
   // Verse transition state
   const prevAyahRef = useRef<{ numberInSurah: number; text: string } | null>(null);
@@ -218,8 +202,11 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   }, [aspectRatio]);
 
   const getRecommendedRecordingFps = useCallback(() => {
-    return 30; // Smooth 30fps CFR for normalized videos
-  }, []);
+    const perfMode = displaySettings.performanceMode || 'balanced';
+    if (perfMode === 'economy') return 24;
+    if (perfMode === 'pro') return 30;
+    return 27;
+  }, [displaySettings.performanceMode]);
 
   const ensureBackgroundPlayback = useCallback(async () => {
     if ((background?.type || 'image') !== 'video') return;
@@ -227,7 +214,6 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     const video = videoRef.current;
     if (!video) return;
 
-    // Wait until video has enough data
     if (video.readyState < 2) {
       await new Promise<void>((resolve) => {
         let timeoutId: number | null = null;
@@ -252,27 +238,17 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         video.addEventListener('loadeddata', onReady, { once: true });
         video.addEventListener('canplay', onReady, { once: true });
         video.addEventListener('error', onDone, { once: true });
-        timeoutId = window.setTimeout(onDone, 3000);
+        timeoutId = window.setTimeout(onDone, 1200);
       });
     }
 
-    // Start playback and wait for the 'playing' event to confirm frames are advancing
     if (video.paused) {
       try {
         await video.play();
-        // Wait for the browser to actually start decoding frames
-        await new Promise<void>((resolve) => {
-          const onPlaying = () => { resolve(); };
-          video.addEventListener('playing', onPlaying, { once: true });
-          // Fallback timeout
-          setTimeout(resolve, 500);
-        });
       } catch (err) {
         console.warn('Could not resume background video before recording:', err);
       }
     }
-
-    console.log('✅ ensureBackgroundPlayback: video playing =', !video.paused, 'readyState =', video.readyState, 'currentTime =', video.currentTime);
   }, [background?.type]);
 
   // Get the actual font name for canvas
@@ -291,14 +267,8 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
 
     setImageLoaded(false);
     setVideoReady(false);
-    setVideoNormalized(false);
-    setNormalizingVideo(false);
     setSlideshowReady(false);
     slideshowImagesRef.current = [];
-    if (normalizedBlobUrlRef.current) {
-      URL.revokeObjectURL(normalizedBlobUrlRef.current);
-      normalizedBlobUrlRef.current = null;
-    }
 
     let cancelled = false;
     let localBlobUrl: string | null = null;
@@ -349,8 +319,8 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         };
       });
     } else if (bgType === 'video') {
-      // Strategy: Always load as blob first (same-origin = no canvas taint ever).
-      // This guarantees captureStream() works during recording.
+      // Strategy: Try direct CORS load first (Pexels supports CORS headers).
+      // Only fall back to proxy if direct load taints canvas.
       const createVideoEl = (): HTMLVideoElement => {
         const video = document.createElement('video');
         video.muted = true;
@@ -359,15 +329,6 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         video.preload = 'auto';
         video.autoplay = true;
         video.setAttribute('playsinline', 'true');
-        // Attach to DOM hidden — prevents browsers from freezing detached videos
-        video.style.position = 'fixed';
-        video.style.top = '-9999px';
-        video.style.left = '-9999px';
-        video.style.width = '1px';
-        video.style.height = '1px';
-        video.style.opacity = '0.01';
-        video.style.pointerEvents = 'none';
-        document.body.appendChild(video);
         return video;
       };
 
@@ -375,67 +336,9 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         if (cancelled) return;
         videoRef.current = video;
         setVideoReady(true);
-        // Don't set normalized yet — that happens after FFmpeg normalization
         video.play().catch((err) => console.warn('Video play warning:', err));
         console.log(successLog);
         onBackgroundLoadMethod?.(method);
-      };
-
-      // After raw video is loaded, normalize it in background for recording
-      const normalizeInBackground = async (rawBlob: Blob) => {
-        if (cancelled) return;
-        const isPexels = /pexels/i.test(bgUrl);
-        const isPixabay = /pixabay/i.test(bgUrl);
-        
-        // Pixabay videos are already standardized (CFR, pre-sized) — skip normalization
-        if (isPixabay || !isPexels) {
-          setVideoNormalized(true);
-          return;
-        }
-        
-        setNormalizingVideo(true);
-        console.log('🔄 Starting background video normalization for recording...');
-        
-        try {
-          const normalized = await normalizeBackgroundVideo(rawBlob, aspectRatio, {
-            maxWidth: aspectRatio === '9:16' ? 720 : 1280,
-            maxHeight: aspectRatio === '9:16' ? 1280 : 720,
-            onProgress: (ratio) => {
-              console.log(`🔄 Normalize progress: ${Math.round(ratio * 100)}%`);
-            },
-          });
-
-          if (cancelled) return;
-
-          // Replace video source with normalized version
-          if (normalizedBlobUrlRef.current) {
-            URL.revokeObjectURL(normalizedBlobUrlRef.current);
-          }
-          const normalizedUrl = URL.createObjectURL(normalized);
-          normalizedBlobUrlRef.current = normalizedUrl;
-
-          const video = videoRef.current;
-          if (video) {
-            const wasPlaying = !video.paused;
-            video.src = normalizedUrl;
-            video.load();
-            await new Promise<void>((resolve) => {
-              video.onloadeddata = () => resolve();
-              setTimeout(resolve, 3000); // timeout fallback
-            });
-            if (wasPlaying) {
-              try { await video.play(); } catch {}
-            }
-          }
-
-          setVideoNormalized(true);
-          setNormalizingVideo(false);
-          console.log('✅ Background video normalized successfully (CFR 30fps, H.264)');
-        } catch (err) {
-          console.warn('⚠️ Video normalization failed, using raw video:', err);
-          setVideoNormalized(true); // fallback: use raw
-          setNormalizingVideo(false);
-        }
       };
 
       const loadViaProxy = async () => {
@@ -461,42 +364,44 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
           localBlobUrl = URL.createObjectURL(blob);
           const video = createVideoEl();
           video.src = localBlobUrl;
-          video.onloadeddata = () => {
-            activateVideo(video, '✅ Video loaded via proxy blob', 'proxy');
-            normalizeInBackground(blob);
-          };
+          video.onloadeddata = () => activateVideo(video, '✅ Video loaded via proxy blob', 'proxy');
           video.onerror = () => { onBackgroundLoadMethod?.('fallback'); loadImage(fallbackThumb || bgUrl); };
         } catch {
           loadImage(fallbackThumb || bgUrl);
         }
       };
 
-      // Blob-first: download video as blob to make it same-origin (prevents canvas taint)
-      const loadAsBlobDirect = async () => {
-        try {
-          const resp = await fetch(bgUrl, { mode: 'cors' });
-          if (!resp.ok) throw new Error(`Direct fetch ${resp.status}`);
-          const blob = await resp.blob();
-          if (cancelled || !blob.size) return;
-          localBlobUrl = URL.createObjectURL(blob);
-          const video = createVideoEl();
-          video.src = localBlobUrl;
-          video.onloadeddata = () => {
-            activateVideo(video, '✅ Video loaded as direct blob (same-origin)', 'direct');
-            normalizeInBackground(blob);
-          };
-          video.onerror = () => {
-            console.warn('Direct blob video element failed, trying proxy…');
-            if (localBlobUrl) { URL.revokeObjectURL(localBlobUrl); localBlobUrl = null; }
+      const loadDirectVideo = () => {
+        const video = createVideoEl();
+        video.crossOrigin = 'anonymous';
+        video.src = bgUrl;
+
+        video.onloadeddata = () => {
+          if (cancelled) return;
+          // Test if canvas stays clean
+          try {
+            const tc = document.createElement('canvas');
+            tc.width = 2;
+            tc.height = 2;
+            const tctx = tc.getContext('2d');
+            tctx?.drawImage(video, 0, 0, 2, 2);
+            tc.toDataURL(); // Throws if tainted
+            activateVideo(video, '✅ Video loaded directly with CORS', 'direct');
+          } catch {
+            console.warn('Direct video taints canvas, trying proxy…');
+            video.pause();
+            video.src = '';
             loadViaProxy();
-          };
-        } catch {
-          console.warn('Direct blob fetch failed, trying proxy…');
+          }
+        };
+
+        video.onerror = () => {
+          console.warn('Direct video load failed, trying proxy…');
           loadViaProxy();
-        }
+        };
       };
 
-      loadAsBlobDirect();
+      loadDirectVideo();
     } else {
       loadImage(bgUrl);
     }
@@ -521,86 +426,24 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       cancelled = true;
       if (videoRef.current) {
         videoRef.current.pause();
-        if (videoRef.current.parentNode) {
-          videoRef.current.parentNode.removeChild(videoRef.current);
-        }
         videoRef.current = null;
       }
       if (localBlobUrl) {
         URL.revokeObjectURL(localBlobUrl);
-      }
-      if (normalizedBlobUrlRef.current) {
-        URL.revokeObjectURL(normalizedBlobUrlRef.current);
-        normalizedBlobUrlRef.current = null;
       }
       slideshowImagesRef.current = [];
       kenBurnsPresetsRef.current = [];
     };
   }, [customBackground, background?.url, background?.type, background?.thumbnail, background?.slideImages]);
 
-  const tokenHslCacheRef = useRef<Record<string, string>>({});
   const getTokenHsl = useCallback((token: string, fallback: string) => {
-    if (tokenHslCacheRef.current[token]) return tokenHslCacheRef.current[token];
     try {
       const v = getComputedStyle(document.documentElement).getPropertyValue(token).trim();
-      const result = v ? `hsl(${v})` : fallback;
-      tokenHslCacheRef.current[token] = result;
-      return result;
+      return v ? `hsl(${v})` : fallback;
     } catch {
       return fallback;
     }
   }, []);
-
-  const drawRecordingHeaderLayer = useCallback((targetCtx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, S: number, fontName: string) => {
-    const key = [
-      canvas.width,
-      canvas.height,
-      displaySettings.showSurahName,
-      displaySettings.showReciterName,
-      surahName,
-      reciterName,
-      textSettings.textColor,
-      textSettings.fontSize,
-      fontName,
-    ].join('|');
-
-    let layer = recordingHeaderLayerRef.current;
-    if (!layer) {
-      layer = document.createElement('canvas');
-      recordingHeaderLayerRef.current = layer;
-    }
-
-    if (layer.width !== canvas.width || layer.height !== canvas.height || recordingHeaderLayerKeyRef.current !== key) {
-      layer.width = canvas.width;
-      layer.height = canvas.height;
-      const lctx = layer.getContext('2d');
-      if (!lctx) return;
-
-      lctx.clearRect(0, 0, layer.width, layer.height);
-      lctx.direction = 'rtl';
-      lctx.textAlign = 'center';
-      lctx.textBaseline = 'middle';
-
-      if (displaySettings.showSurahName) {
-        lctx.globalAlpha = 0.95;
-        lctx.fillStyle = textSettings.textColor;
-        lctx.font = `600 ${Math.max(18, textSettings.fontSize * 1.45 * S)}px "Amiri", "Scheherazade New", serif`;
-        lctx.fillText(surahName, canvas.width / 2, canvas.height * 0.11);
-      }
-
-      if (displaySettings.showReciterName) {
-        lctx.globalAlpha = 0.76;
-        lctx.fillStyle = textSettings.textColor;
-        lctx.font = `500 ${Math.max(14, textSettings.fontSize * 0.92 * S)}px "${fontName}", "Noto Naskh Arabic", serif`;
-        lctx.fillText(`بصوت ${reciterName}`, canvas.width / 2, displaySettings.showSurahName ? canvas.height * 0.175 : canvas.height * 0.12);
-      }
-
-      lctx.globalAlpha = 1;
-      recordingHeaderLayerKeyRef.current = key;
-    }
-
-    targetCtx.drawImage(layer, 0, 0);
-  }, [displaySettings.showSurahName, displaySettings.showReciterName, surahName, reciterName, textSettings.textColor, textSettings.fontSize]);
 
   // Convert Arabic number to Eastern Arabic numerals
   const toArabicNumber = (num: number): string => {
@@ -928,21 +771,17 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   };
 
   // Draw frame on canvas
-  const drawFrame = useCallback((
-    targetCanvas?: HTMLCanvasElement,
-    renderMode: 'preview' | 'recording' | 'recordingLite' | 'overlayOnly' = 'preview',
-    forcedTimeMs?: number
-  ) => {
+  const drawFrame = useCallback((targetCanvas?: HTMLCanvasElement, renderMode: 'preview' | 'recording' | 'recordingLite' = 'preview') => {
     const canvas = targetCanvas || canvasRef.current;
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
 
-    const renderTimestamp = forcedTimeMs ?? Date.now();
     const base = getRecordingDimensions();
-    const previewScale = 0.38;
+    const previewPerfMode = displaySettings.performanceMode || 'balanced';
+    const previewScale = previewPerfMode === 'economy' ? 0.3 : previewPerfMode === 'pro' ? 0.5 : 0.38;
     const isPreviewRender = renderMode === 'preview';
     const isLiteRecording = renderMode === 'recordingLite';
-    const isOverlayOnlyRender = renderMode === 'overlayOnly';
+    const recordingScale = isLiteRecording ? 0.67 : 1;
 
     // For recording: the canvas dimensions are set by the caller (PreviewPage)
     // based on quality preset. We only resize for preview mode.
@@ -964,19 +803,12 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     const S = canvas.width / 1080;
 
     // Clear canvas
-    if (isOverlayOnlyRender) {
-      // Overlay-only: start with transparent canvas
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-    } else {
-      ctx.fillStyle = '#000000';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // ── Skip background drawing entirely in overlayOnly mode ──
-    if (!isOverlayOnlyRender) {
     // Draw background motion (lighter in recordingLite)
     const motionFactor = isLiteRecording ? 0.55 : 1;
-    const t = (renderTimestamp / 1000) * motionSpeed * motionFactor;
+    const t = (Date.now() / 1000) * motionSpeed * motionFactor;
     const scale = 1.04 + Math.sin(t * 0.2) * (0.03 * motionFactor);
     const offsetX = Math.sin(t * 0.12) * (20 * motionFactor);
     const offsetY = Math.cos(t * 0.1) * (16 * motionFactor);
@@ -985,7 +817,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     if (slideshowReady && slideshowImagesRef.current.length > 1) {
       const images = slideshowImagesRef.current;
       const presets = kenBurnsPresetsRef.current;
-      const elapsed = renderTimestamp - slideshowStartTimeRef.current;
+      const elapsed = Date.now() - slideshowStartTimeRef.current;
       const cycleDuration = SLIDESHOW_DISPLAY_DURATION + SLIDESHOW_TRANSITION_DURATION;
       const totalCycle = cycleDuration * images.length;
       const cyclePosition = elapsed % totalCycle;
@@ -1134,37 +966,8 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         }
       }
     } else if (videoReady && videoRef.current) {
-      const video = videoRef.current;
-
-      // Ensure video keeps playing during recording
-      if (!isPreviewRender && video.paused) {
-        video.play().catch(() => {});
-      }
-
-      if (isPreviewRender) {
-        // Preview: use off-screen scale canvas for lower GPU cost
-        if (!videoScaleCanvasRef.current) {
-          videoScaleCanvasRef.current = document.createElement('canvas');
-        }
-        const sc = videoScaleCanvasRef.current;
-        const scaleW = Math.min(video.videoWidth || 480, 480);
-        const scaleH = Math.round(scaleW * (canvas.height / canvas.width));
-        if (sc.width !== scaleW || sc.height !== scaleH) {
-          sc.width = scaleW;
-          sc.height = scaleH;
-        }
-        const sCtx = sc.getContext('2d');
-        if (sCtx) {
-          sCtx.drawImage(video, 0, 0, scaleW, scaleH);
-          ctx.drawImage(sc, 0, 0, canvas.width, canvas.height);
-        } else {
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        }
-      } else {
-        // Recording: draw video DIRECTLY to recording canvas — no intermediate canvas
-        // This avoids any potential canvas taint propagation through the scale canvas
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      }
+      // Draw video frame — NO Ken Burns for video backgrounds to prevent lag
+      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
     } else if (imageRef.current && imageLoaded) {
       // Draw single image with Ken Burns + cover-fit
       const img = imageRef.current;
@@ -1193,33 +996,26 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
-    } // end if (!isOverlayOnlyRender) — background drawing block
 
     // Draw overlay
     ctx.fillStyle = `rgba(0, 0, 0, ${textSettings.overlayOpacity})`;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Draw top/bottom gradients (skip during recording for performance)
-    if (isPreviewRender) {
-      const sizeChanged = gradientCacheSizeRef.current.w !== canvas.width || gradientCacheSizeRef.current.h !== canvas.height;
-      if (sizeChanged || !topGradientCacheRef.current || !bottomGradientCacheRef.current) {
-        const tg = ctx.createLinearGradient(0, 0, 0, canvas.height * 0.25);
-        tg.addColorStop(0, 'rgba(0, 0, 0, 0.5)');
-        tg.addColorStop(1, 'transparent');
-        topGradientCacheRef.current = tg;
-        const bg = ctx.createLinearGradient(0, canvas.height * 0.75, 0, canvas.height);
-        bg.addColorStop(0, 'transparent');
-        bg.addColorStop(1, 'rgba(0, 0, 0, 0.5)');
-        bottomGradientCacheRef.current = bg;
-        gradientCacheSizeRef.current = { w: canvas.width, h: canvas.height };
-      }
-      ctx.fillStyle = topGradientCacheRef.current;
-      ctx.fillRect(0, 0, canvas.width, canvas.height * 0.25);
-      ctx.fillStyle = bottomGradientCacheRef.current;
-      ctx.fillRect(0, canvas.height * 0.75, canvas.width, canvas.height * 0.25);
-    }
+    // Draw top gradient
+    const topGradient = ctx.createLinearGradient(0, 0, 0, canvas.height * 0.25);
+    topGradient.addColorStop(0, 'rgba(0, 0, 0, 0.5)');
+    topGradient.addColorStop(1, 'transparent');
+    ctx.fillStyle = topGradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height * 0.25);
 
-    
+    // Draw bottom gradient
+    const bottomGradient = ctx.createLinearGradient(0, canvas.height * 0.75, 0, canvas.height);
+    bottomGradient.addColorStop(0, 'transparent');
+    bottomGradient.addColorStop(1, 'rgba(0, 0, 0, 0.5)');
+    ctx.fillStyle = bottomGradient;
+    ctx.fillRect(0, canvas.height * 0.75, canvas.width, canvas.height * 0.25);
+
+    // (Particles removed for performance — particleDensity defaults to 'off')
 
     // ── Subtle vignette effect (skip during recording to save GPU) ──────
     if (isPreviewRender && isPlaying) {
@@ -1242,7 +1038,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     ctx.textBaseline = 'middle';
 
     // Apply textShadowStyle setting
-    const textShadowStyle = isAnyRecording ? 'none' : (displaySettings.textShadowStyle || 'soft');
+    const textShadowStyle = displaySettings.textShadowStyle || 'soft';
     if (textShadowStyle === 'none') {
       ctx.shadowColor = 'transparent';
       ctx.shadowBlur = 0;
@@ -1265,12 +1061,8 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       ctx.shadowOffsetY = 0;
     }
 
-    if (isAnyRecording) {
-      drawRecordingHeaderLayer(ctx, canvas, S, fontName);
-    }
-
     // Draw surah name badge (if enabled) based on surahNameStyle
-    if (!isAnyRecording && displaySettings.showSurahName) {
+    if (displaySettings.showSurahName) {
       const badgeY = canvas.height * 0.11;
       const nameStyle = displaySettings.surahNameStyle || 'classic';
 
@@ -1390,7 +1182,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     }
 
     // Draw reciter name (if enabled) with style — scaled
-    if (!isAnyRecording && displaySettings.showReciterName) {
+    if (displaySettings.showReciterName) {
       const reciterY = displaySettings.showSurahName ? canvas.height * 0.175 : canvas.height * 0.12;
       const reciterText = `بصوت ${reciterName}`;
       const reciterStyle = displaySettings.reciterNameStyle || 'simple';
@@ -1450,14 +1242,12 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         case 'glow': {
           ctx.font = `${textSettings.fontSize * 1.0 * S}px "${fontName}", "Noto Naskh Arabic", serif`;
           ctx.shadowColor = '#D4AF37';
-          ctx.shadowBlur = !isPreviewRender ? 4 * S : 18 * S;
-          ctx.fillStyle = '#FFD700';
+           ctx.shadowBlur = isAnyRecording ? 6 * S : 18 * S;
+           ctx.fillStyle = '#FFD700';
+           ctx.fillText(reciterText, canvas.width / 2, reciterY);
+           // Second pass for stronger glow
+           ctx.shadowBlur = isAnyRecording ? 3 * S : 8 * S;
           ctx.fillText(reciterText, canvas.width / 2, reciterY);
-          // Second pass for stronger glow — skip during recording
-          if (isPreviewRender) {
-            ctx.shadowBlur = 8 * S;
-            ctx.fillText(reciterText, canvas.width / 2, reciterY);
-          }
           break;
         }
         default: { // simple
@@ -1471,8 +1261,8 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       ctx.restore();
     }
 
-    // Draw decorative separator — skip during ALL recording modes for performance
-    if (isPreviewRender && (displaySettings.showSurahName || displaySettings.showReciterName)) {
+    // Draw decorative separator (waveform-inspired) - Minimal ornate line
+    if (displaySettings.showSurahName || displaySettings.showReciterName) {
       const lineY = displaySettings.showReciterName ? canvas.height * 0.21 : canvas.height * 0.17;
       const lineHalf = 120 * S;
 
@@ -1522,12 +1312,12 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     // Detect ayah change and start transition
     if (currentAyah && prevAyahRef.current && 
         currentAyah.numberInSurah !== prevAyahRef.current.numberInSurah) {
-      transitionStartRef.current = renderTimestamp;
+      transitionStartRef.current = Date.now();
       isTransitioningRef.current = true;
       currentRandomTransitionRef.current = RANDOM_TRANSITIONS[Math.floor(Math.random() * RANDOM_TRANSITIONS.length)];
       // Reset chunk counter and adaptive timing for new verse
       chunkCounterRef.current = 0;
-      lastChunkTimeRef.current = renderTimestamp;
+      lastChunkTimeRef.current = Date.now();
       prevChunkIndexRef.current = -1;
       chunkFadeRef.current = 1;
       chunkStartWordIndexRef.current = 0;
@@ -1541,12 +1331,10 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
 
     // Calculate transition progress
     const rawTransitionType = displaySettings.ayahTransition || 'fade';
-    const transitionType = isAnyRecording
-      ? 'none'
-      : (rawTransitionType === 'random' ? currentRandomTransitionRef.current : rawTransitionType);
+    const transitionType = rawTransitionType === 'random' ? currentRandomTransitionRef.current : rawTransitionType;
     let transitionProgress = 1; // 1 = fully visible
     if (isTransitioningRef.current && transitionType !== 'none') {
-      const elapsed = renderTimestamp - transitionStartRef.current;
+      const elapsed = Date.now() - transitionStartRef.current;
       transitionProgress = Math.min(elapsed / VERSE_TRANSITION_DURATION, 1);
       if (transitionProgress >= 1) {
         isTransitioningRef.current = false;
@@ -1578,7 +1366,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
           return;
         }
 
-        const pulse = 0.6 + Math.sin(renderTimestamp / 400) * 0.4;
+        const pulse = 0.6 + Math.sin(Date.now() / 400) * 0.4;
         let glowColor: string;
         let glowBlur: number;
         let textColor: string;
@@ -1841,7 +1629,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       let chunkStartWordIndex = 0; // Global word index where current chunk starts
       
       // ── Adaptive timing: learn reciter speed from highlightedWordIndex changes ──
-      const now = renderTimestamp;
+      const now = Date.now();
       if (highlightedWordIndex != null && highlightedWordIndex !== lastHighlightedWordRef.current) {
         if (lastHighlightedWordRef.current != null) {
           highlightWordTimestampsRef.current.push(now);
@@ -1921,10 +1709,10 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       if (verseMode !== 'full' && currentChunkIndex !== prevChunkIndexRef.current) {
         prevChunkIndexRef.current = currentChunkIndex;
         chunkFadeRef.current = 0;
-        chunkFadeStartRef.current = renderTimestamp;
+        chunkFadeStartRef.current = Date.now();
       }
       if (verseMode !== 'full' && chunkFadeRef.current < 1) {
-        const fadeElapsed = renderTimestamp - chunkFadeStartRef.current;
+        const fadeElapsed = Date.now() - chunkFadeStartRef.current;
         chunkFadeRef.current = Math.min(fadeElapsed / 300, 1);
       }
       
@@ -1968,28 +1756,83 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         totalHeight = lines.length * lineHeight;
         startY = ayahY - totalHeight / 2;
 
-        // Pre-compute line totals AND individual word widths to avoid per-frame measureText
-        const wordWidths = lines.map(wordsInLine => wordsInLine.map(w => ctx.measureText(w).width));
-        const lineTotals = wordWidths.map((ww, i) =>
-          ww.reduce((sum, w) => sum + w, 0) +
-          Math.max(lines[i].length - 1, 0) * spaceWidth
-        );
-        textLayoutCacheRef.current = { key: cacheKey, lines, spaceWidth, totalHeight, startY, lineHeight, lineTotals, wordWidths };
+        textLayoutCacheRef.current = { key: cacheKey, lines, spaceWidth, totalHeight, startY, lineHeight };
+      }
+
+      // Draw decoration (side borders or separator) based on decorationStyle
+      // Skip complex decorations in recordingLite mode for performance
+      if (!isLiteRecording) {
+        const decoStyle = displaySettings.decorationStyle || 'none';
+
+        // Draw side ornaments (left & right of ayah area)
+        if (decoStyle === 'sideBorder' || decoStyle === 'both') {
+          drawAyahSideOrnaments(ctx, canvas.width * 0.05, ayahY, totalHeight);
+          drawAyahSideOrnaments(ctx, canvas.width * 0.95, ayahY, totalHeight, true);
+        }
+
+        // Draw separator line above the ayah
+        if (decoStyle === 'separator' || decoStyle === 'both') {
+          drawAyahSeparator(ctx, canvas.width / 2, startY - 40 * S, 180 * S);
+        }
       }
 
       // Draw frame around ayah text - centered properly
-      // During recording: force 'simple' frame for heavy styles to save GPU
       if (displaySettings.frameStyle !== 'none') {
         const framePadding = 40 * S;
+        // Center the frame horizontally
         const frameWidth = maxWidth + framePadding * 2;
         const frameX = (canvas.width - frameWidth) / 2;
         const frameY = startY - lineHeight / 2 - framePadding;
         const frameHeight = totalHeight + framePadding * 2;
-        const effectiveFrameStyle = isAnyRecording && (displaySettings.frameStyle === 'ornate' || displaySettings.frameStyle === 'golden' || displaySettings.frameStyle === 'geometric')
-          ? 'simple' : displaySettings.frameStyle;
-        drawIslamicFrame(ctx, frameX, frameY, frameWidth, frameHeight, effectiveFrameStyle);
+        
+        drawIslamicFrame(ctx, frameX, frameY, frameWidth, frameHeight, displaySettings.frameStyle);
       }
 
+    // Helper: draw decorative vertical ornament on side
+    function drawAyahSideOrnaments(c: CanvasRenderingContext2D, x: number, centerY: number, h: number, flipX = false) {
+      c.save();
+      c.translate(x, centerY);
+      if (flipX) c.scale(-1, 1);
+      c.strokeStyle = 'rgba(212, 175, 55, 0.4)';
+      c.lineWidth = 2 * S;
+      c.beginPath();
+      c.moveTo(0, -h / 2);
+      c.bezierCurveTo(30 * S, -h / 4, 30 * S, h / 4, 0, h / 2);
+      c.stroke();
+
+      // Small end circles
+      c.fillStyle = 'rgba(212, 175, 55, 0.5)';
+      c.beginPath();
+      c.arc(0, -h / 2, 4 * S, 0, Math.PI * 2);
+      c.fill();
+      c.beginPath();
+      c.arc(0, h / 2, 4 * S, 0, Math.PI * 2);
+      c.fill();
+      c.restore();
+    }
+
+    // Helper: draw horizontal separator line (subtle wave-like)
+    function drawAyahSeparator(c: CanvasRenderingContext2D, cx: number, cy: number, width: number) {
+      c.save();
+      c.strokeStyle = 'rgba(212, 175, 55, 0.35)';
+      c.lineWidth = 1.5 * S;
+      const hw = width / 2;
+      c.beginPath();
+      c.moveTo(cx - hw, cy);
+      c.bezierCurveTo(cx - hw + 30 * S, cy - 6 * S, cx - 30 * S, cy + 6 * S, cx, cy);
+      c.bezierCurveTo(cx + 30 * S, cy - 6 * S, cx + hw - 30 * S, cy + 6 * S, cx + hw, cy);
+      c.stroke();
+
+      // End dots
+      c.fillStyle = 'rgba(212, 175, 55, 0.5)';
+      c.beginPath();
+      c.arc(cx - hw - 5 * S, cy, 3 * S, 0, Math.PI * 2);
+      c.fill();
+      c.beginPath();
+      c.arc(cx + hw + 5 * S, cy, 3 * S, 0, Math.PI * 2);
+      c.fill();
+      c.restore();
+    }
 
       // Apply verse transition effects
       ctx.save();
@@ -2060,26 +1903,20 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       ctx.direction = 'rtl';
       ctx.textAlign = 'right';
 
-      // Cache primaryRaw to avoid per-frame DOM access
-      if (!primaryColorCacheRef.current) {
+      const primaryRaw = (() => {
         try {
-          primaryColorCacheRef.current = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim();
+          return getComputedStyle(document.documentElement).getPropertyValue('--primary').trim();
         } catch {
-          primaryColorCacheRef.current = '';
+          return '';
         }
-      }
-      const primaryRaw = primaryColorCacheRef.current;
+      })();
       
       // Different highlight styles
-      const effectiveHighlightStyle: 'none' | 'solid' | 'glow' | 'underline' | 'shadow' = isAnyRecording
-        ? (displaySettings.highlightStyle === 'none' ? 'none' : 'underline')
-        : displaySettings.highlightStyle;
-
       let highlightBg: string;
       let highlightText: string;
-      const highlightEnabled = effectiveHighlightStyle !== 'none';
-
-      switch (effectiveHighlightStyle) {
+      const highlightEnabled = displaySettings.highlightStyle !== 'none';
+      
+      switch (displaySettings.highlightStyle) {
         case 'none':
           highlightBg = 'transparent';
           highlightText = textSettings.textColor;
@@ -2099,17 +1936,15 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
 
       let localIndex = 0;
       const chunkStart = chunkStartWordIndexRef.current;
-      const cachedLineTotals = textLayoutCacheRef.current?.lineTotals;
-      const cachedWordWidths = textLayoutCacheRef.current?.wordWidths;
       lines.forEach((wordsInLine, i) => {
-        const lineTotal = cachedLineTotals?.[i] ?? (wordsInLine.reduce((sum, w) => sum + ctx.measureText(w).width, 0) +
-          Math.max(wordsInLine.length - 1, 0) * spaceWidth);
+        const lineTotal = wordsInLine.reduce((sum, w) => sum + ctx.measureText(w).width, 0) +
+          Math.max(wordsInLine.length - 1, 0) * spaceWidth;
 
         let cursorX = canvas.width / 2 + lineTotal / 2;
         const y = startY + i * lineHeight + lineHeight / 2;
 
-        wordsInLine.forEach((w, j) => {
-          const wWidth = cachedWordWidths?.[i]?.[j] ?? ctx.measureText(w).width;
+        wordsInLine.forEach((w) => {
+          const wWidth = ctx.measureText(w).width;
           // Map local index to global: in chunked modes, the global word index = chunkStart + localIndex
           const globalWordIdx = verseMode === 'full' ? localIndex : chunkStart + localIndex;
           const isWordHighlighted = highlightEnabled && highlightedWordIndex != null && globalWordIdx === highlightedWordIndex;
@@ -2118,7 +1953,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
             ctx.save();
             ctx.shadowBlur = 0;
             
-            if (effectiveHighlightStyle === 'solid') {
+            if (displaySettings.highlightStyle === 'solid') {
               const padX = 20 * S;
               const padY = 12 * S;
               ctx.fillStyle = highlightBg;
@@ -2129,11 +1964,11 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
               ctx.beginPath();
               ctx.roundRect(left, top, width, height, 24 * S);
               ctx.fill();
-            } else if (effectiveHighlightStyle === 'glow') {
+            } else if (displaySettings.highlightStyle === 'glow') {
               const glowPulse = 0.35 + Math.sin(Math.PI * Math.min(Math.max(highlightWordProgress, 0), 1)) * 0.65;
               ctx.shadowColor = '#FFD700';
               ctx.shadowBlur = (isAnyRecording ? (8 + glowPulse * 14) : (14 + glowPulse * 24)) * S;
-            } else if (effectiveHighlightStyle === 'underline') {
+            } else if (displaySettings.highlightStyle === 'underline') {
               ctx.strokeStyle = '#FFD700';
               ctx.lineWidth = 3 * S;
               ctx.beginPath();
@@ -2147,7 +1982,15 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
 
           ctx.save();
           if (isWordHighlighted) {
-            if (effectiveHighlightStyle === 'glow') {
+            // Subtle scale-up effect for the highlighted word (optional)
+            if (displaySettings.wordScaleEffect !== false) {
+              const scalePulse = 1.0 + 0.12 * Math.sin(Math.PI * Math.min(Math.max(highlightWordProgress ?? 0, 0), 1));
+              ctx.translate(cursorX - wWidth / 2, y);
+              ctx.scale(scalePulse, scalePulse);
+              ctx.translate(-(cursorX - wWidth / 2), -y);
+            }
+
+            if (displaySettings.highlightStyle === 'glow') {
               const glowPulse = 0.35 + Math.sin(Math.PI * Math.min(Math.max(highlightWordProgress ?? 0, 0), 1)) * 0.65;
               ctx.shadowColor = '#FFD700';
               ctx.shadowBlur = isAnyRecording ? (8 + glowPulse * 14) * S : (18 + glowPulse * 28) * S;
@@ -2227,46 +2070,17 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       ctx.fillText(wmText, wmX, wmY);
       ctx.restore();
     }
-  }, [background, customBackground, imageLoaded, videoReady, slideshowReady, surahName, reciterName, currentAyah, currentAyahWords, highlightedWordIndex, highlightWordProgress, textSettings, displaySettings, getRecordingDimensions, getTokenHsl, drawAyahBadge, getCanvasFontFamily, drawIslamicFrame, drawRecordingHeaderLayer, motionSpeed, isPlaying, ibtahalatLyricsMode, allLyricsLines, currentLyricsIndex]);
+  }, [background, customBackground, imageLoaded, videoReady, slideshowReady, surahName, reciterName, currentAyah, currentAyahWords, highlightedWordIndex, highlightWordProgress, textSettings, displaySettings, getRecordingDimensions, getTokenHsl, drawAyahBadge, getCanvasFontFamily, drawIslamicFrame, motionSpeed, isPlaying, ibtahalatLyricsMode, allLyricsLines, currentLyricsIndex]);
 
   useEffect(() => {
     drawFrameRuntimeRef.current = drawFrame;
   }, [drawFrame]);
 
-  // Animation loop for preview canvas
-  // During recording: keep a low-frequency loop running to ensure the video
-  // element keeps advancing frames (browsers may freeze hidden/detached videos).
-  // The recording canvas is drawn by PreviewPage's own rAF loop.
+  // Animation loop for preview canvas — lighter while idle and fully paused during isolated recording
   useEffect(() => {
     if (isRecording) {
-      // Keep video alive during recording — tick at ~10 FPS
-      let keepAliveRaf: number;
-      let lastTick = 0;
-
-      const tick = (now: number) => {
-        keepAliveRaf = requestAnimationFrame(tick);
-        if (now - lastTick < 100) return; // ~10 FPS
-        lastTick = now;
-
-        const video = videoRef.current;
-        if (video) {
-          if (video.paused) video.play().catch(() => {});
-          // Force browser to decode current video frame
-          if (!videoScaleCanvasRef.current) {
-            videoScaleCanvasRef.current = document.createElement('canvas');
-            videoScaleCanvasRef.current.width = 4;
-            videoScaleCanvasRef.current.height = 4;
-          }
-          const sCtx = videoScaleCanvasRef.current.getContext('2d');
-          if (sCtx) sCtx.drawImage(video, 0, 0, 4, 4);
-        }
-      };
-
-      keepAliveRaf = requestAnimationFrame(tick);
-      // Draw one initial frame on the preview canvas
       drawFrameRuntimeRef.current();
-
-      return () => cancelAnimationFrame(keepAliveRaf);
+      return;
     }
 
     const hasAnimatedBackground =
@@ -2278,7 +2092,8 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       return;
     }
 
-    const targetFps = 14;
+    const perfMode = displaySettings.performanceMode || 'balanced';
+    const targetFps = perfMode === 'economy' ? 10 : perfMode === 'pro' ? 18 : 14;
     const frameInterval = 1000 / targetFps;
     let lastFrameTime = 0;
 
@@ -2296,7 +2111,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [background?.type, isPlaying, isRecording, videoReady, slideshowReady]);
+  }, [background?.type, displaySettings.performanceMode, isPlaying, isRecording, videoReady, slideshowReady]);
 
   // Notify when canvas is ready
   useEffect(() => {
@@ -2304,111 +2119,6 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       onCanvasReady(canvasRef.current);
     }
   }, [onCanvasReady]);
-
-  // Keep refs in sync with state to avoid stale closures during recording
-  const slideshowReadyRef = useRef(false);
-  const imageLoadedRef = useRef(false);
-  useEffect(() => { slideshowReadyRef.current = slideshowReady; }, [slideshowReady]);
-  useEffect(() => { imageLoadedRef.current = imageLoaded; }, [imageLoaded]);
-
-  // Ultra-lightweight: draw ONLY the background to a target canvas (video, image with Ken Burns, or slideshow)
-  const drawVideoFrame = useCallback((targetCanvas: HTMLCanvasElement) => {
-    const ctx = targetCanvas.getContext('2d');
-    if (!ctx) return;
-    const video = videoRef.current;
-
-    // Priority 1: Video background
-    if (video && video.readyState >= 2 && !video.paused) {
-      ctx.drawImage(video, 0, 0, targetCanvas.width, targetCanvas.height);
-      return;
-    }
-
-    // Priority 2: Slideshow background with Ken Burns (use ref to avoid stale closure)
-    const slides = slideshowImagesRef.current;
-    if (slides.length > 1 && slideshowReadyRef.current) {
-      const now = performance.now();
-      const totalCycleDuration = SLIDESHOW_DISPLAY_DURATION + SLIDESHOW_TRANSITION_DURATION;
-      const elapsed = now - slideshowStartTimeRef.current;
-      const currentIndex = Math.floor(elapsed / totalCycleDuration) % slides.length;
-      const nextIndex = (currentIndex + 1) % slides.length;
-      const withinCycle = elapsed % totalCycleDuration;
-      const isTransitioning = withinCycle > SLIDESHOW_DISPLAY_DURATION;
-      const transitionProgress = isTransitioning
-        ? (withinCycle - SLIDESHOW_DISPLAY_DURATION) / SLIDESHOW_TRANSITION_DURATION
-        : 0;
-
-      // Progress within current image display (0→1)
-      const displayProgress = Math.min(withinCycle / SLIDESHOW_DISPLAY_DURATION, 1);
-
-      const drawSlideWithKenBurns = (img: HTMLImageElement, idx: number, progress: number, alpha: number) => {
-        const preset = kenBurnsPresetsRef.current[idx % kenBurnsPresetsRef.current.length];
-        if (!preset || !img) return;
-        const zoom = preset.zoomStart + (preset.zoomEnd - preset.zoomStart) * progress;
-        const panX = preset.panXStart + (preset.panXEnd - preset.panXStart) * progress;
-        const panY = preset.panYStart + (preset.panYEnd - preset.panYStart) * progress;
-
-        ctx.save();
-        ctx.globalAlpha = alpha;
-        const cw = targetCanvas.width;
-        const ch = targetCanvas.height;
-        const imgRatio = img.naturalWidth / img.naturalHeight;
-        const canvasRatio = cw / ch;
-        let sw = img.naturalWidth, sh = img.naturalHeight, sx = 0, sy = 0;
-        if (imgRatio > canvasRatio) {
-          sw = img.naturalHeight * canvasRatio;
-          sx = (img.naturalWidth - sw) / 2;
-        } else {
-          sh = img.naturalWidth / canvasRatio;
-          sy = (img.naturalHeight - sh) / 2;
-        }
-        ctx.translate(cw / 2 + panX, ch / 2 + panY);
-        ctx.scale(zoom, zoom);
-        ctx.translate(-cw / 2, -ch / 2);
-        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, cw, ch);
-        ctx.restore();
-      };
-
-      // Draw current image
-      drawSlideWithKenBurns(slides[currentIndex], currentIndex, displayProgress, isTransitioning ? 1 - transitionProgress : 1);
-      // Draw next image during transition
-      if (isTransitioning && slides[nextIndex]) {
-        drawSlideWithKenBurns(slides[nextIndex], nextIndex, 0, transitionProgress);
-      }
-      return;
-    }
-
-    // Priority 3: Static image with Ken Burns motion (use ref to avoid stale closure)
-    if (imageRef.current && imageLoadedRef.current) {
-      const img = imageRef.current;
-      const imgRatio = img.naturalWidth / img.naturalHeight;
-      const canvasRatio = targetCanvas.width / targetCanvas.height;
-      let sw = img.naturalWidth, sh = img.naturalHeight, sx = 0, sy = 0;
-      if (imgRatio > canvasRatio) {
-        sw = img.naturalHeight * canvasRatio;
-        sx = (img.naturalWidth - sw) / 2;
-      } else {
-        sh = img.naturalWidth / canvasRatio;
-        sy = (img.naturalHeight - sh) / 2;
-      }
-      // Apply subtle Ken Burns to static images during recording
-      const t = (performance.now() % 20000) / 20000; // 20s cycle
-      const zoom = 1.0 + 0.08 * Math.sin(t * Math.PI * 2);
-      const panX = 10 * Math.sin(t * Math.PI * 2 * 0.7);
-      const panY = 6 * Math.cos(t * Math.PI * 2 * 0.5);
-      ctx.save();
-      ctx.translate(targetCanvas.width / 2 + panX, targetCanvas.height / 2 + panY);
-      ctx.scale(zoom, zoom);
-      ctx.translate(-targetCanvas.width / 2, -targetCanvas.height / 2);
-      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, targetCanvas.width, targetCanvas.height);
-      ctx.restore();
-      return;
-    }
-
-    // Fallback: no background ready — draw black + log warning
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, targetCanvas.width, targetCanvas.height);
-    console.warn('drawVideoFrame: no background source ready (video/slideshow/image)');
-  }, []); // No state deps — uses refs only
 
   useImperativeHandle(ref, () => ({
     getContainer: () => containerRef.current,
@@ -2418,13 +2128,12 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       if ((background?.type || 'image') === 'animated') return slideshowReady || imageLoaded;
       return imageLoaded || Boolean(customBackground);
     },
-    isVideoNormalized: () => videoNormalized,
     ensureBackgroundPlayback,
     getRecordingDimensions,
     getRecommendedRecordingFps,
-    drawFrame: (targetCanvas?: HTMLCanvasElement, renderMode?: 'preview' | 'recording' | 'recordingLite' | 'overlayOnly', forcedTimeMs?: number) =>
-      drawFrameRuntimeRef.current(targetCanvas, renderMode, forcedTimeMs),
-    drawVideoFrame,
+    // Always route through the live draw function ref to avoid stale closure
+    drawFrame: (targetCanvas?: HTMLCanvasElement, renderMode?: 'preview' | 'recording' | 'recordingLite') =>
+      drawFrameRuntimeRef.current(targetCanvas, renderMode),
   }));
 
   const containerClass = aspectRatio === '9:16'

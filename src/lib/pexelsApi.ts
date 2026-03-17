@@ -125,8 +125,7 @@ export async function getPopularPexelsVideos(
   }
 }
 
-// Get optimal video URL — prefer SD portrait for recording performance
-// SD = less data to download/normalize, still looks good at 720p-1080p output
+// Get optimal video URL — prefer SD/HD portrait, avoid UHD to reduce CPU load
 export function getBestVideoUrl(video: PexelsVideo, preferLowRes = false): string {
   const files = [...video.video_files].sort((a, b) => {
     // Prefer portrait orientation
@@ -134,11 +133,11 @@ export function getBestVideoUrl(video: PexelsVideo, preferLowRes = false): strin
     const bIsPortrait = b.height > b.width;
     if (aIsPortrait !== bIsPortrait) return aIsPortrait ? -1 : 1;
     
-    // Always prefer SD now — HD is acceptable, never UHD
-    // SD downloads faster and normalizes quicker via FFmpeg
+    // Prefer SD for low-res mode (mobile / compatibility), HD otherwise
+    // Never pick UHD — too heavy for canvas recording
     const qualityOrder = preferLowRes
-      ? { sd: 3, hd: 1, uhd: 0 }
-      : { sd: 3, hd: 2, uhd: 0 };
+      ? { sd: 3, hd: 2, uhd: 0 }
+      : { hd: 3, sd: 2, uhd: 0 };
     const aQuality = qualityOrder[a.quality as keyof typeof qualityOrder] ?? 0;
     const bQuality = qualityOrder[b.quality as keyof typeof qualityOrder] ?? 0;
     if (aQuality !== bQuality) return bQuality - aQuality;

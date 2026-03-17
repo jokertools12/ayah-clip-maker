@@ -15,6 +15,7 @@ export async function getFFmpeg(onProgress?: (ratio: number) => void): Promise<F
     }
 
     // Lazy-load core from CDN to avoid bundling massive WASM into the app.
+    // If one CDN is blocked, try another.
     const coreBases = [
       'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd',
       'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd',
@@ -43,90 +44,6 @@ export async function getFFmpeg(onProgress?: (ratio: number) => void): Promise<F
   return ffmpegLoading;
 }
 
-/**
- * Normalize a background video to a standard format for smooth recording:
- * - CFR 30fps
- * - H.264 (libx264) with yuv420p
- * - Scale/crop to match target aspect ratio
- * - No audio (background videos are muted)
- */
-export async function normalizeBackgroundVideo(
-  input: Blob,
-  aspectRatio: '9:16' | '16:9' = '9:16',
-  opts?: {
-    onProgress?: (ratio: number) => void;
-    maxWidth?: number;
-    maxHeight?: number;
-  }
-): Promise<Blob> {
-  const ffmpeg = await getFFmpeg(opts?.onProgress);
-
-  const inName = 'bg_input.mp4';
-  const outName = 'bg_normalized.mp4';
-
-  await ffmpeg.writeFile(inName, await fetchFile(input));
-
-  // Target dimensions based on aspect ratio
-  const targetW = aspectRatio === '9:16' ? (opts?.maxWidth ?? 720) : (opts?.maxWidth ?? 1280);
-  const targetH = aspectRatio === '9:16' ? (opts?.maxHeight ?? 1280) : (opts?.maxHeight ?? 720);
-
-  // Video filter: force 30fps CFR, scale to fit, then crop to exact dimensions
-  const vf = [
-    'fps=30',
-    `scale=${targetW}:${targetH}:force_original_aspect_ratio=increase`,
-    `crop=${targetW}:${targetH}`,
-  ].join(',');
-
-  try {
-    await ffmpeg.exec([
-      '-i', inName,
-      '-vf', vf,
-      '-r', '30',
-      '-vsync', 'cfr',
-      '-an', // no audio for background
-      '-c:v', 'libx264',
-      '-pix_fmt', 'yuv420p',
-      '-preset', 'veryfast',
-      '-crf', '28', // slightly lower quality is fine for background
-      '-movflags', '+faststart',
-      outName,
-    ]);
-  } catch {
-    // Fallback: mpeg4 codec if libx264 unavailable
-    try {
-      await ffmpeg.exec([
-        '-i', inName,
-        '-vf', vf,
-        '-r', '30',
-        '-vsync', 'cfr',
-        '-an',
-        '-c:v', 'mpeg4',
-        '-q:v', '6',
-        '-pix_fmt', 'yuv420p',
-        outName,
-      ]);
-    } catch (e2) {
-      // Last resort: just re-encode with basic settings
-      await ffmpeg.exec([
-        '-i', inName,
-        '-r', '30',
-        '-an',
-        outName,
-      ]);
-    }
-  }
-
-  const data = (await ffmpeg.readFile(outName)) as unknown as Uint8Array;
-  const copy = new Uint8Array(data.byteLength);
-  copy.set(data);
-
-  // Cleanup
-  try { await ffmpeg.deleteFile(inName); } catch {}
-  try { await ffmpeg.deleteFile(outName); } catch {}
-
-  return new Blob([copy.buffer], { type: 'video/mp4' });
-}
-
 export async function convertWebmToMp4(
   input: Blob,
   opts?: {
@@ -140,47 +57,41 @@ export async function convertWebmToMp4(
 
   await ffmpeg.writeFile(inName, await fetchFile(input));
 
-  // H.264 + AAC with CFR 30fps for maximum compatibility and smoothness
+  // Try H.264 + AAC first; if not available in this build, fallback to MPEG-4 Part 2.
   try {
     await ffmpeg.exec([
-      '-i', inName,
-      '-r', '30',
-      '-vsync', 'cfr',
-      '-c:v', 'libx264',
-      '-pix_fmt', 'yuv420p',
-      '-preset', 'veryfast',
-      '-crf', '23',
-      '-c:a', 'aac',
-      '-b:a', '128k',
-      '-movflags', '+faststart',
+      '-i',
+      inName,
+      '-c:v',
+      'libx264',
+      '-pix_fmt',
+      'yuv420p',
+      '-preset',
+      'veryfast',
+      '-crf',
+      '23',
+      '-c:a',
+      'aac',
+      '-b:a',
+      '128k',
       outName,
     ]);
   } catch {
-    // Fallback to mpeg4 codec
-    try {
-      await ffmpeg.exec([
-        '-i', inName,
-        '-r', '30',
-        '-vsync', 'cfr',
-        '-c:v', 'mpeg4',
-        '-q:v', '5',
-        '-pix_fmt', 'yuv420p',
-        '-c:a', 'aac',
-        '-b:a', '128k',
-        outName,
-      ]);
-    } catch {
-      // Last resort
-      await ffmpeg.exec(['-i', inName, '-r', '30', '-c:a', 'aac', outName]);
-    }
+    await ffmpeg.exec(['-i', inName, '-c:v', 'mpeg4', '-q:v', '5', '-c:a', 'aac', '-b:a', '128k', outName]);
   }
 
   const data = (await ffmpeg.readFile(outName)) as unknown as Uint8Array;
+  // Some typings expose SharedArrayBuffer-like buffers; copy into a fresh ArrayBuffer for Blob.
   const copy = new Uint8Array(data.byteLength);
   copy.set(data);
 
-  try { await ffmpeg.deleteFile(inName); } catch {}
-  try { await ffmpeg.deleteFile(outName); } catch {}
+  // Cleanup (best-effort)
+  try {
+    await ffmpeg.deleteFile(inName);
+    await ffmpeg.deleteFile(outName);
+  } catch {
+    // ignore
+  }
 
   return new Blob([copy.buffer], { type: 'video/mp4' });
 }
