@@ -129,7 +129,7 @@ export function BackgroundSelector({
   return (
     <div className="space-y-4">
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
-        <TabsList className="w-full grid grid-cols-4">
+        <TabsList className="w-full grid grid-cols-5">
           <TabsTrigger value="custom" className="gap-1 text-xs sm:text-sm">
             <Upload className="h-4 w-4" />
             <span className="hidden sm:inline">رفع</span>
@@ -143,9 +143,14 @@ export function BackgroundSelector({
             <span className="hidden sm:inline">متغيرة</span>
             {!isPremium && <Lock className="h-3 w-3 opacity-60" />}
           </TabsTrigger>
-          <TabsTrigger value="pexels" className="gap-1 text-xs sm:text-sm">
+          <TabsTrigger value="pixabay" className="gap-1 text-xs sm:text-sm">
             <Video className="h-4 w-4" />
-            <span className="hidden sm:inline">فيديو</span>
+            <span className="hidden sm:inline">Pixabay</span>
+            {!isPremium && <Lock className="h-3 w-3 opacity-60" />}
+          </TabsTrigger>
+          <TabsTrigger value="pexels" className="gap-1 text-xs sm:text-sm">
+            <Film className="h-4 w-4" />
+            <span className="hidden sm:inline">Pexels</span>
             {!isPremium && <Lock className="h-3 w-3 opacity-60" />}
           </TabsTrigger>
         </TabsList>
