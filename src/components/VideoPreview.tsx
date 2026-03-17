@@ -2395,8 +2395,14 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       ctx.translate(-targetCanvas.width / 2, -targetCanvas.height / 2);
       ctx.drawImage(img, sx, sy, sw, sh, 0, 0, targetCanvas.width, targetCanvas.height);
       ctx.restore();
+      return;
     }
-  }, [imageLoaded, slideshowReady]);
+
+    // Fallback: no background ready — draw black + log warning
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, targetCanvas.width, targetCanvas.height);
+    console.warn('drawVideoFrame: no background source ready (video/slideshow/image)');
+  }, []); // No state deps — uses refs only
 
   useImperativeHandle(ref, () => ({
     getContainer: () => containerRef.current,

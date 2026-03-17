@@ -186,7 +186,7 @@ export function BackgroundSelector({
           )}
         </TabsContent>
 
-        <TabsContent value="pexels" className="mt-4">
+        <TabsContent value="pixabay" className="mt-4">
           {!canUseFeature('pexelsVideos') ? (
             <div className="text-center py-8 space-y-3">
               <Lock className="h-8 w-8 mx-auto text-muted-foreground" />
@@ -194,7 +194,19 @@ export function BackgroundSelector({
               <PremiumBadge showLock />
             </div>
           ) : (
-            <PexelsVideoSelector onSelect={handlePexelsVideoSelect} />
+            <PexelsVideoSelector onSelect={handlePixabayVideoSelect} />
+          )}
+        </TabsContent>
+
+        <TabsContent value="pexels" className="mt-4">
+          {!canUseFeature('pexelsVideos') ? (
+            <div className="text-center py-8 space-y-3">
+              <Lock className="h-8 w-8 mx-auto text-muted-foreground" />
+              <p className="text-muted-foreground">فيديوهات Pexels متاحة للأعضاء المميزين فقط</p>
+              <PremiumBadge showLock />
+            </div>
+          ) : (
+            <PexelsOriginalVideoSelector onSelect={handlePexelsVideoSelect} />
           )}
         </TabsContent>
       </Tabs>
