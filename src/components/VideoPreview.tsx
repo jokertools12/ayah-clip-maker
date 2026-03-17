@@ -2305,6 +2305,12 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     }
   }, [onCanvasReady]);
 
+  // Keep refs in sync with state to avoid stale closures during recording
+  const slideshowReadyRef = useRef(false);
+  const imageLoadedRef = useRef(false);
+  useEffect(() => { slideshowReadyRef.current = slideshowReady; }, [slideshowReady]);
+  useEffect(() => { imageLoadedRef.current = imageLoaded; }, [imageLoaded]);
+
   // Ultra-lightweight: draw ONLY the background to a target canvas (video, image with Ken Burns, or slideshow)
   const drawVideoFrame = useCallback((targetCanvas: HTMLCanvasElement) => {
     const ctx = targetCanvas.getContext('2d');
@@ -2317,9 +2323,9 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       return;
     }
 
-    // Priority 2: Slideshow background with Ken Burns
+    // Priority 2: Slideshow background with Ken Burns (use ref to avoid stale closure)
     const slides = slideshowImagesRef.current;
-    if (slides.length > 1 && slideshowReady) {
+    if (slides.length > 1 && slideshowReadyRef.current) {
       const now = performance.now();
       const totalCycleDuration = SLIDESHOW_DISPLAY_DURATION + SLIDESHOW_TRANSITION_DURATION;
       const elapsed = now - slideshowStartTimeRef.current;
