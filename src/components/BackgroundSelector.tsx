@@ -92,8 +92,7 @@ export function BackgroundSelector({
     );
   };
 
-  const handlePexelsVideoSelect = (videoUrl: string, thumbnailUrl: string) => {
-    // Create a custom background item for the Pixabay video
+  const handlePixabayVideoSelect = (videoUrl: string, thumbnailUrl: string) => {
     const pixabayBackground: BackgroundItem = {
       id: `pixabay-${Date.now()}`,
       name: 'فيديو Pixabay',
@@ -104,6 +103,19 @@ export function BackgroundSelector({
     };
     onCustomBackgroundChange?.(null);
     onSelect(pixabayBackground);
+  };
+
+  const handlePexelsVideoSelect = (videoUrl: string, thumbnailUrl: string) => {
+    const pexelsBackground: BackgroundItem = {
+      id: `pexels-${Date.now()}`,
+      name: 'فيديو Pexels',
+      url: videoUrl,
+      thumbnail: thumbnailUrl,
+      type: 'video',
+      category: 'nature',
+    };
+    onCustomBackgroundChange?.(null);
+    onSelect(pexelsBackground);
   };
 
   const tabDescriptions: Record<string, string> = {
