@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Check, Image as ImageIcon, Sparkles, Upload, Video, Lock } from 'lucide-react';
+import { Check, Image as ImageIcon, Sparkles, Upload, Video, Film, Lock } from 'lucide-react';
 import { BackgroundItem, backgroundImages, slideshowBackgrounds } from '@/data/backgrounds';
 import { CustomBackgroundUploader } from '@/components/CustomBackgroundUploader';
 import { PexelsVideoSelector } from '@/components/PexelsVideoSelector';
+import { PexelsOriginalVideoSelector } from '@/components/PexelsOriginalVideoSelector';
 import { PremiumBadge } from '@/components/PremiumBadge';
 import { useSubscription } from '@/hooks/useSubscription';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
