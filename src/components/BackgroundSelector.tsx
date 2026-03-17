@@ -122,7 +122,8 @@ export function BackgroundSelector({
     custom: 'ارفع صورة أو فيديو من جهازك',
     image: 'صور طبيعية عالية الجودة مع تأثير Ken Burns للحركة',
     slideshow: 'صور متغيرة ومتنوعة تتحرك وتتبدل تلقائياً',
-    pexels: 'فيديوهات احترافية من Pixabay',
+    pixabay: 'فيديوهات احترافية من Pixabay',
+    pexels: 'فيديوهات احترافية من Pexels',
   };
 
   return (
