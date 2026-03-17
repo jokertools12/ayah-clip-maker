@@ -2371,8 +2371,8 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       return;
     }
 
-    // Priority 3: Static image with Ken Burns motion
-    if (imageRef.current && imageLoaded) {
+    // Priority 3: Static image with Ken Burns motion (use ref to avoid stale closure)
+    if (imageRef.current && imageLoadedRef.current) {
       const img = imageRef.current;
       const imgRatio = img.naturalWidth / img.naturalHeight;
       const canvasRatio = targetCanvas.width / targetCanvas.height;
