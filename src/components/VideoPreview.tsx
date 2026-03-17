@@ -2305,6 +2305,12 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
     }
   }, [onCanvasReady]);
 
+  // Keep refs in sync with state to avoid stale closures during recording
+  const slideshowReadyRef = useRef(false);
+  const imageLoadedRef = useRef(false);
+  useEffect(() => { slideshowReadyRef.current = slideshowReady; }, [slideshowReady]);
+  useEffect(() => { imageLoadedRef.current = imageLoaded; }, [imageLoaded]);
+
   // Ultra-lightweight: draw ONLY the background to a target canvas (video, image with Ken Burns, or slideshow)
   const drawVideoFrame = useCallback((targetCanvas: HTMLCanvasElement) => {
     const ctx = targetCanvas.getContext('2d');
@@ -2317,9 +2323,9 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       return;
     }
 
-    // Priority 2: Slideshow background with Ken Burns
+    // Priority 2: Slideshow background with Ken Burns (use ref to avoid stale closure)
     const slides = slideshowImagesRef.current;
-    if (slides.length > 1 && slideshowReady) {
+    if (slides.length > 1 && slideshowReadyRef.current) {
       const now = performance.now();
       const totalCycleDuration = SLIDESHOW_DISPLAY_DURATION + SLIDESHOW_TRANSITION_DURATION;
       const elapsed = now - slideshowStartTimeRef.current;
@@ -2371,8 +2377,8 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       return;
     }
 
-    // Priority 3: Static image with Ken Burns motion
-    if (imageRef.current && imageLoaded) {
+    // Priority 3: Static image with Ken Burns motion (use ref to avoid stale closure)
+    if (imageRef.current && imageLoadedRef.current) {
       const img = imageRef.current;
       const imgRatio = img.naturalWidth / img.naturalHeight;
       const canvasRatio = targetCanvas.width / targetCanvas.height;
@@ -2395,8 +2401,14 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       ctx.translate(-targetCanvas.width / 2, -targetCanvas.height / 2);
       ctx.drawImage(img, sx, sy, sw, sh, 0, 0, targetCanvas.width, targetCanvas.height);
       ctx.restore();
+      return;
     }
-  }, [imageLoaded, slideshowReady]);
+
+    // Fallback: no background ready — draw black + log warning
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, targetCanvas.width, targetCanvas.height);
+    console.warn('drawVideoFrame: no background source ready (video/slideshow/image)');
+  }, []); // No state deps — uses refs only
 
   useImperativeHandle(ref, () => ({
     getContainer: () => containerRef.current,
