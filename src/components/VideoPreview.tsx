@@ -2009,13 +2009,6 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
 
           ctx.save();
           if (isWordHighlighted) {
-            // Subtle scale-up effect for the highlighted word (optional)
-            if (displaySettings.wordScaleEffect !== false) {
-              const scalePulse = 1.0 + 0.12 * Math.sin(Math.PI * Math.min(Math.max(highlightWordProgress ?? 0, 0), 1));
-              ctx.translate(cursorX - wWidth / 2, y);
-              ctx.scale(scalePulse, scalePulse);
-              ctx.translate(-(cursorX - wWidth / 2), -y);
-            }
 
             if (displaySettings.highlightStyle === 'glow') {
               const glowPulse = 0.35 + Math.sin(Math.PI * Math.min(Math.max(highlightWordProgress ?? 0, 0), 1)) * 0.65;
