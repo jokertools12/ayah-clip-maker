@@ -114,6 +114,7 @@ const DEFAULT_DISPLAY_SETTINGS = {
 export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   background,
   customBackground,
+  customBackgroundType,
   surahName,
   reciterName,
   currentAyah,
