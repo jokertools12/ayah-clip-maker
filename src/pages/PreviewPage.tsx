@@ -1233,6 +1233,7 @@ export default function PreviewPage() {
               ref={videoPreviewRef}
               background={background}
               customBackground={customBackground}
+              customBackgroundType={customBackgroundType}
               surahName={isIbtahalatMode ? ibtTrackTitle : (surah?.name || '')}
               reciterName={isIbtahalatMode ? ibtPerformerName : (reciter?.name || '')}
               currentAyah={ayahs[currentAyahIndex] || null}
