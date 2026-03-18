@@ -32,7 +32,6 @@ export interface DisplaySettings {
   glowStyle: 'none' | 'golden' | 'soft' | 'neon' | 'pulse';
   lyricsDisplayStyle: 'scroll' | 'single' | 'karaoke' | 'fade';
   slideshowTransition: 'crossfade' | 'slideLeft' | 'slideRight' | 'slideUp' | 'zoomThrough' | 'wipe' | 'mixed';
-  wordScaleEffect: boolean;
 }
 
 interface DisplaySettingsPanelProps {
