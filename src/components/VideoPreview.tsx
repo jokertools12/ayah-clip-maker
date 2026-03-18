@@ -262,7 +262,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   // Load background (image or video)
   useEffect(() => {
     const bgUrl = customBackground || background?.url;
-    const bgType = background?.type || 'image';
+    const bgType = customBackground ? (customBackgroundType || 'image') : (background?.type || 'image');
     const slideImages = background?.slideImages;
     const fallbackThumb = background?.thumbnail;
 
