@@ -1048,6 +1048,10 @@ export default function PreviewPage() {
               const livePreviewApi = videoPreviewRef.current;
               const draw = livePreviewApi?.drawFrame ?? previewApi.drawFrame;
               draw(recordingCanvas, attempt.renderMode);
+              // Manually push the rendered frame into the capture stream.
+              // With captureStream(0), frames are only captured on requestFrame() calls,
+              // so no frames are dropped even if rendering is slow.
+              videoRecorder.requestFrame();
             } catch (e) {
               console.warn('Frame draw error:', e);
             }

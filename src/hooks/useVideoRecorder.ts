@@ -68,6 +68,13 @@ export function useVideoRecorder() {
   const conversionInProgressRef = useRef<boolean>(false);
   const mp4BlobRef = useRef<Blob | null>(null);
 
+  const videoTrackRef = useRef<CanvasCaptureMediaStreamTrack | null>(null);
+
+  /** Call after each drawFrame() during recording to push the frame into the stream */
+  const requestFrame = useCallback(() => {
+    try { videoTrackRef.current?.requestFrame(); } catch {}
+  }, []);
+
   const startRecording = useCallback(async (
     canvas: HTMLCanvasElement,
     audioElement: HTMLAudioElement | null,
@@ -92,11 +99,13 @@ export function useVideoRecorder() {
         conversionInProgressRef.current = false;
 
         const safeFps = Number.isFinite(captureFps) ? Math.min(Math.max(captureFps, 12), 30) : 24;
-        const requestedStreamFps = options?.captureStreamFps;
-        const streamFps = Number.isFinite(requestedStreamFps)
-          ? Math.min(Math.max(requestedStreamFps as number, 1), 30)
-          : safeFps;
-        const canvasStream = canvas.captureStream(streamFps);
+
+        // Use captureStream(0) = manual frame capture mode.
+        // Frames are only pushed when we call videoTrack.requestFrame().
+        // This eliminates dropped frames when canvas rendering is slow (e.g. heavy video backgrounds).
+        const canvasStream = canvas.captureStream(0);
+        const vTrack = canvasStream.getVideoTracks()[0] as CanvasCaptureMediaStreamTrack;
+        videoTrackRef.current = vTrack;
 
         const tracks = [...canvasStream.getVideoTracks()];
         if (audioStream && audioStream.getAudioTracks().length) {
@@ -292,5 +301,5 @@ export function useVideoRecorder() {
     chunksRef.current = [];
   }, [stopRecording]);
 
-  return { ...state, startRecording, stopRecording, downloadMp4, downloadWebm, convertToMp4, reset };
+  return { ...state, startRecording, stopRecording, downloadMp4, downloadWebm, convertToMp4, reset, requestFrame };
 }
