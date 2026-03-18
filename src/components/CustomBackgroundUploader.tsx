@@ -30,7 +30,7 @@ export function CustomBackgroundUploader({ onUpload, currentBackground, currentB
 
       // Create a local URL for the file
       const url = URL.createObjectURL(file);
-      onUpload(url);
+      onUpload(url, isVideo ? 'video' : 'image');
     } catch (error) {
       console.error('Error uploading file:', error);
       alert('حدث خطأ في رفع الملف');
