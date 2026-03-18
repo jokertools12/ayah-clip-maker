@@ -176,6 +176,7 @@ export default function PreviewPage() {
   // ── Settings state ──────────────────────────────────────────────────────────
   const [displaySettings, setDisplaySettings] = useState<DisplaySettings>(DEFAULT_DISPLAY_SETTINGS);
   const [customBackground, setCustomBackground] = useState<string | null>(null);
+  const [customBackgroundType, setCustomBackgroundType] = useState<'image' | 'video'>('image');
   const [backgroundLoadMethod, setBackgroundLoadMethod] = useState<'direct' | 'proxy' | 'fallback' | null>(null);
   const [exportSettings, setExportSettings] = useState<ExportSettings>(DEFAULT_EXPORT_SETTINGS);
   const [selectedPresetId, setSelectedPresetId] = useState<string | undefined>(undefined);
