@@ -301,5 +301,5 @@ export function useVideoRecorder() {
     chunksRef.current = [];
   }, [stopRecording]);
 
-  return { ...state, startRecording, stopRecording, downloadMp4, downloadWebm, convertToMp4, reset };
+  return { ...state, startRecording, stopRecording, downloadMp4, downloadWebm, convertToMp4, reset, requestFrame };
 }
