@@ -1556,7 +1556,11 @@ export default function PreviewPage() {
               <TabsContent value="background" className="mt-4">
                 <CustomBackgroundUploader
                   currentBackground={customBackground}
-                  onUpload={(url) => setCustomBackground(url || null)}
+                  currentBackgroundType={customBackgroundType}
+                  onUpload={(url, type) => {
+                    setCustomBackground(url || null);
+                    if (type) setCustomBackgroundType(type);
+                  }}
                 />
               </TabsContent>
 
