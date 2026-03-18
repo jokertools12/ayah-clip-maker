@@ -4,8 +4,9 @@ import { Upload, X, Image as ImageIcon, Video, Check } from 'lucide-react';
 import { useState, useRef } from 'react';
 
 interface CustomBackgroundUploaderProps {
-  onUpload: (url: string) => void;
+  onUpload: (url: string, type?: 'image' | 'video') => void;
   currentBackground?: string | null;
+  currentBackgroundType?: 'image' | 'video';
 }
 
 export function CustomBackgroundUploader({ onUpload, currentBackground }: CustomBackgroundUploaderProps) {
