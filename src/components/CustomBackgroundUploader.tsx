@@ -9,7 +9,7 @@ interface CustomBackgroundUploaderProps {
   currentBackgroundType?: 'image' | 'video';
 }
 
-export function CustomBackgroundUploader({ onUpload, currentBackground }: CustomBackgroundUploaderProps) {
+export function CustomBackgroundUploader({ onUpload, currentBackground, currentBackgroundType }: CustomBackgroundUploaderProps) {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
