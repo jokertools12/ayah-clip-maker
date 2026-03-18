@@ -27,6 +27,7 @@ const FRAME_INTERVAL_DEFAULT = 1000 / DEFAULT_TARGET_FPS;
 interface VideoPreviewProps {
   background: BackgroundItem | null;
   customBackground?: string | null;
+  customBackgroundType?: 'image' | 'video';
   surahName: string;
   reciterName: string;
   currentAyah: { numberInSurah: number; text: string } | null;
