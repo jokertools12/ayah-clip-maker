@@ -39,7 +39,7 @@ export function CustomBackgroundUploader({ onUpload, currentBackground, currentB
     }
   };
 
-  const isVideo = currentBackground?.includes('video') || currentBackground?.includes('.mp4') || currentBackground?.includes('.webm');
+  const isVideo = currentBackgroundType === 'video' || currentBackground?.includes('.mp4') || currentBackground?.includes('.webm');
 
   return (
     <div className="space-y-4">
