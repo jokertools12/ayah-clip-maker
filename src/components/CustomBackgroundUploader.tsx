@@ -4,11 +4,12 @@ import { Upload, X, Image as ImageIcon, Video, Check } from 'lucide-react';
 import { useState, useRef } from 'react';
 
 interface CustomBackgroundUploaderProps {
-  onUpload: (url: string) => void;
+  onUpload: (url: string, type?: 'image' | 'video') => void;
   currentBackground?: string | null;
+  currentBackgroundType?: 'image' | 'video';
 }
 
-export function CustomBackgroundUploader({ onUpload, currentBackground }: CustomBackgroundUploaderProps) {
+export function CustomBackgroundUploader({ onUpload, currentBackground, currentBackgroundType }: CustomBackgroundUploaderProps) {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -29,7 +30,7 @@ export function CustomBackgroundUploader({ onUpload, currentBackground }: Custom
 
       // Create a local URL for the file
       const url = URL.createObjectURL(file);
-      onUpload(url);
+      onUpload(url, isVideo ? 'video' : 'image');
     } catch (error) {
       console.error('Error uploading file:', error);
       alert('حدث خطأ في رفع الملف');
@@ -38,7 +39,7 @@ export function CustomBackgroundUploader({ onUpload, currentBackground }: Custom
     }
   };
 
-  const isVideo = currentBackground?.includes('video') || currentBackground?.includes('.mp4') || currentBackground?.includes('.webm');
+  const isVideo = currentBackgroundType === 'video' || currentBackground?.includes('.mp4') || currentBackground?.includes('.webm');
 
   return (
     <div className="space-y-4">

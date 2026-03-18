@@ -27,7 +27,7 @@ export const QUALITY_PRESETS: Record<ExportQuality, QualitySettings> = {
   low:    { label: '480p - سريع',           resolution: '480×854',      bitrate: 700_000,   canvasWidth: 480,  canvasHeight: 854  },
   medium: { label: '720p HD',               resolution: '720×1280',     bitrate: 1_500_000, canvasWidth: 720,  canvasHeight: 1280 },
   high:   { label: '1080p Full HD',          resolution: '1080×1920',    bitrate: 3_000_000, canvasWidth: 1080, canvasHeight: 1920 },
-  ultra:  { label: 'Ultra (للأجهزة القوية)', resolution: '1080×1920 عالي', bitrate: 5_000_000, canvasWidth: 1080, canvasHeight: 1920 },
+  ultra:  { label: '4K Ultra HD',              resolution: '2160×3840',      bitrate: 12_000_000, canvasWidth: 2160, canvasHeight: 3840 },
 };
 
 /** Return recording canvas dimensions for the given quality + aspect ratio */

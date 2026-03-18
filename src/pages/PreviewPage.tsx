@@ -95,7 +95,7 @@ const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
   glowStyle: 'golden',
   lyricsDisplayStyle: 'scroll',
   slideshowTransition: 'crossfade',
-  wordScaleEffect: true,
+  
 };
 
 // Note: frameStyle defaults to 'none' — user must explicitly select a frame
@@ -176,6 +176,7 @@ export default function PreviewPage() {
   // ── Settings state ──────────────────────────────────────────────────────────
   const [displaySettings, setDisplaySettings] = useState<DisplaySettings>(DEFAULT_DISPLAY_SETTINGS);
   const [customBackground, setCustomBackground] = useState<string | null>(null);
+  const [customBackgroundType, setCustomBackgroundType] = useState<'image' | 'video'>('image');
   const [backgroundLoadMethod, setBackgroundLoadMethod] = useState<'direct' | 'proxy' | 'fallback' | null>(null);
   const [exportSettings, setExportSettings] = useState<ExportSettings>(DEFAULT_EXPORT_SETTINGS);
   const [selectedPresetId, setSelectedPresetId] = useState<string | undefined>(undefined);
@@ -1232,6 +1233,7 @@ export default function PreviewPage() {
               ref={videoPreviewRef}
               background={background}
               customBackground={customBackground}
+              customBackgroundType={customBackgroundType}
               surahName={isIbtahalatMode ? ibtTrackTitle : (surah?.name || '')}
               reciterName={isIbtahalatMode ? ibtPerformerName : (reciter?.name || '')}
               currentAyah={ayahs[currentAyahIndex] || null}
@@ -1554,7 +1556,11 @@ export default function PreviewPage() {
               <TabsContent value="background" className="mt-4">
                 <CustomBackgroundUploader
                   currentBackground={customBackground}
-                  onUpload={(url) => setCustomBackground(url || null)}
+                  currentBackgroundType={customBackgroundType}
+                  onUpload={(url, type) => {
+                    setCustomBackground(url || null);
+                    if (type) setCustomBackgroundType(type);
+                  }}
                 />
               </TabsContent>
 
