@@ -116,6 +116,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   background,
   customBackground,
   customBackgroundType,
+  backgroundScaleMax = 480,
   surahName,
   reciterName,
   currentAyah,
