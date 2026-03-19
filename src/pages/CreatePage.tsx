@@ -743,7 +743,16 @@ export default function CreatePage() {
           {((contentMode !== 'ibtahalat' && currentStep === 4) || (contentMode === 'ibtahalat' && currentStep === 2)) && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2">
-                <BackgroundSelector selectedBackground={selectedBackground} onSelect={setSelectedBackground} />
+                <BackgroundSelector 
+                  selectedBackground={selectedBackground} 
+                  onSelect={setSelectedBackground}
+                  customBackground={customBackground}
+                  customBackgroundType={customBackgroundType}
+                  onCustomBackgroundChange={(url, type) => {
+                    setCustomBackground(url);
+                    if (type) setCustomBackgroundType(type);
+                  }}
+                />
               </div>
               <div className="space-y-6">
                 <Card>

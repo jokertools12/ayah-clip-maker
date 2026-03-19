@@ -140,8 +140,9 @@ export function BackgroundSelector({
 
         <TabsContent value="custom" className="mt-4">
           <CustomBackgroundUploader 
-            onUpload={(url) => onCustomBackgroundChange?.(url)}
+            onUpload={(url, type) => onCustomBackgroundChange?.(url || null, type)}
             currentBackground={customBackground}
+            currentBackgroundType={customBackgroundType}
           />
         </TabsContent>
 
