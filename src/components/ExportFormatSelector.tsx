@@ -48,6 +48,8 @@ export function ExportFormatSelector({
   mp4Blob,
   isConverting,
   isRecording,
+  backgroundScaleMax = 480,
+  onBackgroundScaleMaxChange,
 }: ExportFormatSelectorProps) {
   const updateSetting = <K extends keyof ExportSettings>(key: K, value: ExportSettings[K]) => {
     onChange({ ...settings, [key]: value });
