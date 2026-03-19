@@ -21,7 +21,8 @@ interface BackgroundSelectorProps {
 export function BackgroundSelector({ 
   selectedBackground, 
   onSelect, 
-  customBackground, 
+  customBackground,
+  customBackgroundType,
   onCustomBackgroundChange 
 }: BackgroundSelectorProps) {
   const [activeTab, setActiveTab] = useState<'custom' | 'image' | 'slideshow' | 'pexels'>('image');
