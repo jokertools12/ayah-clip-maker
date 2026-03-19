@@ -982,8 +982,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       }
       const sc = videoScaleCanvasRef.current;
       // Use a smaller intermediate size to reduce GPU pixel processing
-      const maxScale = (props as any).backgroundScaleMax || 480;
-      const scaleW = Math.min(video.videoWidth || maxScale, maxScale);
+      const scaleW = Math.min(video.videoWidth || backgroundScaleMax, backgroundScaleMax);
       const scaleH = Math.round(scaleW * (canvas.height / canvas.width));
       if (sc.width !== scaleW || sc.height !== scaleH) {
         sc.width = scaleW;
