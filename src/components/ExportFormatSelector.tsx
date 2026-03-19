@@ -24,6 +24,8 @@ interface ExportFormatSelectorProps {
   mp4Blob: Blob | null;
   isConverting: boolean;
   isRecording: boolean;
+  backgroundScaleMax?: number;
+  onBackgroundScaleMaxChange?: (value: number) => void;
 }
 
 const FORMAT_OPTIONS: { id: ExportFormat; label: string; description: string; icon: typeof FileVideo }[] = [
