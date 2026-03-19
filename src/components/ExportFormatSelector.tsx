@@ -2,8 +2,7 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Slider } from '@/components/ui/slider';
-import { Download, FileVideo, Settings2, Loader2, Cpu, Film, Image as ImageIcon } from 'lucide-react';
+import { Download, FileVideo, Settings2, Loader2, Cpu, Film } from 'lucide-react';
 import { ExportQuality, QUALITY_PRESETS } from '@/hooks/useVideoRecorder';
 
 export type ExportFormat = 'mp4' | 'webm' | 'gif';
@@ -24,8 +23,6 @@ interface ExportFormatSelectorProps {
   mp4Blob: Blob | null;
   isConverting: boolean;
   isRecording: boolean;
-  backgroundScaleMax?: number;
-  onBackgroundScaleMaxChange?: (value: number) => void;
 }
 
 const FORMAT_OPTIONS: { id: ExportFormat; label: string; description: string; icon: typeof FileVideo }[] = [
@@ -48,8 +45,6 @@ export function ExportFormatSelector({
   mp4Blob,
   isConverting,
   isRecording,
-  backgroundScaleMax = 480,
-  onBackgroundScaleMaxChange,
 }: ExportFormatSelectorProps) {
   const updateSetting = <K extends keyof ExportSettings>(key: K, value: ExportSettings[K]) => {
     onChange({ ...settings, [key]: value });
@@ -164,32 +159,6 @@ export function ExportFormatSelector({
               </div>
             ))}
           </RadioGroup>
-        </div>
-
-        {/* Background Scale */}
-        <div className="space-y-3 pt-2 border-t">
-          <Label className="text-sm flex items-center gap-2">
-            <ImageIcon className="h-4 w-4" />
-            دقة الخلفية أثناء التسجيل
-          </Label>
-          <div className="space-y-2">
-            <Slider
-              value={[backgroundScaleMax]}
-              onValueChange={([v]) => onBackgroundScaleMaxChange?.(v)}
-              min={240}
-              max={720}
-              step={40}
-              className="w-full"
-            />
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>أخف (240px)</span>
-              <span className="font-medium text-foreground">{backgroundScaleMax}px</span>
-              <span>أوضح (720px)</span>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              تقليل الدقة يحسّن الأداء مع خلفيات الفيديو الثقيلة دون التأثير على جودة النص
-            </p>
-          </div>
         </div>
 
         {/* Status */}

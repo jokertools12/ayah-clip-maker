@@ -85,8 +85,6 @@ export default function CreatePage() {
     () => backgroundImages[0] || slideshowBackgrounds[0] || getRandomBackground('animated')
   );
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('9:16');
-  const [customBackground, setCustomBackground] = useState<string | null>(null);
-  const [customBackgroundType, setCustomBackgroundType] = useState<'image' | 'video'>('image');
   const [textSettings, setTextSettings] = useState<TextSettings>(defaultTextSettings);
 
   // ── Surah / Quran state ──
@@ -256,10 +254,6 @@ export default function CreatePage() {
         backgroundThumb: selectedBackground.thumbnail,
         ratio: aspectRatio,
       });
-      if (customBackground) {
-        params.set('customBackground', customBackground);
-        params.set('customBackgroundType', customBackgroundType);
-      }
       navigate(`/preview?${params.toString()}`);
       return;
     }
@@ -285,10 +279,6 @@ export default function CreatePage() {
       shadowIntensity: textSettings.shadowIntensity.toString(),
       overlayOpacity: textSettings.overlayOpacity.toString(),
     });
-    if (customBackground) {
-      params.set('customBackground', customBackground);
-      params.set('customBackgroundType', customBackgroundType);
-    }
     navigate(`/preview?${params.toString()}`);
   };
 
@@ -743,16 +733,7 @@ export default function CreatePage() {
           {((contentMode !== 'ibtahalat' && currentStep === 4) || (contentMode === 'ibtahalat' && currentStep === 2)) && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2">
-                <BackgroundSelector 
-                  selectedBackground={selectedBackground} 
-                  onSelect={setSelectedBackground}
-                  customBackground={customBackground}
-                  customBackgroundType={customBackgroundType}
-                  onCustomBackgroundChange={(url, type) => {
-                    setCustomBackground(url);
-                    if (type) setCustomBackgroundType(type);
-                  }}
-                />
+                <BackgroundSelector selectedBackground={selectedBackground} onSelect={setSelectedBackground} />
               </div>
               <div className="space-y-6">
                 <Card>

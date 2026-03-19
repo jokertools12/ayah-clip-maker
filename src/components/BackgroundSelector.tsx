@@ -14,15 +14,13 @@ interface BackgroundSelectorProps {
   selectedBackground: BackgroundItem | null;
   onSelect: (background: BackgroundItem) => void;
   customBackground?: string | null;
-  customBackgroundType?: 'image' | 'video';
-  onCustomBackgroundChange?: (url: string | null, type?: 'image' | 'video') => void;
+  onCustomBackgroundChange?: (url: string | null) => void;
 }
 
 export function BackgroundSelector({ 
   selectedBackground, 
   onSelect, 
-  customBackground,
-  customBackgroundType,
+  customBackground, 
   onCustomBackgroundChange 
 }: BackgroundSelectorProps) {
   const [activeTab, setActiveTab] = useState<'custom' | 'image' | 'slideshow' | 'pexels'>('image');
@@ -140,9 +138,8 @@ export function BackgroundSelector({
 
         <TabsContent value="custom" className="mt-4">
           <CustomBackgroundUploader 
-            onUpload={(url, type) => onCustomBackgroundChange?.(url || null, type)}
+            onUpload={(url) => onCustomBackgroundChange?.(url)}
             currentBackground={customBackground}
-            currentBackgroundType={customBackgroundType}
           />
         </TabsContent>
 

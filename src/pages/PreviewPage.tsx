@@ -175,13 +175,8 @@ export default function PreviewPage() {
 
   // ── Settings state ──────────────────────────────────────────────────────────
   const [displaySettings, setDisplaySettings] = useState<DisplaySettings>(DEFAULT_DISPLAY_SETTINGS);
-  const [customBackground, setCustomBackground] = useState<string | null>(
-    searchParams.get('customBackground') || null
-  );
-  const [customBackgroundType, setCustomBackgroundType] = useState<'image' | 'video'>(
-    (searchParams.get('customBackgroundType') as 'image' | 'video') || 'image'
-  );
-  const [backgroundScaleMax, setBackgroundScaleMax] = useState(480);
+  const [customBackground, setCustomBackground] = useState<string | null>(null);
+  const [customBackgroundType, setCustomBackgroundType] = useState<'image' | 'video'>('image');
   const [backgroundLoadMethod, setBackgroundLoadMethod] = useState<'direct' | 'proxy' | 'fallback' | null>(null);
   const [exportSettings, setExportSettings] = useState<ExportSettings>(DEFAULT_EXPORT_SETTINGS);
   const [selectedPresetId, setSelectedPresetId] = useState<string | undefined>(undefined);
@@ -1037,10 +1032,11 @@ export default function PreviewPage() {
 
         try {
           const recordingCanvas = document.createElement('canvas');
-          // Use full quality dimensions for all modes (no more liteScale downscaling)
+          // Use quality-based dimensions; for lite mode, scale down once here
           const recordingDimensions = getQualityDimensions(attempt.quality, aspectRatio);
-          recordingCanvas.width = recordingDimensions.width;
-          recordingCanvas.height = recordingDimensions.height;
+          const liteScale = attempt.renderMode === 'recordingLite' ? 0.67 : 1;
+          recordingCanvas.width = Math.round(recordingDimensions.width * liteScale);
+          recordingCanvas.height = Math.round(recordingDimensions.height * liteScale);
 
           const frameInterval = Math.max(1000 / attempt.fps, 16);
           let rafId: number | null = null;
@@ -1242,7 +1238,6 @@ export default function PreviewPage() {
               background={background}
               customBackground={customBackground}
               customBackgroundType={customBackgroundType}
-              backgroundScaleMax={backgroundScaleMax}
               surahName={isIbtahalatMode ? ibtTrackTitle : (surah?.name || '')}
               reciterName={isIbtahalatMode ? ibtPerformerName : (reciter?.name || '')}
               currentAyah={ayahs[currentAyahIndex] || null}
@@ -1583,8 +1578,6 @@ export default function PreviewPage() {
                     mp4Blob={videoRecorder.mp4Blob}
                     isConverting={videoRecorder.isConverting}
                     isRecording={videoRecorder.isRecording}
-                    backgroundScaleMax={backgroundScaleMax}
-                    onBackgroundScaleMaxChange={setBackgroundScaleMax}
                   />
                   <MotionSpeedControl
                     speed={exportSettings.motionSpeed}
