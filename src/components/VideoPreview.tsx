@@ -28,6 +28,7 @@ interface VideoPreviewProps {
   background: BackgroundItem | null;
   customBackground?: string | null;
   customBackgroundType?: 'image' | 'video';
+  backgroundScaleMax?: number;
   surahName: string;
   reciterName: string;
   currentAyah: { numberInSurah: number; text: string } | null;
