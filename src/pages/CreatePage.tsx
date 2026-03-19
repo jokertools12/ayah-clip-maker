@@ -85,6 +85,8 @@ export default function CreatePage() {
     () => backgroundImages[0] || slideshowBackgrounds[0] || getRandomBackground('animated')
   );
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('9:16');
+  const [customBackground, setCustomBackground] = useState<string | null>(null);
+  const [customBackgroundType, setCustomBackgroundType] = useState<'image' | 'video'>('image');
   const [textSettings, setTextSettings] = useState<TextSettings>(defaultTextSettings);
 
   // ── Surah / Quran state ──
