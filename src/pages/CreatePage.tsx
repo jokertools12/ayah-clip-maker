@@ -285,6 +285,10 @@ export default function CreatePage() {
       shadowIntensity: textSettings.shadowIntensity.toString(),
       overlayOpacity: textSettings.overlayOpacity.toString(),
     });
+    if (customBackground) {
+      params.set('customBackground', customBackground);
+      params.set('customBackgroundType', customBackgroundType);
+    }
     navigate(`/preview?${params.toString()}`);
   };
 
