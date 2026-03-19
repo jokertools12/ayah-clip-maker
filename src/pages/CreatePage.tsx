@@ -256,6 +256,10 @@ export default function CreatePage() {
         backgroundThumb: selectedBackground.thumbnail,
         ratio: aspectRatio,
       });
+      if (customBackground) {
+        params.set('customBackground', customBackground);
+        params.set('customBackgroundType', customBackgroundType);
+      }
       navigate(`/preview?${params.toString()}`);
       return;
     }
