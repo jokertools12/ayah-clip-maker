@@ -1242,6 +1242,7 @@ export default function PreviewPage() {
               background={background}
               customBackground={customBackground}
               customBackgroundType={customBackgroundType}
+              backgroundScaleMax={backgroundScaleMax}
               surahName={isIbtahalatMode ? ibtTrackTitle : (surah?.name || '')}
               reciterName={isIbtahalatMode ? ibtPerformerName : (reciter?.name || '')}
               currentAyah={ayahs[currentAyahIndex] || null}
