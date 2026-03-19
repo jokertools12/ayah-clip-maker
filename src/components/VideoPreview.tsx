@@ -28,6 +28,7 @@ interface VideoPreviewProps {
   background: BackgroundItem | null;
   customBackground?: string | null;
   customBackgroundType?: 'image' | 'video';
+  backgroundScaleMax?: number;
   surahName: string;
   reciterName: string;
   currentAyah: { numberInSurah: number; text: string } | null;
@@ -115,6 +116,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   background,
   customBackground,
   customBackgroundType,
+  backgroundScaleMax = 480,
   surahName,
   reciterName,
   currentAyah,
@@ -980,7 +982,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       }
       const sc = videoScaleCanvasRef.current;
       // Use a smaller intermediate size to reduce GPU pixel processing
-      const scaleW = Math.min(video.videoWidth || 480, 480);
+      const scaleW = Math.min(video.videoWidth || backgroundScaleMax, backgroundScaleMax);
       const scaleH = Math.round(scaleW * (canvas.height / canvas.width));
       if (sc.width !== scaleW || sc.height !== scaleH) {
         sc.width = scaleW;
