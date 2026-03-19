@@ -166,6 +166,32 @@ export function ExportFormatSelector({
           </RadioGroup>
         </div>
 
+        {/* Background Scale */}
+        <div className="space-y-3 pt-2 border-t">
+          <Label className="text-sm flex items-center gap-2">
+            <ImageIcon className="h-4 w-4" />
+            دقة الخلفية أثناء التسجيل
+          </Label>
+          <div className="space-y-2">
+            <Slider
+              value={[backgroundScaleMax]}
+              onValueChange={([v]) => onBackgroundScaleMaxChange?.(v)}
+              min={240}
+              max={720}
+              step={40}
+              className="w-full"
+            />
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>أخف (240px)</span>
+              <span className="font-medium text-foreground">{backgroundScaleMax}px</span>
+              <span>أوضح (720px)</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              تقليل الدقة يحسّن الأداء مع خلفيات الفيديو الثقيلة دون التأثير على جودة النص
+            </p>
+          </div>
+        </div>
+
         {/* Status */}
         {isRecording && (
           <div className="flex items-center gap-2 p-3 rounded-lg bg-primary/10 text-primary">

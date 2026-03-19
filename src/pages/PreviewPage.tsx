@@ -1583,6 +1583,8 @@ export default function PreviewPage() {
                     mp4Blob={videoRecorder.mp4Blob}
                     isConverting={videoRecorder.isConverting}
                     isRecording={videoRecorder.isRecording}
+                    backgroundScaleMax={backgroundScaleMax}
+                    onBackgroundScaleMaxChange={setBackgroundScaleMax}
                   />
                   <MotionSpeedControl
                     speed={exportSettings.motionSpeed}
