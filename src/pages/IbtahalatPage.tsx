@@ -60,6 +60,8 @@ export default function IbtahalatPage() {
     () => getRandomBackground('animated')
   );
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('9:16');
+  const [customBg, setCustomBg] = useState<string | null>(null);
+  const [customBgType, setCustomBgType] = useState<'image' | 'video'>('image');
   const [searchQuery, setSearchQuery] = useState('');
   const [playingTrackId, setPlayingTrackId] = useState<string | null>(null);
   const [browseMode, setBrowseMode] = useState<BrowseMode>('byCategory');
