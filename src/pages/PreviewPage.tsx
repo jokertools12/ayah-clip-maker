@@ -210,6 +210,7 @@ export default function PreviewPage() {
   const [editingLyricsText, setEditingLyricsText] = useState('');
   const [retranscribeTrigger, setRetranscribeTrigger] = useState(0);
   const [isEditingTiming, setIsEditingTiming] = useState(false);
+  const [isRefiningTiming, setIsRefiningTiming] = useState(false);
 
   // ── Playback state ──────────────────────────────────────────────────────────
   const [isPlaying, setIsPlaying] = useState(false);
