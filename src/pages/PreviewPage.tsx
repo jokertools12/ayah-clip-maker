@@ -61,6 +61,7 @@ import {
   Pencil,
   X,
   Clock,
+  Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -141,6 +142,8 @@ export default function PreviewPage() {
   const backgroundUrlParam = searchParams.get('backgroundUrl') || '';
   const backgroundThumbParam = searchParams.get('backgroundThumb') || '';
   const aspectRatio = (searchParams.get('ratio') || '9:16') as '9:16' | '16:9';
+  const customBgUrlParam = searchParams.get('customBgUrl') || '';
+  const customBgTypeParam = (searchParams.get('customBgType') || 'image') as 'image' | 'video';
 
   const textSettings: TextSettings = {
     fontSize: parseInt(searchParams.get('fontSize') || '28'),
@@ -167,7 +170,6 @@ export default function PreviewPage() {
       thumbnail: backgroundThumbParam || backgroundUrlParam,
       name: 'خلفية مختارة',
       category: fallbackBackground.category,
-      // Carry over slideImages from the original background data for animated slideshows
       slideImages: fallbackBackground.slideImages,
     };
   }, [backgroundUrlParam, fallbackBackground, backgroundId, backgroundType, backgroundThumbParam]);
@@ -175,8 +177,8 @@ export default function PreviewPage() {
 
   // ── Settings state ──────────────────────────────────────────────────────────
   const [displaySettings, setDisplaySettings] = useState<DisplaySettings>(DEFAULT_DISPLAY_SETTINGS);
-  const [customBackground, setCustomBackground] = useState<string | null>(null);
-  const [customBackgroundType, setCustomBackgroundType] = useState<'image' | 'video'>('image');
+  const [customBackground, setCustomBackground] = useState<string | null>(customBgUrlParam || null);
+  const [customBackgroundType, setCustomBackgroundType] = useState<'image' | 'video'>(customBgTypeParam);
   const [backgroundLoadMethod, setBackgroundLoadMethod] = useState<'direct' | 'proxy' | 'fallback' | null>(null);
   const [exportSettings, setExportSettings] = useState<ExportSettings>(DEFAULT_EXPORT_SETTINGS);
   const [selectedPresetId, setSelectedPresetId] = useState<string | undefined>(undefined);
@@ -209,6 +211,7 @@ export default function PreviewPage() {
   const [editingLyricsText, setEditingLyricsText] = useState('');
   const [retranscribeTrigger, setRetranscribeTrigger] = useState(0);
   const [isEditingTiming, setIsEditingTiming] = useState(false);
+  const [isRefiningTiming, setIsRefiningTiming] = useState(false);
 
   // ── Playback state ──────────────────────────────────────────────────────────
   const [isPlaying, setIsPlaying] = useState(false);
@@ -1341,6 +1344,38 @@ export default function PreviewPage() {
                       >
                         <RefreshCw className="h-3 w-3" />
                         إعادة النسخ
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs gap-1"
+                        disabled={isRefiningTiming || transcribedLines.length === 0}
+                        onClick={async () => {
+                          setIsRefiningTiming(true);
+                          toast.info('جارٍ تحسين التوقيت بالذكاء الاصطناعي...');
+                          try {
+                            const { data, error } = await supabase.functions.invoke('refine-timing', {
+                              body: { lines: transcribedLines, totalDuration: duration },
+                            });
+                            if (error) throw error;
+                            if (data?.refinedLines) {
+                              setTranscribedLines(data.refinedLines);
+                              transcribedLinesRef.current = data.refinedLines;
+                              setAyahs(data.refinedLines.map((l: any, i: number) => ({ numberInSurah: i + 1, text: l.text })));
+                              const cacheKey = `transcription_cache_${btoa(ibtAudioUrl).slice(0, 64)}`;
+                              try { localStorage.setItem(cacheKey, JSON.stringify({ lines: data.refinedLines })); } catch {}
+                              toast.success('تم تحسين التوقيت بنجاح!');
+                            }
+                          } catch (err: any) {
+                            console.error('Refine timing error:', err);
+                            toast.error('فشل تحسين التوقيت: ' + (err?.message || 'خطأ غير معروف'));
+                          } finally {
+                            setIsRefiningTiming(false);
+                          }
+                        }}
+                      >
+                        {isRefiningTiming ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                        تحسين بالذكاء الاصطناعي
                       </Button>
                     </div>
                   </div>

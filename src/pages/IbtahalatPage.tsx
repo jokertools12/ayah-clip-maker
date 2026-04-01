@@ -60,6 +60,8 @@ export default function IbtahalatPage() {
     () => getRandomBackground('animated')
   );
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('9:16');
+  const [customBg, setCustomBg] = useState<string | null>(null);
+  const [customBgType, setCustomBgType] = useState<'image' | 'video'>('image');
   const [searchQuery, setSearchQuery] = useState('');
   const [playingTrackId, setPlayingTrackId] = useState<string | null>(null);
   const [browseMode, setBrowseMode] = useState<BrowseMode>('byCategory');
@@ -184,6 +186,10 @@ export default function IbtahalatPage() {
       backgroundThumb: selectedBackground.thumbnail,
       ratio: aspectRatio,
     });
+    if (customBg) {
+      params.set('customBgUrl', customBg);
+      params.set('customBgType', customBgType);
+    }
 
     navigate(`/preview?${params.toString()}`);
   };
@@ -419,6 +425,14 @@ export default function IbtahalatPage() {
                 <BackgroundSelector
                   selectedBackground={selectedBackground}
                   onSelect={setSelectedBackground}
+                  customBackground={customBg}
+                  onCustomBackgroundChange={(url) => {
+                    if (url) {
+                      setCustomBg(url);
+                    } else {
+                      setCustomBg(null);
+                    }
+                  }}
                 />
               </div>
               <Card>
