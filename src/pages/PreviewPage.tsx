@@ -141,6 +141,8 @@ export default function PreviewPage() {
   const backgroundUrlParam = searchParams.get('backgroundUrl') || '';
   const backgroundThumbParam = searchParams.get('backgroundThumb') || '';
   const aspectRatio = (searchParams.get('ratio') || '9:16') as '9:16' | '16:9';
+  const customBgUrlParam = searchParams.get('customBgUrl') || '';
+  const customBgTypeParam = (searchParams.get('customBgType') || 'image') as 'image' | 'video';
 
   const textSettings: TextSettings = {
     fontSize: parseInt(searchParams.get('fontSize') || '28'),
@@ -167,7 +169,6 @@ export default function PreviewPage() {
       thumbnail: backgroundThumbParam || backgroundUrlParam,
       name: 'خلفية مختارة',
       category: fallbackBackground.category,
-      // Carry over slideImages from the original background data for animated slideshows
       slideImages: fallbackBackground.slideImages,
     };
   }, [backgroundUrlParam, fallbackBackground, backgroundId, backgroundType, backgroundThumbParam]);
@@ -175,8 +176,8 @@ export default function PreviewPage() {
 
   // ── Settings state ──────────────────────────────────────────────────────────
   const [displaySettings, setDisplaySettings] = useState<DisplaySettings>(DEFAULT_DISPLAY_SETTINGS);
-  const [customBackground, setCustomBackground] = useState<string | null>(null);
-  const [customBackgroundType, setCustomBackgroundType] = useState<'image' | 'video'>('image');
+  const [customBackground, setCustomBackground] = useState<string | null>(customBgUrlParam || null);
+  const [customBackgroundType, setCustomBackgroundType] = useState<'image' | 'video'>(customBgTypeParam);
   const [backgroundLoadMethod, setBackgroundLoadMethod] = useState<'direct' | 'proxy' | 'fallback' | null>(null);
   const [exportSettings, setExportSettings] = useState<ExportSettings>(DEFAULT_EXPORT_SETTINGS);
   const [selectedPresetId, setSelectedPresetId] = useState<string | undefined>(undefined);
