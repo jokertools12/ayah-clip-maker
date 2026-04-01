@@ -186,6 +186,10 @@ export default function IbtahalatPage() {
       backgroundThumb: selectedBackground.thumbnail,
       ratio: aspectRatio,
     });
+    if (customBg) {
+      params.set('customBgUrl', customBg);
+      params.set('customBgType', customBgType);
+    }
 
     navigate(`/preview?${params.toString()}`);
   };
