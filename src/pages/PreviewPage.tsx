@@ -1344,6 +1344,38 @@ export default function PreviewPage() {
                         <RefreshCw className="h-3 w-3" />
                         إعادة النسخ
                       </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs gap-1"
+                        disabled={isRefiningTiming || transcribedLines.length === 0}
+                        onClick={async () => {
+                          setIsRefiningTiming(true);
+                          toast.info('جارٍ تحسين التوقيت بالذكاء الاصطناعي...');
+                          try {
+                            const { data, error } = await supabase.functions.invoke('refine-timing', {
+                              body: { lines: transcribedLines, totalDuration: duration },
+                            });
+                            if (error) throw error;
+                            if (data?.refinedLines) {
+                              setTranscribedLines(data.refinedLines);
+                              transcribedLinesRef.current = data.refinedLines;
+                              setAyahs(data.refinedLines.map((l: any, i: number) => ({ numberInSurah: i + 1, text: l.text })));
+                              const cacheKey = `transcription_cache_${btoa(ibtAudioUrl).slice(0, 64)}`;
+                              try { localStorage.setItem(cacheKey, JSON.stringify({ lines: data.refinedLines })); } catch {}
+                              toast.success('تم تحسين التوقيت بنجاح!');
+                            }
+                          } catch (err: any) {
+                            console.error('Refine timing error:', err);
+                            toast.error('فشل تحسين التوقيت: ' + (err?.message || 'خطأ غير معروف'));
+                          } finally {
+                            setIsRefiningTiming(false);
+                          }
+                        }}
+                      >
+                        {isRefiningTiming ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                        تحسين بالذكاء الاصطناعي
+                      </Button>
                     </div>
                   </div>
                 )}
