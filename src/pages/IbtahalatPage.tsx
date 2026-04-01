@@ -425,6 +425,14 @@ export default function IbtahalatPage() {
                 <BackgroundSelector
                   selectedBackground={selectedBackground}
                   onSelect={setSelectedBackground}
+                  customBackground={customBg}
+                  onCustomBackgroundChange={(url) => {
+                    if (url) {
+                      setCustomBg(url);
+                    } else {
+                      setCustomBg(null);
+                    }
+                  }}
                 />
               </div>
               <Card>
