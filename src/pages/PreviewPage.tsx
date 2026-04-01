@@ -61,6 +61,7 @@ import {
   Pencil,
   X,
   Clock,
+  Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
