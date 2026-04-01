@@ -32,14 +32,22 @@ const fontOptions = [
   { value: '"El Messiri", sans-serif', label: 'المسيري' },
   { value: '"Tajawal", sans-serif', label: 'تجول' },
   { value: '"Mada", sans-serif', label: 'مدى' },
+  { value: '"Katibeh", serif', label: 'كاتبة' },
+  { value: '"Rakkas", serif', label: 'رقّاص' },
+  { value: '"Lalezar", cursive', label: 'لاله‌زار' },
 ];
 
 const colorOptions = [
   { value: '#ffffff', label: 'أبيض', className: 'bg-white border border-gray-300' },
-  { value: '#fef3c7', label: 'ذهبي', className: 'bg-amber-100' },
+  { value: '#fef3c7', label: 'ذهبي فاتح', className: 'bg-amber-100' },
+  { value: '#fbbf24', label: 'ذهبي', className: 'bg-amber-400' },
   { value: '#e0f2fe', label: 'سماوي', className: 'bg-sky-100' },
   { value: '#dcfce7', label: 'أخضر', className: 'bg-green-100' },
   { value: '#fce7f3', label: 'وردي', className: 'bg-pink-100' },
+  { value: '#c0c0c0', label: 'فضي', className: 'bg-gray-300' },
+  { value: '#f59e0b', label: 'كهرماني', className: 'bg-amber-500' },
+  { value: '#38bdf8', label: 'أزرق سماوي', className: 'bg-sky-400' },
+  { value: '#a78bfa', label: 'بنفسجي', className: 'bg-violet-400' },
 ];
 
 export function TextSettingsPanel({ settings, onChange }: TextSettingsPanelProps) {
