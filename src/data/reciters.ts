@@ -300,6 +300,15 @@ export const reciters: Reciter[] = [
     moshafId: 27,
   },
   {
+    id: "asim_luhaidan",
+    name: "عاصم اللحيدان",
+    englishName: "Asim Al-Luhaidan",
+    style: "مرتل",
+    description: "تلاوة خاشعة مؤثرة جداً",
+    server: "https://media.way2quran.com/asim-al-luhaidan/hafs-an-asim",
+    isOpenLicense: true,
+  },
+  {
     id: "mansour_salimi",
     name: "منصور السالمي",
     englishName: "Mansour Al-Salimi",
