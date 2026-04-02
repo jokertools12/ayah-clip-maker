@@ -212,6 +212,7 @@ export default function PreviewPage() {
   const [retranscribeTrigger, setRetranscribeTrigger] = useState(0);
   const [isEditingTiming, setIsEditingTiming] = useState(false);
   const [isRefiningTiming, setIsRefiningTiming] = useState(false);
+  const [isRefiningText, setIsRefiningText] = useState(false);
 
   // ── Playback state ──────────────────────────────────────────────────────────
   const [isPlaying, setIsPlaying] = useState(false);
