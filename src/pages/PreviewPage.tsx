@@ -212,6 +212,7 @@ export default function PreviewPage() {
   const [retranscribeTrigger, setRetranscribeTrigger] = useState(0);
   const [isEditingTiming, setIsEditingTiming] = useState(false);
   const [isRefiningTiming, setIsRefiningTiming] = useState(false);
+  const [isRefiningText, setIsRefiningText] = useState(false);
 
   // ── Playback state ──────────────────────────────────────────────────────────
   const [isPlaying, setIsPlaying] = useState(false);
@@ -1374,8 +1375,40 @@ export default function PreviewPage() {
                           }
                         }}
                       >
-                        {isRefiningTiming ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-                        تحسين بالذكاء الاصطناعي
+                        {isRefiningTiming ? <Loader2 className="h-3 w-3 animate-spin" /> : <Clock className="h-3 w-3" />}
+                        تحسين التوقيت
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs gap-1"
+                        disabled={isRefiningText || transcribedLines.length === 0}
+                        onClick={async () => {
+                          setIsRefiningText(true);
+                          toast.info('جارٍ تحسين الكلمات بالذكاء الاصطناعي...');
+                          try {
+                            const { data, error } = await supabase.functions.invoke('refine-text', {
+                              body: { lines: transcribedLines },
+                            });
+                            if (error) throw error;
+                            if (data?.refinedLines) {
+                              setTranscribedLines(data.refinedLines);
+                              transcribedLinesRef.current = data.refinedLines;
+                              setAyahs(data.refinedLines.map((l: any, i: number) => ({ numberInSurah: i + 1, text: l.text })));
+                              const cacheKey = `transcription_cache_${btoa(ibtAudioUrl).slice(0, 64)}`;
+                              try { localStorage.setItem(cacheKey, JSON.stringify({ lines: data.refinedLines })); } catch {}
+                              toast.success('تم تحسين الكلمات بنجاح! ✨');
+                            }
+                          } catch (err: any) {
+                            console.error('Refine text error:', err);
+                            toast.error('فشل تحسين الكلمات: ' + (err?.message || 'خطأ غير معروف'));
+                          } finally {
+                            setIsRefiningText(false);
+                          }
+                        }}
+                      >
+                        {isRefiningText ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                        تحسين الكلمات ✨
                       </Button>
                     </div>
                   </div>
