@@ -1,66 +1,27 @@
 /**
- * Detects silence gaps in an audio file to split it into ayah segments.
- * Uses Web Audio API to analyze amplitude and find natural pauses.
+ * Smart ayah clipping for full-surah audio sources.
+ *
+ * For reciters that only provide full-surah MP3 files, we:
+ * 1) Decode the full audio
+ * 2) Detect natural silence gaps
+ * 3) Estimate verse boundaries using full-surah text weights
+ * 4) Snap estimated boundaries to nearby silence gaps
+ * 5) Extract only the requested ayah range into a new WAV blob
+ *
+ * This produces exact clipped playback (not full-file range playback), plus
+ * relative per-ayah timestamps inside the clipped audio.
  */
 
 export interface AyahSegment {
-  from: number; // seconds
-  to: number;   // seconds
+  from: number;
+  to: number;
 }
 
-/**
- * Fetches audio from URL, decodes it, and detects silence gaps
- * to split into the expected number of ayah segments.
- */
-export async function detectAyahSegments(
-  audioUrl: string,
-  expectedAyahCount: number,
-  startAyah: number,
-  totalAyahsInSurah: number,
-): Promise<AyahSegment[]> {
-  const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-
-  try {
-    const res = await fetch(audioUrl);
-    if (!res.ok) throw new Error(`Failed to fetch audio: ${res.status}`);
-    const arrayBuf = await res.arrayBuffer();
-    const audioBuffer = await ctx.decodeAudioData(arrayBuf.slice(0));
-
-    const sampleRate = audioBuffer.sampleRate;
-    const channelData = audioBuffer.getChannelData(0);
-    const totalDuration = audioBuffer.duration;
-
-    // Step 1: Find all silence gaps in the audio
-    const silences = findSilenceGaps(channelData, sampleRate, totalDuration);
-
-    // Step 2: Estimate the rough region for our ayahs
-    const roughFrom = ((startAyah - 1) / totalAyahsInSurah) * totalDuration;
-    const roughTo = ((startAyah - 1 + expectedAyahCount) / totalAyahsInSurah) * totalDuration;
-
-    // Expand search region by 15%
-    const margin = (roughTo - roughFrom) * 0.15;
-    const searchFrom = Math.max(0, roughFrom - margin);
-    const searchTo = Math.min(totalDuration, roughTo + margin);
-
-    // Step 3: Find silences in our region
-    const regionSilences = silences.filter(
-      s => s.mid >= searchFrom && s.mid <= searchTo
-    );
-
-    // Step 4: We need (expectedAyahCount - 1) split points
-    const neededSplits = expectedAyahCount - 1;
-
-    if (regionSilences.length >= neededSplits) {
-      // Pick the best split points (longest silences, evenly distributed)
-      const splits = pickBestSplits(regionSilences, neededSplits, searchFrom, searchTo);
-      return buildSegments(splits, searchFrom, searchTo);
-    }
-
-    // Not enough silences found — fall back to proportional
-    return proportionalSegments(searchFrom, searchTo, expectedAyahCount);
-  } finally {
-    ctx.close().catch(() => {});
-  }
+export interface SmartAyahClipResult {
+  blobUrl: string;
+  totalDuration: number;
+  timestamps: AyahSegment[];
+  sourceRange: AyahSegment;
 }
 
 interface SilenceGap {
@@ -70,55 +31,180 @@ interface SilenceGap {
   duration: number;
 }
 
+export async function createSmartAyahClipFromFullSurah(
+  audioUrl: string,
+  startAyah: number,
+  endAyah: number,
+  fullSurahTexts: string[],
+): Promise<SmartAyahClipResult> {
+  if (!fullSurahTexts.length) {
+    throw new Error('Full surah texts are required for smart clipping');
+  }
+
+  const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+
+  try {
+    const res = await fetch(audioUrl);
+    if (!res.ok) throw new Error(`Failed to fetch audio: ${res.status}`);
+
+    const arrayBuf = await res.arrayBuffer();
+    const audioBuffer = await ctx.decodeAudioData(arrayBuf.slice(0));
+    const totalDuration = audioBuffer.duration;
+    const sampleRate = audioBuffer.sampleRate;
+    const channelData = audioBuffer.getChannelData(0);
+
+    const silences = findSilenceGaps(channelData, sampleRate, totalDuration);
+    const estimatedBoundaries = buildEstimatedBoundaries(fullSurahTexts, totalDuration);
+
+    const selectedBoundaries = pickSelectionBoundaries({
+      estimatedBoundaries,
+      silences,
+      startAyah,
+      endAyah,
+      totalAyahs: fullSurahTexts.length,
+      totalDuration,
+    });
+
+    const absoluteSegments = buildSegmentsFromBoundaries(selectedBoundaries);
+    if (!absoluteSegments.length) {
+      throw new Error('Could not determine ayah segments');
+    }
+
+    const clipStart = absoluteSegments[0].from;
+    const clipEnd = absoluteSegments[absoluteSegments.length - 1].to;
+    const clipped = sliceAudioBuffer(audioBuffer, clipStart, clipEnd, ctx);
+
+    const timestamps = absoluteSegments.map((segment) => ({
+      from: Math.max(0, segment.from - clipStart),
+      to: Math.max(0, segment.to - clipStart),
+    }));
+
+    const blobUrl = URL.createObjectURL(audioBufferToWav(clipped));
+
+    return {
+      blobUrl,
+      totalDuration: clipped.duration,
+      timestamps,
+      sourceRange: { from: clipStart, to: clipEnd },
+    };
+  } finally {
+    ctx.close().catch(() => {});
+  }
+}
+
+export async function detectAyahSegments(
+  audioUrl: string,
+  expectedAyahCount: number,
+  startAyah: number,
+  totalAyahsInSurah: number,
+): Promise<AyahSegment[]> {
+  const syntheticTexts = Array.from({ length: Math.max(totalAyahsInSurah, startAyah + expectedAyahCount - 1) }, () => 'آية');
+  const result = await createSmartAyahClipFromFullSurah(
+    audioUrl,
+    startAyah,
+    startAyah + expectedAyahCount - 1,
+    syntheticTexts,
+  );
+  return result.timestamps;
+}
+
+function normalizeArabicText(text: string): string {
+  return text
+    .replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, '')
+    .replace(/[﴿﴾۞۩]/g, ' ')
+    .replace(/[^\u0600-\u06FF\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function getAyahWeight(text: string): number {
+  const normalized = normalizeArabicText(text);
+  if (!normalized) return 1;
+
+  const words = normalized.split(/\s+/).filter(Boolean).length;
+  const letters = normalized.replace(/\s+/g, '').length;
+
+  return Math.max(1, letters + words * 2);
+}
+
+function buildEstimatedBoundaries(fullSurahTexts: string[], totalDuration: number): number[] {
+  const weights = fullSurahTexts.map(getAyahWeight);
+  const totalWeight = Math.max(1, weights.reduce((sum, value) => sum + value, 0));
+  const prefix: number[] = [0];
+
+  for (const weight of weights) {
+    prefix.push(prefix[prefix.length - 1] + weight);
+  }
+
+  return prefix.map((value) => (value / totalWeight) * totalDuration);
+}
+
 function findSilenceGaps(
   channelData: Float32Array,
   sampleRate: number,
   totalDuration: number,
 ): SilenceGap[] {
-  const windowSize = Math.floor(sampleRate * 0.05); // 50ms windows
-  const threshold = 0.015; // amplitude threshold for silence
-  const minSilenceDuration = 0.15; // minimum 150ms gap to count as silence
-
-  const gaps: SilenceGap[] = [];
-  let silenceStart: number | null = null;
+  const windowSize = Math.max(1, Math.floor(sampleRate * 0.04));
+  const envelope: number[] = [];
 
   for (let i = 0; i < channelData.length; i += windowSize) {
     const end = Math.min(i + windowSize, channelData.length);
-    let maxAmp = 0;
+    let sum = 0;
+    let peak = 0;
+
     for (let j = i; j < end; j++) {
-      const amp = Math.abs(channelData[j]);
-      if (amp > maxAmp) maxAmp = amp;
+      const value = Math.abs(channelData[j]);
+      sum += value * value;
+      if (value > peak) peak = value;
     }
 
-    const timeSec = i / sampleRate;
+    const rms = Math.sqrt(sum / Math.max(1, end - i));
+    envelope.push(Math.max(rms, peak * 0.8));
+  }
 
-    if (maxAmp < threshold) {
-      if (silenceStart === null) silenceStart = timeSec;
-    } else {
-      if (silenceStart !== null) {
-        const silenceDur = timeSec - silenceStart;
-        if (silenceDur >= minSilenceDuration) {
-          gaps.push({
-            start: silenceStart,
-            end: timeSec,
-            mid: silenceStart + silenceDur / 2,
-            duration: silenceDur,
-          });
-        }
-        silenceStart = null;
+  const sortedEnvelope = [...envelope].sort((a, b) => a - b);
+  const q20 = sortedEnvelope[Math.floor(sortedEnvelope.length * 0.2)] ?? 0.006;
+  const threshold = Math.max(0.004, Math.min(0.028, q20 * 1.8));
+  const minSilenceDuration = 0.12;
+
+  const gaps: SilenceGap[] = [];
+  let silenceStartWindow = -1;
+
+  for (let index = 0; index < envelope.length; index++) {
+    const level = envelope[index];
+    const timeSec = (index * windowSize) / sampleRate;
+
+    if (level <= threshold) {
+      if (silenceStartWindow < 0) silenceStartWindow = index;
+      continue;
+    }
+
+    if (silenceStartWindow >= 0) {
+      const start = (silenceStartWindow * windowSize) / sampleRate;
+      const end = timeSec;
+      const duration = end - start;
+      if (duration >= minSilenceDuration) {
+        gaps.push({
+          start,
+          end,
+          mid: start + duration / 2,
+          duration,
+        });
       }
+      silenceStartWindow = -1;
     }
   }
 
-  // Handle silence at end
-  if (silenceStart !== null) {
-    const silenceDur = totalDuration - silenceStart;
-    if (silenceDur >= minSilenceDuration) {
+  if (silenceStartWindow >= 0) {
+    const start = (silenceStartWindow * windowSize) / sampleRate;
+    const end = totalDuration;
+    const duration = end - start;
+    if (duration >= minSilenceDuration) {
       gaps.push({
-        start: silenceStart,
-        end: totalDuration,
-        mid: silenceStart + silenceDur / 2,
-        duration: silenceDur,
+        start,
+        end,
+        mid: start + duration / 2,
+        duration,
       });
     }
   }
@@ -126,77 +212,164 @@ function findSilenceGaps(
   return gaps;
 }
 
-function pickBestSplits(
-  silences: SilenceGap[],
-  count: number,
-  regionStart: number,
-  regionEnd: number,
-): number[] {
-  if (count === 0) return [];
+function pickSelectionBoundaries({
+  estimatedBoundaries,
+  silences,
+  startAyah,
+  endAyah,
+  totalAyahs,
+  totalDuration,
+}: {
+  estimatedBoundaries: number[];
+  silences: SilenceGap[];
+  startAyah: number;
+  endAyah: number;
+  totalAyahs: number;
+  totalDuration: number;
+}): number[] {
+  const boundaries: number[] = [];
+  const startBoundaryIndex = Math.max(0, startAyah - 1);
+  const endBoundaryIndex = Math.min(totalAyahs, endAyah);
 
-  // Sort by duration (longest first) then pick evenly spaced ones
-  const sorted = [...silences].sort((a, b) => b.duration - a.duration);
-
-  // Take top candidates (2x what we need)
-  const candidates = sorted.slice(0, Math.min(count * 3, sorted.length));
-
-  // Sort candidates by time
-  candidates.sort((a, b) => a.mid - b.mid);
-
-  if (candidates.length <= count) {
-    return candidates.map(s => s.mid);
-  }
-
-  // Dynamic programming to pick `count` splits that are most evenly spaced
-  const regionDur = regionEnd - regionStart;
-  const idealGap = regionDur / (count + 1);
-
-  // Greedy: pick the silence closest to each ideal split point
-  const picks: number[] = [];
-  const used = new Set<number>();
-
-  for (let i = 0; i < count; i++) {
-    const idealTime = regionStart + idealGap * (i + 1);
-    let bestIdx = -1;
-    let bestDist = Infinity;
-
-    for (let j = 0; j < candidates.length; j++) {
-      if (used.has(j)) continue;
-      const dist = Math.abs(candidates[j].mid - idealTime);
-      // Weight by silence duration (prefer longer silences)
-      const score = dist - candidates[j].duration * 2;
-      if (score < bestDist) {
-        bestDist = score;
-        bestIdx = j;
-      }
+  for (let boundaryIndex = startBoundaryIndex; boundaryIndex <= endBoundaryIndex; boundaryIndex++) {
+    if (boundaryIndex === 0) {
+      boundaries.push(0);
+      continue;
     }
 
-    if (bestIdx >= 0) {
-      picks.push(candidates[bestIdx].mid);
-      used.add(bestIdx);
+    if (boundaryIndex === totalAyahs) {
+      boundaries.push(totalDuration);
+      continue;
     }
+
+    const target = estimatedBoundaries[boundaryIndex] ?? 0;
+    const previousEstimated = estimatedBoundaries[Math.max(0, boundaryIndex - 1)] ?? 0;
+    const nextEstimated = estimatedBoundaries[Math.min(totalAyahs, boundaryIndex + 1)] ?? totalDuration;
+    const previousChosen = boundaries[boundaries.length - 1] ?? 0;
+
+    const localSpan = Math.max(0.35, nextEstimated - previousEstimated);
+    const searchWindow = Math.min(12, Math.max(0.75, localSpan * 0.9));
+
+    const candidates = silences
+      .filter((silence) => silence.mid > previousChosen + 0.04)
+      .map((silence) => ({
+        ...silence,
+        score:
+          Math.abs(silence.mid - target) -
+          Math.min(silence.duration, 0.5) * 0.65 -
+          (silence.mid >= target - searchWindow && silence.mid <= target + searchWindow ? 0.2 : 0),
+      }))
+      .sort((a, b) => a.score - b.score);
+
+    const chosen = candidates[0]?.mid;
+    const fallback = Math.max(previousChosen + 0.05, Math.min(target, totalDuration));
+    boundaries.push(chosen ?? fallback);
   }
 
-  return picks.sort((a, b) => a - b);
+  return enforceIncreasingBoundaries(boundaries, totalDuration);
 }
 
-function buildSegments(splits: number[], regionStart: number, regionEnd: number): AyahSegment[] {
-  const segments: AyahSegment[] = [];
-  let prev = regionStart;
+function enforceIncreasingBoundaries(boundaries: number[], totalDuration: number): number[] {
+  const fixed = [...boundaries];
 
-  for (const split of splits) {
-    segments.push({ from: prev, to: split });
-    prev = split;
+  for (let i = 1; i < fixed.length; i++) {
+    fixed[i] = Math.max(fixed[i], fixed[i - 1] + 0.05);
   }
-  segments.push({ from: prev, to: regionEnd });
+
+  fixed[fixed.length - 1] = Math.min(totalDuration, fixed[fixed.length - 1]);
+
+  for (let i = fixed.length - 2; i >= 0; i--) {
+    fixed[i] = Math.min(fixed[i], fixed[i + 1] - 0.05);
+  }
+
+  fixed[0] = Math.max(0, fixed[0]);
+  fixed[fixed.length - 1] = Math.min(totalDuration, fixed[fixed.length - 1]);
+
+  return fixed;
+}
+
+function buildSegmentsFromBoundaries(boundaries: number[]): AyahSegment[] {
+  const segments: AyahSegment[] = [];
+
+  for (let i = 0; i < boundaries.length - 1; i++) {
+    segments.push({
+      from: boundaries[i],
+      to: boundaries[i + 1],
+    });
+  }
 
   return segments;
 }
 
-function proportionalSegments(from: number, to: number, count: number): AyahSegment[] {
-  const dur = (to - from) / count;
-  return Array.from({ length: count }, (_, i) => ({
-    from: from + dur * i,
-    to: from + dur * (i + 1),
-  }));
+function sliceAudioBuffer(
+  source: AudioBuffer,
+  startSec: number,
+  endSec: number,
+  ctx: AudioContext,
+): AudioBuffer {
+  const sampleRate = source.sampleRate;
+  const numChannels = source.numberOfChannels;
+  const startSample = Math.max(0, Math.floor(startSec * sampleRate));
+  const endSample = Math.min(source.length, Math.ceil(endSec * sampleRate));
+  const clippedLength = Math.max(1, endSample - startSample);
+  const clipped = ctx.createBuffer(numChannels, clippedLength, sampleRate);
+
+  for (let channel = 0; channel < numChannels; channel++) {
+    const src = source.getChannelData(channel).subarray(startSample, endSample);
+    clipped.getChannelData(channel).set(src, 0);
+  }
+
+  return clipped;
+}
+
+function audioBufferToWav(buffer: AudioBuffer): Blob {
+  const numChannels = buffer.numberOfChannels;
+  const sampleRate = buffer.sampleRate;
+  const format = 1;
+  const bitDepth = 16;
+
+  const length = buffer.length * numChannels;
+  const interleaved = new Float32Array(length);
+
+  for (let i = 0; i < buffer.length; i++) {
+    for (let channel = 0; channel < numChannels; channel++) {
+      interleaved[i * numChannels + channel] = buffer.getChannelData(channel)[i];
+    }
+  }
+
+  const dataLength = length * (bitDepth / 8);
+  const headerLength = 44;
+  const totalLength = headerLength + dataLength;
+  const arrayBuffer = new ArrayBuffer(totalLength);
+  const view = new DataView(arrayBuffer);
+
+  writeString(view, 0, 'RIFF');
+  view.setUint32(4, totalLength - 8, true);
+  writeString(view, 8, 'WAVE');
+  writeString(view, 12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, format, true);
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * numChannels * (bitDepth / 8), true);
+  view.setUint16(32, numChannels * (bitDepth / 8), true);
+  view.setUint16(34, bitDepth, true);
+  writeString(view, 36, 'data');
+  view.setUint32(40, dataLength, true);
+
+  let writeOffset = 44;
+  for (let i = 0; i < interleaved.length; i++) {
+    const sample = Math.max(-1, Math.min(1, interleaved[i]));
+    const value = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
+    view.setInt16(writeOffset, value, true);
+    writeOffset += 2;
+  }
+
+  return new Blob([arrayBuffer], { type: 'audio/wav' });
+}
+
+function writeString(view: DataView, offset: number, text: string) {
+  for (let i = 0; i < text.length; i++) {
+    view.setUint8(offset + i, text.charCodeAt(i));
+  }
 }
