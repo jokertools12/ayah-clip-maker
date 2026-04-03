@@ -495,8 +495,11 @@ export default function PreviewPage() {
       }
 
       if (!cancelled) setTimingsLoading(false);
+    };
+
+    load();
     return () => { cancelled = true; };
-  }, [isIbtahalatMode, ibtAudioUrl, reciter?.id, reciter?.quranFoundationId, reciter?.everyAyahSubfolder, surahNumber, startAyah, endAyah]);
+  }, [isIbtahalatMode, ibtAudioUrl, reciter?.id, reciter?.quranFoundationId, reciter?.everyAyahSubfolder, surahNumber, startAyah, endAyah, totalAyahsInSurah]);
 
   // ── Audio effects init ──────────────────────────────────────────────────────
   useEffect(() => {
