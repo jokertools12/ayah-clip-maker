@@ -241,6 +241,10 @@ export default function PreviewPage() {
   // Exact timestamps from concatenated audio buffer
   const [everyAyahTimestamps, setEveryAyahTimestamps] = useState<{from: number; to: number}[]>([]);
 
+  // Fallback mode – silence-detected ayah segments
+  const [fallbackSegments, setFallbackSegments] = useState<AyahSegment[]>([]);
+  const fallbackSegmentsRef = useRef<AyahSegment[]>([]);
+
   const [timingsLoading, setTimingsLoading] = useState(false);
 
   // ── Refs ────────────────────────────────────────────────────────────────────
