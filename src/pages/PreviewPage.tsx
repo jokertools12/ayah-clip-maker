@@ -31,6 +31,7 @@ import {
   QuranFoundationTimestamp,
 } from '@/lib/quranFoundationApi';
 import { concatenateAudioUrls } from '@/lib/audioConcat';
+import { detectAyahSegments, AyahSegment } from '@/lib/audioSilenceDetector';
 import { supabase } from '@/integrations/supabase/client';
 import { TextSettings } from '@/components/TextSettingsPanel';
 import { TimingEditor } from '@/components/TimingEditor';
@@ -239,6 +240,10 @@ export default function PreviewPage() {
   const everyAyahIndexRef = useRef(0);
   // Exact timestamps from concatenated audio buffer
   const [everyAyahTimestamps, setEveryAyahTimestamps] = useState<{from: number; to: number}[]>([]);
+
+  // Fallback mode – silence-detected ayah segments
+  const [fallbackSegments, setFallbackSegments] = useState<AyahSegment[]>([]);
+  const fallbackSegmentsRef = useRef<AyahSegment[]>([]);
 
   const [timingsLoading, setTimingsLoading] = useState(false);
 
@@ -460,14 +465,33 @@ export default function PreviewPage() {
         }
       }
 
-      // ── Strategy 3: Full-surah mp3 with proportional estimate ───────────────
+      // ── Strategy 3: Full-surah mp3 with silence-detection splitting ──────────
       if (!cancelled) {
         const url = getAudioUrl(reciter, surahNumber);
         setAudioUrl(url);
         setAyahTimings([]);
         setRangeMs(null);
+        setFallbackSegments([]);
+        fallbackSegmentsRef.current = [];
         setPlaybackMode('fallback');
-        console.log(`⚠️ Fallback mode – full surah mp3 with proportional estimation`);
+
+        // Run silence detection in background to find ayah boundaries
+        const ayahCount = endAyah - startAyah + 1;
+        detectAyahSegments(url, ayahCount, startAyah, totalAyahsInSurah)
+          .then((segments) => {
+            if (cancelled) return;
+            setFallbackSegments(segments);
+            fallbackSegmentsRef.current = segments;
+            const totalDur = segments[segments.length - 1].to - segments[0].from;
+            setRangeMs({ from: segments[0].from * 1000, to: segments[segments.length - 1].to * 1000 });
+            setDuration(totalDur);
+            console.log(`✅ Silence-detection mode – ${segments.length} ayah segments detected, total ${totalDur.toFixed(1)}s`);
+          })
+          .catch((e) => {
+            console.warn('Silence detection failed, using proportional fallback', e);
+          });
+
+        console.log(`⏳ Fallback mode – loading full surah mp3, detecting ayah boundaries…`);
       }
 
       if (!cancelled) setTimingsLoading(false);
@@ -475,7 +499,7 @@ export default function PreviewPage() {
 
     load();
     return () => { cancelled = true; };
-  }, [isIbtahalatMode, ibtAudioUrl, reciter?.id, reciter?.quranFoundationId, reciter?.everyAyahSubfolder, surahNumber, startAyah, endAyah]);
+  }, [isIbtahalatMode, ibtAudioUrl, reciter?.id, reciter?.quranFoundationId, reciter?.everyAyahSubfolder, surahNumber, startAyah, endAyah, totalAyahsInSurah]);
 
   // ── Audio effects init ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -714,17 +738,38 @@ export default function PreviewPage() {
         updateTimeline(relativeSec, Math.min((relativeSec / totalSec) * 100, 100));
 
         const ayahsCount = ayahsRef.current.length;
+        const segs = fallbackSegmentsRef.current;
+
         if (ayahsCount > 0) {
-          const ayahDuration = totalSec / ayahsCount;
-          const estimatedIndex = Math.min(Math.floor(relativeSec / ayahDuration), ayahsCount - 1);
+          let estimatedIndex = 0;
+
+          if (segs.length === ayahsCount) {
+            // Use silence-detected segments for precise ayah tracking
+            for (let i = 0; i < segs.length; i++) {
+              if (nowSec >= segs[i].from && nowSec < segs[i].to) {
+                estimatedIndex = i;
+                break;
+              }
+              if (i === segs.length - 1) estimatedIndex = i;
+            }
+          } else {
+            // Proportional fallback
+            const ayahDuration = totalSec / ayahsCount;
+            estimatedIndex = Math.min(Math.floor(relativeSec / ayahDuration), ayahsCount - 1);
+          }
+
           if (estimatedIndex !== currentAyahIndexRef.current) setCurrentAyahIndex(estimatedIndex);
 
-          // Disable expensive word-by-word highlight updates during recording
+          // Word-level highlight
+          const seg = segs.length === ayahsCount ? segs[estimatedIndex] : null;
+          const ayahStart = seg ? seg.from : estStartSec + estimatedIndex * (totalSec / ayahsCount);
+          const ayahEnd = seg ? seg.to : ayahStart + totalSec / ayahsCount;
+          const ayahDur = Math.max(ayahEnd - ayahStart, 0.001);
+          const posInAyah = Math.max(nowSec - ayahStart, 0);
+          const ratio = Math.min(posInAyah / ayahDur, 1);
 
           const wordCount = (ayahsRef.current[estimatedIndex]?.text ?? '').split(' ').filter(Boolean).length;
           if (wordCount > 0) {
-            const posInAyah = Math.max(relativeSec - estimatedIndex * ayahDuration, 0);
-            const ratio = Math.min(Math.max(posInAyah / Math.max(ayahDuration, 0.001), 0), 1);
             const wordIdx = Math.min(Math.floor(ratio * wordCount), wordCount - 1);
             setHighlightWordIndex(wordIdx);
             const perWord = 1 / wordCount;
