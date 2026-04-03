@@ -31,6 +31,7 @@ import {
   QuranFoundationTimestamp,
 } from '@/lib/quranFoundationApi';
 import { concatenateAudioUrls } from '@/lib/audioConcat';
+import { detectAyahSegments, AyahSegment } from '@/lib/audioSilenceDetector';
 import { supabase } from '@/integrations/supabase/client';
 import { TextSettings } from '@/components/TextSettingsPanel';
 import { TimingEditor } from '@/components/TimingEditor';
