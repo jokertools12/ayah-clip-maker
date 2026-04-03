@@ -117,7 +117,7 @@ export default function PreviewPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
-  const { fetchAyahs } = useQuranApi();
+  const { fetchAyahs, fetchSurah } = useQuranApi();
   const { incrementUsage, dailyUsage, videoLimit, isPremium, canUseFeature } = useSubscription();
   const audioEffects = useAudioEffects();
   const videoRecorder = useVideoRecorder();
