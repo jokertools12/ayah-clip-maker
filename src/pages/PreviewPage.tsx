@@ -31,7 +31,7 @@ import {
   QuranFoundationTimestamp,
 } from '@/lib/quranFoundationApi';
 import { concatenateAudioUrls } from '@/lib/audioConcat';
-import { detectAyahSegments, AyahSegment } from '@/lib/audioSilenceDetector';
+import { createSmartAyahClipFromFullSurah, AyahSegment } from '@/lib/audioSilenceDetector';
 import { supabase } from '@/integrations/supabase/client';
 import { TextSettings } from '@/components/TextSettingsPanel';
 import { TimingEditor } from '@/components/TimingEditor';
@@ -117,7 +117,7 @@ export default function PreviewPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
-  const { fetchAyahs } = useQuranApi();
+  const { fetchAyahs, fetchSurah } = useQuranApi();
   const { incrementUsage, dailyUsage, videoLimit, isPremium, canUseFeature } = useSubscription();
   const audioEffects = useAudioEffects();
   const videoRecorder = useVideoRecorder();
@@ -465,33 +465,51 @@ export default function PreviewPage() {
         }
       }
 
-      // ── Strategy 3: Full-surah mp3 with silence-detection splitting ──────────
+      // ── Strategy 3: Smart clip from full-surah mp3 (exact selected ayahs) ───
       if (!cancelled) {
         const url = getAudioUrl(reciter, surahNumber);
-        setAudioUrl(url);
         setAyahTimings([]);
         setRangeMs(null);
         setFallbackSegments([]);
         fallbackSegmentsRef.current = [];
+
+        try {
+          console.log(`⏳ Smart clipping selected ayahs from full-surah audio…`);
+          const surahData = await fetchSurah(surahNumber);
+          const fullSurahTexts = surahData?.ayahs?.map((ayah) => ayah.text) ?? [];
+
+          if (fullSurahTexts.length === totalAyahsInSurah) {
+            const result = await createSmartAyahClipFromFullSurah(
+              url,
+              startAyah,
+              endAyah,
+              fullSurahTexts,
+            );
+            if (cancelled) {
+              URL.revokeObjectURL(result.blobUrl);
+              return;
+            }
+
+            setEveryAyahUrls([url]);
+            setEveryAyahTimestamps(result.timestamps);
+            setFallbackSegments(result.timestamps);
+            fallbackSegmentsRef.current = result.timestamps;
+            setAudioUrl(result.blobUrl);
+            setDuration(result.totalDuration);
+            setPlaybackMode('everyayah');
+            console.log(
+              `✅ SmartClip mode – exact clipped audio for ${result.timestamps.length} ayahs, source ${result.sourceRange.from.toFixed(1)}s–${result.sourceRange.to.toFixed(1)}s`
+            );
+            setTimingsLoading(false);
+            return;
+          }
+        } catch (e) {
+          console.warn('Smart clip failed, falling back to estimated full-surah playback…', e);
+        }
+
+        setAudioUrl(url);
         setPlaybackMode('fallback');
-
-        // Run silence detection in background to find ayah boundaries
-        const ayahCount = endAyah - startAyah + 1;
-        detectAyahSegments(url, ayahCount, startAyah, totalAyahsInSurah)
-          .then((segments) => {
-            if (cancelled) return;
-            setFallbackSegments(segments);
-            fallbackSegmentsRef.current = segments;
-            const totalDur = segments[segments.length - 1].to - segments[0].from;
-            setRangeMs({ from: segments[0].from * 1000, to: segments[segments.length - 1].to * 1000 });
-            setDuration(totalDur);
-            console.log(`✅ Silence-detection mode – ${segments.length} ayah segments detected, total ${totalDur.toFixed(1)}s`);
-          })
-          .catch((e) => {
-            console.warn('Silence detection failed, using proportional fallback', e);
-          });
-
-        console.log(`⏳ Fallback mode – loading full surah mp3, detecting ayah boundaries…`);
+        console.log(`⚠️ Fallback mode – full surah mp3 with proportional estimation`);
       }
 
       if (!cancelled) setTimingsLoading(false);
