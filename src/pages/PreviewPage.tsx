@@ -465,20 +465,36 @@ export default function PreviewPage() {
         }
       }
 
-      // ── Strategy 3: Full-surah mp3 with proportional estimate ───────────────
+      // ── Strategy 3: Full-surah mp3 with silence-detection splitting ──────────
       if (!cancelled) {
         const url = getAudioUrl(reciter, surahNumber);
         setAudioUrl(url);
         setAyahTimings([]);
         setRangeMs(null);
+        setFallbackSegments([]);
+        fallbackSegmentsRef.current = [];
         setPlaybackMode('fallback');
-        console.log(`⚠️ Fallback mode – full surah mp3 with proportional estimation`);
+
+        // Run silence detection in background to find ayah boundaries
+        const ayahCount = endAyah - startAyah + 1;
+        detectAyahSegments(url, ayahCount, startAyah, totalAyahsInSurah)
+          .then((segments) => {
+            if (cancelled) return;
+            setFallbackSegments(segments);
+            fallbackSegmentsRef.current = segments;
+            const totalDur = segments[segments.length - 1].to - segments[0].from;
+            setRangeMs({ from: segments[0].from * 1000, to: segments[segments.length - 1].to * 1000 });
+            setDuration(totalDur);
+            console.log(`✅ Silence-detection mode – ${segments.length} ayah segments detected, total ${totalDur.toFixed(1)}s`);
+          })
+          .catch((e) => {
+            console.warn('Silence detection failed, using proportional fallback', e);
+          });
+
+        console.log(`⏳ Fallback mode – loading full surah mp3, detecting ayah boundaries…`);
       }
 
       if (!cancelled) setTimingsLoading(false);
-    };
-
-    load();
     return () => { cancelled = true; };
   }, [isIbtahalatMode, ibtAudioUrl, reciter?.id, reciter?.quranFoundationId, reciter?.everyAyahSubfolder, surahNumber, startAyah, endAyah]);
 
