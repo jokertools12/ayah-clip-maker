@@ -52,16 +52,56 @@ export async function createSmartAyahClipFromFullSurah(
     const totalDuration = audioBuffer.duration;
     const sampleRate = audioBuffer.sampleRate;
     const channelData = audioBuffer.getChannelData(0);
+    const totalAyahs = fullSurahTexts.length;
 
-    const silences = findSilenceGaps(channelData, sampleRate, totalDuration);
+    console.log(`🔍 SmartClip: totalDuration=${totalDuration.toFixed(1)}s, totalAyahs=${totalAyahs}, selecting ${startAyah}-${endAyah}`);
+
+    // Build estimated boundaries from text weights (always needed)
     const estimatedBoundaries = buildEstimatedBoundaries(fullSurahTexts, totalDuration);
+    const estimatedStart = estimatedBoundaries[Math.max(0, startAyah - 1)];
+    const estimatedEnd = estimatedBoundaries[Math.min(totalAyahs, endAyah)];
+    const estimatedDuration = estimatedEnd - estimatedStart;
+    const avgAyahDuration = totalDuration / totalAyahs;
+    const expectedMinDuration = (endAyah - startAyah + 1) * avgAyahDuration * 0.3;
+
+    console.log(`🔍 SmartClip: estimated range ${estimatedStart.toFixed(1)}s–${estimatedEnd.toFixed(1)}s (${estimatedDuration.toFixed(1)}s)`);
+
+    // For very large files (>20 min), only analyze the relevant portion for silence detection
+    let silences: SilenceGap[];
+    const isLargeFile = totalDuration > 1200; // >20 minutes
+    
+    if (isLargeFile) {
+      // Only analyze a window around the estimated range (with 30% padding)
+      const pad = Math.max(30, estimatedDuration * 0.3);
+      const analyzeStart = Math.max(0, estimatedStart - pad);
+      const analyzeEnd = Math.min(totalDuration, estimatedEnd + pad);
+      const startSample = Math.floor(analyzeStart * sampleRate);
+      const endSample = Math.min(channelData.length, Math.ceil(analyzeEnd * sampleRate));
+      const windowData = channelData.subarray(startSample, endSample);
+      const windowDuration = analyzeEnd - analyzeStart;
+      
+      console.log(`🔍 SmartClip: large file – analyzing window ${analyzeStart.toFixed(1)}s–${analyzeEnd.toFixed(1)}s`);
+      
+      const rawSilences = findSilenceGaps(windowData, sampleRate, windowDuration);
+      // Offset silences back to absolute time
+      silences = rawSilences.map(s => ({
+        start: s.start + analyzeStart,
+        end: s.end + analyzeStart,
+        mid: s.mid + analyzeStart,
+        duration: s.duration,
+      }));
+    } else {
+      silences = findSilenceGaps(channelData, sampleRate, totalDuration);
+    }
+
+    console.log(`🔍 SmartClip: found ${silences.length} silence gaps`);
 
     const selectedBoundaries = pickSelectionBoundaries({
       estimatedBoundaries,
       silences,
       startAyah,
       endAyah,
-      totalAyahs: fullSurahTexts.length,
+      totalAyahs,
       totalDuration,
     });
 
@@ -72,6 +112,16 @@ export async function createSmartAyahClipFromFullSurah(
 
     const clipStart = absoluteSegments[0].from;
     const clipEnd = absoluteSegments[absoluteSegments.length - 1].to;
+    const clipDuration = clipEnd - clipStart;
+
+    console.log(`🔍 SmartClip: clip range ${clipStart.toFixed(1)}s–${clipEnd.toFixed(1)}s (${clipDuration.toFixed(1)}s)`);
+
+    // Sanity check: if the clip is unreasonably short, use pure proportional estimation
+    if (clipDuration < expectedMinDuration || clipDuration < 1) {
+      console.warn(`⚠️ SmartClip: clip too short (${clipDuration.toFixed(1)}s < expected ${expectedMinDuration.toFixed(1)}s), using proportional fallback`);
+      return buildProportionalClip(audioBuffer, estimatedBoundaries, startAyah, endAyah, totalAyahs, totalDuration, ctx);
+    }
+
     const clipped = sliceAudioBuffer(audioBuffer, clipStart, clipEnd, ctx);
 
     const timestamps = absoluteSegments.map((segment) => ({
@@ -90,6 +140,38 @@ export async function createSmartAyahClipFromFullSurah(
   } finally {
     ctx.close().catch(() => {});
   }
+}
+
+function buildProportionalClip(
+  audioBuffer: AudioBuffer,
+  estimatedBoundaries: number[],
+  startAyah: number,
+  endAyah: number,
+  totalAyahs: number,
+  totalDuration: number,
+  ctx: AudioContext,
+): SmartAyahClipResult {
+  const clipStart = estimatedBoundaries[Math.max(0, startAyah - 1)];
+  const clipEnd = estimatedBoundaries[Math.min(totalAyahs, endAyah)];
+
+  const clipped = sliceAudioBuffer(audioBuffer, clipStart, clipEnd, ctx);
+
+  const timestamps: AyahSegment[] = [];
+  for (let i = startAyah - 1; i < endAyah; i++) {
+    timestamps.push({
+      from: Math.max(0, estimatedBoundaries[i] - clipStart),
+      to: Math.max(0, estimatedBoundaries[i + 1] - clipStart),
+    });
+  }
+
+  const blobUrl = URL.createObjectURL(audioBufferToWav(clipped));
+
+  return {
+    blobUrl,
+    totalDuration: clipped.duration,
+    timestamps,
+    sourceRange: { from: clipStart, to: clipEnd },
+  };
 }
 
 export async function detectAyahSegments(
