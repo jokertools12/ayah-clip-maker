@@ -135,6 +135,7 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
   ibtahalatLyricsMode = false,
   allLyricsLines = [],
   currentLyricsIndex = 0,
+  audioProgress = 0,
 }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
