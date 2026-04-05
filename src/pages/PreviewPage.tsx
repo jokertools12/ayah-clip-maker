@@ -242,8 +242,8 @@ export default function PreviewPage() {
   const [everyAyahTimestamps, setEveryAyahTimestamps] = useState<{from: number; to: number}[]>([]);
 
   // Fallback mode – silence-detected ayah segments
-  const [fallbackSegments, setFallbackSegments] = useState<AyahSegment[]>([]);
-  const fallbackSegmentsRef = useRef<AyahSegment[]>([]);
+  const [fallbackSegments, setFallbackSegments] = useState<{from: number; to: number}[]>([]);
+  const fallbackSegmentsRef = useRef<{from: number; to: number}[]>([]);
 
   const [timingsLoading, setTimingsLoading] = useState(false);
 
