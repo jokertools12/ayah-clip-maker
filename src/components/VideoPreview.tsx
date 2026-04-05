@@ -14,6 +14,8 @@ const FONT_MAP: Record<string, string> = {
   '"El Messiri", sans-serif': 'El Messiri',
   '"Tajawal", sans-serif': 'Tajawal',
   '"Mada", sans-serif': 'Mada',
+  '"Mirza", serif': 'Mirza',
+  '"Marhey", cursive': 'Marhey',
 };
 
 // Slideshow configuration

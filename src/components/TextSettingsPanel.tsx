@@ -50,6 +50,11 @@ const colorOptions = [
   { value: '#f59e0b', label: 'كهرماني', className: 'bg-amber-500' },
   { value: '#38bdf8', label: 'أزرق سماوي', className: 'bg-sky-400' },
   { value: '#a78bfa', label: 'بنفسجي', className: 'bg-violet-400' },
+  { value: '#d4af37', label: 'ذهبي ملكي', className: 'bg-yellow-600' },
+  { value: '#2d6a4f', label: 'أخضر إسلامي', className: 'bg-emerald-800' },
+  { value: '#1e3a5f', label: 'أزرق ملكي', className: 'bg-blue-900' },
+  { value: '#e8d5b7', label: 'عاجي', className: 'bg-orange-100' },
+  { value: '#ff6b6b', label: 'أحمر ناعم', className: 'bg-red-400' },
 ];
 
 export function TextSettingsPanel({ settings, onChange }: TextSettingsPanelProps) {
