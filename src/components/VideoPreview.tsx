@@ -78,6 +78,7 @@ interface VideoPreviewProps {
   allLyricsLines?: string[];
   /** Index of currently active lyrics line */
   currentLyricsIndex?: number;
+  audioProgress?: number; // 0-1 progress for progress bar
 }
 
 export interface VideoPreviewRef {
