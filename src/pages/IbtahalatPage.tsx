@@ -433,6 +433,7 @@ export default function IbtahalatPage() {
                       setCustomBg(null);
                     }
                   }}
+                  onCustomBackgroundTypeChange={(type) => setCustomBgType(type)}
                 />
               </div>
               <Card>
