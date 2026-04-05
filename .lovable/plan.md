@@ -1,56 +1,56 @@
 
 
-# خطة: إصلاح رفع الخلفية في الابتهالات + خطوط وألوان + تحسين توقيت الكلمات بالذكاء الاصطناعي
+# خطة: إزالة الشيخ عاصم اللحيدان + تحسين الابتهالات + تحديثات مميزة
 
-## المشكلة 1: تبويب رفع صورة/فيديو في الابتهالات لا يعمل
+## 1. إزالة كل ما يخص الشيخ عاصم اللحيدان
 
-**السبب**: في `IbtahalatPage.tsx` سطر 419، `BackgroundSelector` لا يُمرر له `customBackground` أو `onCustomBackgroundChange`، فالرفع لا يُخزّن ولا يُمرر لصفحة المعاينة.
+### الملفات المتأثرة:
+- **`src/data/reciters.ts`**: حذف كائن `asim_luhaidan` (أسطر 302-310)
+- **`src/lib/audioSilenceDetector.ts`**: حذف الملف بالكامل (457 سطر) — لم يعد مستخدماً من أي قارئ آخر لأن جميعهم يملكون `everyAyahSubfolder`
+- **`src/pages/PreviewPage.tsx`**: 
+  - حذف import لـ `createSmartAyahClipFromFullSurah` و `AyahSegment` (سطر 34)
+  - حذف Strategy 3 "Smart clip" بالكامل (أسطر 468-508) — الـ fallback العادي يكفي
+
+## 2. إصلاح رفع الخلفيات في الابتهالات
+
+**المشكلة**: في `BackgroundSelector.tsx` سطر 141، `CustomBackgroundUploader` يستقبل `onUpload` لكنه لا يُمرر `type` لأعلى — `onCustomBackgroundChange` يأخذ `url` فقط.
 
 **الحل**:
-- إضافة state `customBg` و `customBgType` في `IbtahalatPage`
-- تمرير `customBackground` و `onCustomBackgroundChange` لـ `BackgroundSelector`
-- في `handleCreateVideo`، إضافة `customBgUrl` و `customBgType` للـ URL params
-- في `BackgroundSelector.tsx` سطر 141: تمرير `currentBackgroundType` أيضاً للـ `CustomBackgroundUploader`
+- **`BackgroundSelector.tsx`**: تحديث interface ليقبل `onCustomBackgroundTypeChange?: (type: 'image' | 'video') => void` + تمريره في `onUpload`
+- **`IbtahalatPage.tsx`**: تمرير `onCustomBackgroundTypeChange` لـ `BackgroundSelector` لتحديث `customBgType` عند الرفع
+- **`CustomBackgroundUploader.tsx`**: التأكد من تمرير النوع الصحيح (يعمل حالياً)
 
-## المشكلة 2: خطوط وألوان وميزات احترافية للابتهالات
+## 3. إضافة خطوط وألوان احترافية للابتهالات
 
-**الحل**: إضافة تبويب "النص" في صفحة المعاينة للابتهالات يحتوي على:
-- خطوط إضافية احترافية (الثلث، ديواني، كوفي)
-- ألوان إضافية للنص (ذهبي متدرج، فضي، كهرماني، أزرق سماوي)
-- حجم خط الكلمات (Slider)
-- تباعد الأسطر
+**الحل**: الخطوط والألوان موجودة بالفعل في `TextSettingsPanel.tsx` — المشكلة أن تبويب النص يظهر في المعاينة. سأتأكد من عمل الخطوط العربية عبر إضافة Google Fonts imports في `index.html`:
+- خطوط جديدة: `Thuluth` (خط الثلث)، `Diwani` (ديواني)، `Kufi` (كوفي) — عبر `Katibeh`, `Rakkas`, `Lalezar` الموجودين + إضافة `Mirza` و `Marhey`
+- ألوان جديدة: تدرج ذهبي ملكي، أخضر إسلامي، أزرق ملكي
 
-**الملفات**: `TextSettingsPanel.tsx` — إضافة 4 خطوط جديدة و5 ألوان جديدة
+## 4. تحديثات مميزة للمشروع
 
-## المشكلة 3: تحسين توقيت الكلمات بالذكاء الاصطناعي
+### أ. إضافة تأثير "Fade In" تدريجي للنص عند ظهور كل آية/سطر
+- في `VideoPreview.tsx`: بدلاً من ظهور النص مباشرة، إضافة `globalAlpha` تدريجي أول 300ms من كل سطر
 
-**السبب**: النسخ الحالي عبر `chunkedTranscribe.ts` يُنتج أسطر بتوقيتات تقريبية. كل شيخ سرعته مختلفة.
+### ب. إضافة شريط تقدم أنيق أسفل الفيديو
+- شريط رفيع ملون يتحرك مع تقدم الصوت — يظهر في المعاينة والتصدير
 
-**الحل**: إنشاء edge function `refine-timing` تستخدم Lovable AI (Gemini) لتحسين التوقيتات:
-1. إرسال النص المنسوخ مع التوقيتات الحالية + مدة الصوت
-2. طلب من Gemini تحسين التوقيتات بناءً على طول الكلمات وسرعة النطق المتوقعة
-3. إضافة زر "تحسين بالذكاء الاصطناعي" في المعاينة بجانب زر "إعادة النسخ"
+### ج. تحسين شاشة التحميل أثناء تجهيز الصوت
+- إضافة رسوم متحركة (Skeleton + نص توضيحي) بدلاً من spinner بسيط
 
-**ملاحظة**: سنستخدم `LOVABLE_API_KEY` الموجود مسبقاً عبر Lovable AI Gateway بدلاً من مفتاح Gemini المباشر — لأنه يدعم نفس النماذج ومُعد تلقائياً.
-
-### Edge Function: `supabase/functions/refine-timing/index.ts`
-- يستقبل: `{ lines: TranscribedLine[], totalDuration: number }`
-- يرسل لـ Gemini: prompt يطلب تحسين start/end لكل سطر ليتناسب مع النطق الطبيعي
-- يُعيد: أسطر بتوقيتات محسّنة
-
-### تغييرات `PreviewPage.tsx`:
-- إضافة زر "تحسين التوقيت بالذكاء الاصطناعي" في قسم الابتهالات
-- عند الضغط: إرسال الأسطر للـ edge function ← تحديث `transcribedLines` بالنتيجة
+### د. إضافة زر "نسخ الرابط" للمشاركة السريعة بعد التصدير
 
 ## الملفات المتأثرة
 
 | الملف | التغيير |
 |-------|---------|
-| `IbtahalatPage.tsx` | إضافة customBg state + تمريره لـ BackgroundSelector + URL params |
-| `BackgroundSelector.tsx` | تمرير `currentBackgroundType` للـ CustomBackgroundUploader |
-| `TextSettingsPanel.tsx` | إضافة خطوط وألوان جديدة |
-| `PreviewPage.tsx` | زر تحسين التوقيت بالذكاء الاصطناعي + استقبال customBg من URL |
-| `supabase/functions/refine-timing/index.ts` | edge function جديدة لتحسين التوقيتات |
+| `src/data/reciters.ts` | حذف عاصم اللحيدان |
+| `src/lib/audioSilenceDetector.ts` | حذف الملف |
+| `src/pages/PreviewPage.tsx` | حذف SmartClip import + Strategy 3 + إضافة شريط تقدم + تحسين التحميل |
+| `src/components/BackgroundSelector.tsx` | إضافة `onCustomBackgroundTypeChange` |
+| `src/pages/IbtahalatPage.tsx` | تمرير `onCustomBackgroundTypeChange` |
+| `src/components/TextSettingsPanel.tsx` | إضافة خطوط وألوان جديدة |
+| `src/components/VideoPreview.tsx` | تأثير Fade In للنص + شريط تقدم |
+| `index.html` | إضافة Google Fonts imports |
 
-~150 سطر تغييرات إجمالي.
+~120 سطر تغييرات إجمالي.
 
