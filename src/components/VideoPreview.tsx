@@ -2093,7 +2093,22 @@ export const VideoPreview = forwardRef<VideoPreviewRef, VideoPreviewProps>(({
       ctx.fillText(wmText, wmX, wmY);
       ctx.restore();
     }
-  }, [background, customBackground, imageLoaded, videoReady, slideshowReady, surahName, reciterName, currentAyah, currentAyahWords, highlightedWordIndex, highlightWordProgress, textSettings, displaySettings, getRecordingDimensions, getTokenHsl, drawAyahBadge, getCanvasFontFamily, drawIslamicFrame, motionSpeed, isPlaying, ibtahalatLyricsMode, allLyricsLines, currentLyricsIndex]);
+
+    // ── Progress Bar ──────────────────────────────────────────────────────
+    if (typeof audioProgress === 'number' && audioProgress > 0) {
+      const barHeight = 4 * S;
+      const barY = canvas.height - barHeight;
+      // Background track
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+      ctx.fillRect(0, barY, canvas.width, barHeight);
+      // Progress fill
+      const gradient = ctx.createLinearGradient(0, barY, canvas.width * audioProgress, barY);
+      gradient.addColorStop(0, 'rgba(212, 175, 55, 0.9)');
+      gradient.addColorStop(1, 'rgba(255, 215, 0, 0.7)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, barY, canvas.width * Math.min(audioProgress, 1), barHeight);
+    }
+  }, [background, customBackground, imageLoaded, videoReady, slideshowReady, surahName, reciterName, currentAyah, currentAyahWords, highlightedWordIndex, highlightWordProgress, textSettings, displaySettings, getRecordingDimensions, getTokenHsl, drawAyahBadge, getCanvasFontFamily, drawIslamicFrame, motionSpeed, isPlaying, ibtahalatLyricsMode, allLyricsLines, currentLyricsIndex, audioProgress]);
 
   useEffect(() => {
     drawFrameRuntimeRef.current = drawFrame;
