@@ -35,6 +35,8 @@ const fontOptions = [
   { value: '"Katibeh", serif', label: 'كاتبة' },
   { value: '"Rakkas", serif', label: 'رقّاص' },
   { value: '"Lalezar", cursive', label: 'لاله‌زار' },
+  { value: '"Mirza", serif', label: 'ميرزا' },
+  { value: '"Marhey", cursive', label: 'مرحي' },
 ];
 
 const colorOptions = [
