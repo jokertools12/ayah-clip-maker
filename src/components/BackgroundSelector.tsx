@@ -22,7 +22,8 @@ export function BackgroundSelector({
   selectedBackground, 
   onSelect, 
   customBackground, 
-  onCustomBackgroundChange 
+  onCustomBackgroundChange,
+  onCustomBackgroundTypeChange 
 }: BackgroundSelectorProps) {
   const [activeTab, setActiveTab] = useState<'custom' | 'image' | 'slideshow' | 'pexels'>('image');
   const { canUseFeature, isPremium } = useSubscription();
