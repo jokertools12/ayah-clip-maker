@@ -15,6 +15,7 @@ interface BackgroundSelectorProps {
   onSelect: (background: BackgroundItem) => void;
   customBackground?: string | null;
   onCustomBackgroundChange?: (url: string | null) => void;
+  onCustomBackgroundTypeChange?: (type: 'image' | 'video') => void;
 }
 
 export function BackgroundSelector({ 
