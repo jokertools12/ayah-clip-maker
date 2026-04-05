@@ -142,6 +142,9 @@ export function BackgroundSelector({
           <CustomBackgroundUploader 
             onUpload={(url, type) => {
               onCustomBackgroundChange?.(url || null);
+              if (url && type) {
+                onCustomBackgroundTypeChange?.(type);
+              }
             }}
             currentBackground={customBackground}
           />

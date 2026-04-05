@@ -465,48 +465,13 @@ export default function PreviewPage() {
         }
       }
 
-      // ── Strategy 3: Smart clip from full-surah mp3 (exact selected ayahs) ───
+      // ── Strategy 3: Fallback – full surah mp3 with proportional estimation ───
       if (!cancelled) {
         const url = getAudioUrl(reciter, surahNumber);
         setAyahTimings([]);
         setRangeMs(null);
         setFallbackSegments([]);
         fallbackSegmentsRef.current = [];
-
-        try {
-          console.log(`⏳ Smart clipping selected ayahs from full-surah audio…`);
-          const surahData = await fetchSurah(surahNumber);
-          const fullSurahTexts = surahData?.ayahs?.map((ayah) => ayah.text) ?? [];
-
-          if (fullSurahTexts.length === totalAyahsInSurah) {
-            const result = await createSmartAyahClipFromFullSurah(
-              url,
-              startAyah,
-              endAyah,
-              fullSurahTexts,
-            );
-            if (cancelled) {
-              URL.revokeObjectURL(result.blobUrl);
-              return;
-            }
-
-            setEveryAyahUrls([url]);
-            setEveryAyahTimestamps(result.timestamps);
-            setFallbackSegments(result.timestamps);
-            fallbackSegmentsRef.current = result.timestamps;
-            setAudioUrl(result.blobUrl);
-            setDuration(result.totalDuration);
-            setPlaybackMode('everyayah');
-            console.log(
-              `✅ SmartClip mode – exact clipped audio for ${result.timestamps.length} ayahs, source ${result.sourceRange.from.toFixed(1)}s–${result.sourceRange.to.toFixed(1)}s`
-            );
-            setTimingsLoading(false);
-            return;
-          }
-        } catch (e) {
-          console.warn('Smart clip failed, falling back to estimated full-surah playback…', e);
-        }
-
         setAudioUrl(url);
         setPlaybackMode('fallback');
         console.log(`⚠️ Fallback mode – full surah mp3 with proportional estimation`);
