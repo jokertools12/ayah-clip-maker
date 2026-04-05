@@ -1286,6 +1286,7 @@ export default function PreviewPage() {
               ibtahalatLyricsMode={isIbtahalatMode && transcribedLines.length > 1}
               allLyricsLines={isIbtahalatMode && transcribedLines.length > 1 ? transcribedLines.map(l => l.text) : []}
               currentLyricsIndex={currentAyahIndex}
+              audioProgress={duration > 0 ? currentTime / duration : 0}
             />
 
 
