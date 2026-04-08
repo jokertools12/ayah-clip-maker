@@ -1,7 +1,7 @@
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Upload, X, Image as ImageIcon, Video, Check } from 'lucide-react';
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 
 interface CustomBackgroundUploaderProps {
   onUpload: (url: string, type?: 'image' | 'video') => void;
