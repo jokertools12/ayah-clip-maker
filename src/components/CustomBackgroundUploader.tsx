@@ -58,10 +58,13 @@ export function CustomBackgroundUploader({ onUpload, currentBackground, currentB
   };
 
   const isVideo = currentBackgroundType === 'video';
-  // Resolve display URL: if it's a key, get the blob URL
-  const displayUrl = currentBackground && (window as any).__customBgBlobs[currentBackground]
-    ? URL.createObjectURL((window as any).__customBgBlobs[currentBackground])
-    : currentBackground;
+  // Resolve display URL: if it's a key, get the blob URL (memoized to avoid leaks)
+  const displayUrl = useMemo(() => {
+    if (!currentBackground) return null;
+    const blob = (window as any).__customBgBlobs?.[currentBackground];
+    if (blob) return URL.createObjectURL(blob);
+    return currentBackground;
+  }, [currentBackground]);
 
   return (
     <div className="space-y-4">
