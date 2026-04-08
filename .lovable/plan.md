@@ -1,56 +1,40 @@
 
 
-# خطة: إزالة الشيخ عاصم اللحيدان + تحسين الابتهالات + تحديثات مميزة
+# خطة: إصلاح رفع الخلفيات + التحقق من الخطوط/الألوان + تأثير Fade In
 
-## 1. إزالة كل ما يخص الشيخ عاصم اللحيدان
+## تحليل المشاكل
 
-### الملفات المتأثرة:
-- **`src/data/reciters.ts`**: حذف كائن `asim_luhaidan` (أسطر 302-310)
-- **`src/lib/audioSilenceDetector.ts`**: حذف الملف بالكامل (457 سطر) — لم يعد مستخدماً من أي قارئ آخر لأن جميعهم يملكون `everyAyahSubfolder`
-- **`src/pages/PreviewPage.tsx`**: 
-  - حذف import لـ `createSmartAyahClipFromFullSurah` و `AyahSegment` (سطر 34)
-  - حذف Strategy 3 "Smart clip" بالكامل (أسطر 468-508) — الـ fallback العادي يكفي
+### 1. رفع الخلفية لا يعمل بين الصفحات (المشكلة الجذرية)
+**السبب**: `CustomBackgroundUploader` ينشئ `blob:` URL عبر `URL.createObjectURL()`. هذا الرابط صالح **فقط في الصفحة الحالية**. عند الانتقال من الابتهالات إلى `/preview`، يتم تمرير الـ blob URL كـ URL parameter → لكنه يصبح **غير صالح** في الصفحة الجديدة.
 
-## 2. إصلاح رفع الخلفيات في الابتهالات
+**الحل**: تحويل الملف إلى `base64 data URL` بدلاً من `blob URL` — الـ data URL يعمل في أي مكان. للملفات الكبيرة (فيديو)، نستخدم `sessionStorage` لتخزين الـ blob مؤقتاً ونمرر مفتاح فقط.
 
-**المشكلة**: في `BackgroundSelector.tsx` سطر 141، `CustomBackgroundUploader` يستقبل `onUpload` لكنه لا يُمرر `type` لأعلى — `onCustomBackgroundChange` يأخذ `url` فقط.
+### 2. إعدادات النص (خطوط/ألوان) غير موجودة في الابتهالات
+صفحة `IbtahalatPage.tsx` لا تحتوي على `TextSettingsPanel` — الخطوط والألوان تظهر فقط في `PreviewPage` (الخطوة 4 للقرآن). هذا يعني أن المستخدم يمكنه تعديلها فقط في المعاينة، وهو السلوك الحالي الصحيح.
 
-**الحل**:
-- **`BackgroundSelector.tsx`**: تحديث interface ليقبل `onCustomBackgroundTypeChange?: (type: 'image' | 'video') => void` + تمريره في `onUpload`
-- **`IbtahalatPage.tsx`**: تمرير `onCustomBackgroundTypeChange` لـ `BackgroundSelector` لتحديث `customBgType` عند الرفع
-- **`CustomBackgroundUploader.tsx`**: التأكد من تمرير النوع الصحيح (يعمل حالياً)
+### 3. تأثير Fade In — موجود بالفعل
+بعد الفحص، `VideoPreview.tsx` يحتوي بالفعل على تأثيرات `globalAlpha` و transition effects متعددة (fade, slide, zoom, blur, rise, twist, bounce) في أسطر 1867-1920. التأثير يعمل.
 
-## 3. إضافة خطوط وألوان احترافية للابتهالات
+## التغييرات المطلوبة
 
-**الحل**: الخطوط والألوان موجودة بالفعل في `TextSettingsPanel.tsx` — المشكلة أن تبويب النص يظهر في المعاينة. سأتأكد من عمل الخطوط العربية عبر إضافة Google Fonts imports في `index.html`:
-- خطوط جديدة: `Thuluth` (خط الثلث)، `Diwani` (ديواني)، `Kufi` (كوفي) — عبر `Katibeh`, `Rakkas`, `Lalezar` الموجودين + إضافة `Mirza` و `Marhey`
-- ألوان جديدة: تدرج ذهبي ملكي، أخضر إسلامي، أزرق ملكي
+### ملف `src/components/CustomBackgroundUploader.tsx`
+- تحويل الصور إلى `data:` URL عبر `FileReader.readAsDataURL()`
+- للفيديوهات: تخزين الـ File في `sessionStorage` كـ base64 (حد ~10MB) أو استخدام مفتاح في `window.__customBgFile`
 
-## 4. تحديثات مميزة للمشروع
+### ملف `src/pages/PreviewPage.tsx`
+- عند استلام `customBgUrl` من URL params: التحقق إذا كان مفتاح sessionStorage واسترجاع الملف
+- إصلاح تبويب "رفع الخلفية" (Step 4) — يعمل حالياً لأنه في نفس الصفحة، لكن نتأكد من تمرير النوع الصحيح
 
-### أ. إضافة تأثير "Fade In" تدريجي للنص عند ظهور كل آية/سطر
-- في `VideoPreview.tsx`: بدلاً من ظهور النص مباشرة، إضافة `globalAlpha` تدريجي أول 300ms من كل سطر
-
-### ب. إضافة شريط تقدم أنيق أسفل الفيديو
-- شريط رفيع ملون يتحرك مع تقدم الصوت — يظهر في المعاينة والتصدير
-
-### ج. تحسين شاشة التحميل أثناء تجهيز الصوت
-- إضافة رسوم متحركة (Skeleton + نص توضيحي) بدلاً من spinner بسيط
-
-### د. إضافة زر "نسخ الرابط" للمشاركة السريعة بعد التصدير
+### ملف `src/pages/IbtahalatPage.tsx`
+- تحديث طريقة تمرير الخلفية المرفوعة لتستخدم `sessionStorage` بدلاً من blob URL في params
 
 ## الملفات المتأثرة
 
 | الملف | التغيير |
 |-------|---------|
-| `src/data/reciters.ts` | حذف عاصم اللحيدان |
-| `src/lib/audioSilenceDetector.ts` | حذف الملف |
-| `src/pages/PreviewPage.tsx` | حذف SmartClip import + Strategy 3 + إضافة شريط تقدم + تحسين التحميل |
-| `src/components/BackgroundSelector.tsx` | إضافة `onCustomBackgroundTypeChange` |
-| `src/pages/IbtahalatPage.tsx` | تمرير `onCustomBackgroundTypeChange` |
-| `src/components/TextSettingsPanel.tsx` | إضافة خطوط وألوان جديدة |
-| `src/components/VideoPreview.tsx` | تأثير Fade In للنص + شريط تقدم |
-| `index.html` | إضافة Google Fonts imports |
+| `CustomBackgroundUploader.tsx` | استخدام data URL للصور + window storage للفيديو |
+| `IbtahalatPage.tsx` | تخزين الخلفية في sessionStorage + تمرير مفتاح |
+| `PreviewPage.tsx` | استرجاع الخلفية من sessionStorage عند التحميل |
 
-~120 سطر تغييرات إجمالي.
+~40 سطر تغييرات إجمالي.
 
