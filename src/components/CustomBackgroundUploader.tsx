@@ -9,6 +9,9 @@ interface CustomBackgroundUploaderProps {
   currentBackgroundType?: 'image' | 'video';
 }
 
+// Store video blobs globally so they persist across navigation
+(window as any).__customBgBlobs = (window as any).__customBgBlobs || {};
+
 export function CustomBackgroundUploader({ onUpload, currentBackground, currentBackgroundType }: CustomBackgroundUploaderProps) {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -28,9 +31,24 @@ export function CustomBackgroundUploader({ onUpload, currentBackground, currentB
         return;
       }
 
-      // Create a local URL for the file
-      const url = URL.createObjectURL(file);
-      onUpload(url, isVideo ? 'video' : 'image');
+      if (isImage) {
+        // Convert image to data URL (persists across navigation)
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUrl = reader.result as string;
+          onUpload(dataUrl, 'image');
+        };
+        reader.readAsDataURL(file);
+      } else {
+        // For video: create blob URL + store blob globally with a key
+        const blobUrl = URL.createObjectURL(file);
+        const key = `custom_bg_video_${Date.now()}`;
+        (window as any).__customBgBlobs[key] = file;
+        // Store the key in sessionStorage so PreviewPage can find it
+        sessionStorage.setItem('customBgVideoKey', key);
+        sessionStorage.setItem('customBgVideoBlobUrl', blobUrl);
+        onUpload(key, 'video');
+      }
     } catch (error) {
       console.error('Error uploading file:', error);
       alert('حدث خطأ في رفع الملف');
@@ -39,7 +57,11 @@ export function CustomBackgroundUploader({ onUpload, currentBackground, currentB
     }
   };
 
-  const isVideo = currentBackgroundType === 'video' || currentBackground?.includes('.mp4') || currentBackground?.includes('.webm');
+  const isVideo = currentBackgroundType === 'video';
+  // Resolve display URL: if it's a key, get the blob URL
+  const displayUrl = currentBackground && (window as any).__customBgBlobs[currentBackground]
+    ? URL.createObjectURL((window as any).__customBgBlobs[currentBackground])
+    : currentBackground;
 
   return (
     <div className="space-y-4">
@@ -48,7 +70,7 @@ export function CustomBackgroundUploader({ onUpload, currentBackground, currentB
           <div className="aspect-video rounded-lg overflow-hidden bg-muted border-2 border-primary ring-2 ring-primary/30">
             {isVideo ? (
               <video 
-                src={currentBackground} 
+                src={displayUrl || ''} 
                 className="w-full h-full object-cover"
                 muted
                 loop
@@ -57,7 +79,7 @@ export function CustomBackgroundUploader({ onUpload, currentBackground, currentB
               />
             ) : (
               <img 
-                src={currentBackground} 
+                src={displayUrl || ''}
                 alt="خلفية مخصصة"
                 className="w-full h-full object-cover"
               />
