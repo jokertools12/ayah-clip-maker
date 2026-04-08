@@ -178,8 +178,21 @@ export default function PreviewPage() {
 
   // ── Settings state ──────────────────────────────────────────────────────────
   const [displaySettings, setDisplaySettings] = useState<DisplaySettings>(DEFAULT_DISPLAY_SETTINGS);
-  const [customBackground, setCustomBackground] = useState<string | null>(customBgUrlParam || null);
   const [customBackgroundType, setCustomBackgroundType] = useState<'image' | 'video'>(customBgTypeParam);
+
+  // Resolve custom background: data URLs work directly, video keys need blob resolution
+  const [customBackground, setCustomBackground] = useState<string | null>(() => {
+    if (!customBgUrlParam) return null;
+    // If it's a data URL or http URL, use directly
+    if (customBgUrlParam.startsWith('data:') || customBgUrlParam.startsWith('http')) return customBgUrlParam;
+    // If it's a video key, resolve from window global
+    const blob = (window as any).__customBgBlobs?.[customBgUrlParam];
+    if (blob) return URL.createObjectURL(blob);
+    // Try sessionStorage fallback
+    const storedBlobUrl = sessionStorage.getItem('customBgVideoBlobUrl');
+    if (storedBlobUrl) return storedBlobUrl;
+    return customBgUrlParam;
+  });
   const [backgroundLoadMethod, setBackgroundLoadMethod] = useState<'direct' | 'proxy' | 'fallback' | null>(null);
   const [exportSettings, setExportSettings] = useState<ExportSettings>(DEFAULT_EXPORT_SETTINGS);
   const [selectedPresetId, setSelectedPresetId] = useState<string | undefined>(undefined);
